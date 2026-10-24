@@ -1,0 +1,30 @@
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+*.tfvars.local
+
+# Node
+node_modules/
+npm-debug.log*
+
+# Build artifacts
+build/
+frontend/dist/
+
+# Env / secrets
+.env
+.env.*
+*.pem
+
+# Uploads locales (avatares)
+local/server/uploads/
+
+# OS
+.DS_Store
+Thumbs.db
+.mockups/
+
+# Build de producción (distDir separado)
+frontend-next/.next-prod/

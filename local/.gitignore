@@ -1,0 +1,8 @@
+# Local dev/staging environment secrets & data — NEVER commit
+.env
+.env.*
+!.env.example
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+firebase-service-account.json
