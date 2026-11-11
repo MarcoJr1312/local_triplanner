@@ -23,7 +23,6 @@ Owner: Marco (GitHub `MarcoJr1312`). Lead: Hermes (software factory).
 - **Agent `local/agent-service/` — Python 3.12, uv, FastAPI + Agno + ChromaDB + DeepSeek**, `uv run uvicorn tripsuggest.main:app --port 4100`, read-only tools over trip context.
 - **Data `local/db/`** — `schema.sql` (versioned) + idempotent `seed.js`; the SQLite file and Chroma data are gitignored and never travel.
 - **Package manager: bun** in both JS projects (committed `bun.lock`, no `package-lock.json`).
-- **Legacy frontend `frontend/` — React/Vite `:5173`**: still in the repo, retired once Next is fully validated. New work goes to `frontend-next/`.
 - **Production**: `NEXT_PROD=1` build + `next start` on `:3001`, served by nginx at `gathered.woky.dev` behind Basic Auth (`marco`, `loba`). Redeploy after each feature.
 - **Zero AWS deploys without explicit authorization.** The original AWS stack (AppSync/DynamoDB/Cognito/Terraform) lives in `/root/gathered` as reference only; it is not this project's working tree.
 - **Branches:** one branch per feature (`feature/*`), push only to that branch, never to `main`. Commit only when the owner asks.
@@ -56,10 +55,6 @@ cd local/db && node seed.js
 ```
 
 Report the dev port to the owner for manual testing.
-
-## Troubleshooting — stale Vite HMR state
-
-After many agent-driven edits/HMR cycles, the Vite dev server can end up serving a corrupted module graph: pages mount EMPTY (body renders nothing) with no console errors, especially the trip detail page. Fix: restart the dev server and hard-refresh the browser (Ctrl+Shift+R). Before debugging "my data is not showing", verify with `curl http://localhost:4000/graphql` that the backend returns data — if it does, the frontend dev server is the suspect.
 
 ## Troubleshooting — Next.js `Cannot find module './<n>.js'`
 

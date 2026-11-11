@@ -1,6 +1,6 @@
 # Local dev/staging environment — Triplanner
 
-Entorno local completo: frontend (5173) + backend GraphQL local (4000) + SQLite + búsqueda de lugares con HasData.
+Entorno local completo: frontend-next (3000) + backend GraphQL local (4000) + SQLite + búsqueda de lugares con HasData.
 
 ## Estructura
 
@@ -27,14 +27,9 @@ cd ../server && npm install
 # Backend GraphQL local en localhost:4000
 cd local/server && npm start
 
-# Frontend en modo local (apunta al backend local)
-cd frontend && VITE_LOCAL_GRAPHQL=http://localhost:4000/graphql npm run dev
-
-# Frontend en modo mock (sin backend): simplemente
-cd frontend && npm run dev
+# Frontend Next (proxy /api/graphql -> :4000)
+cd frontend-next && bun run dev
 ```
-
-Modos de datos del frontend: `local` (VITE_LOCAL_GRAPHQL o `src/local-config.json`) > `aws` (`src/aws-config.json`) > `mock` (default).
 
 ## Pruebas del servidor
 
