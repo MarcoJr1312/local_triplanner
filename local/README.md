@@ -4,8 +4,9 @@ Entorno local completo: frontend-next (3000) + backend GraphQL local (4000) + SQ
 
 ## Estructura
 
-- `db/` — SQLite (`triplanner.sqlite`, gitignored) + esquema (`schema.sql`) y seed (`seed.js`)
-- `server/` — servidor GraphQL local (graphql-yoga) con el mismo `backend/graphql/schema.graphql` de AWS + extensiones locales (`searchLocations`, `locationDetails`)
+- `db/` — SQLite (`triplanner.sqlite`, gitignored) + esquema (`schema.sql`), seed (`seed.js`) y sus datos (`seed-data.json`)
+- `server/` — servidor GraphQL local (graphql-yoga) con el schema base de `local/graphql/schema.graphql` + extensiones locales (`searchLocations`, `locationDetails`)
+- `graphql/` — schema base heredado del contrato original de AppSync (`schema.graphql`); sin resolvers de AppSync
 - `.env.example` — plantilla de configuración; copiar a `.env` (gitignored)
 
 ## Setup (primera vez)

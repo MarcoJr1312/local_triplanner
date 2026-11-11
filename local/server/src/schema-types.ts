@@ -1,6 +1,6 @@
-// Tipos del dominio de Triplanner, reflejando backend/graphql/schema.graphql
+// Tipos del dominio de Triplanner, reflejando local/graphql/schema.graphql
 // + las extensiones locales (searchLocations, locationDetails, locationById).
-// Se mantienen alineados a mano con el schema (fuente: backend/graphql/schema.graphql).
+// Se mantienen alineados a mano con el schema (fuente: local/graphql/schema.graphql).
 
 import type { DatabaseSync } from 'node:sqlite';
 

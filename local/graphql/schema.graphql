@@ -1,0 +1,217 @@
+schema {
+  query: Query
+  mutation: Mutation
+  subscription: Subscription
+}
+
+type Query {
+  listMyTrips: [TripSummary!]!
+  getTrip(id: ID!): Trip
+  listDestinations: [Destination!]!
+  listActivities(destSlug: String!, category: String): [Activity!]!
+  listPresence(tripId: ID!): [Presence!]!
+  findUserByEmail(email: String!): UserProfile
+}
+
+type Mutation {
+  registerUser(input: RegisterUserInput!): UserProfile!
+  createTrip(input: CreateTripInput!): Trip!
+  updateTripSettings(id: ID!, input: UpdateTripSettingsInput!): Trip!
+  setBudget(tripId: ID!, totalBudget: Float!): Trip!
+  inviteMember(tripId: ID!, userId: String!, email: String!, displayName: String!, role: MemberRole!): Trip!
+  updateMemberRole(tripId: ID!, userId: String!, role: MemberRole!): Trip!
+  removeMember(tripId: ID!, userId: String!): Trip!
+  leaveTrip(tripId: ID!, newOwnerId: ID): Trip!
+  deleteTrip(tripId: ID!): ID!
+  updateTripCover(tripId: ID!, input: UpdateTripCoverInput!): Trip!
+  addItem(tripId: ID!, input: AddItemInput!): TripItem!
+  updateItem(tripId: ID!, itemId: ID!, input: UpdateItemInput!): TripItem!
+  setItemCost(tripId: ID!, itemId: ID!, cost: Float!): TripItem!
+  moveItem(tripId: ID!, itemId: ID!, day: AWSDate!, order: Int!): TripItem!
+  removeItem(tripId: ID!, itemId: ID!): TripItem!
+  touchPresence(input: PresenceInput!): Presence!
+  requestSuggestions(tripId: ID!, day: AWSDate!): SuggestionSet!
+}
+
+type Subscription {
+  onTripChanged(tripId: ID!): TripEvent!
+  onPresenceChanged(tripId: ID!): Presence!
+}
+
+enum MemberRole {
+  owner
+  editor
+  viewer
+}
+
+type Trip {
+  id: ID!
+  name: String!
+  destinationId: String!
+  destinationName: String!
+  startDate: AWSDate!
+  endDate: AWSDate!
+  totalBudget: Float!
+  coverPreset: String
+  coverPhotoUrl: String
+  spent: Float!
+  spentByCategory: [CategorySpend!]!
+  ownerId: String!
+  inviteCode: String!
+  members: [Member!]!
+  items: [TripItem!]!
+  myRole: MemberRole!
+  createdAt: AWSDateTime!
+  updatedAt: AWSDateTime!
+}
+
+type TripSummary {
+  tripId: ID!
+  tripName: String!
+  destinationName: String!
+  startDate: AWSDate!
+  endDate: AWSDate!
+  role: MemberRole!
+  joinedAt: AWSDateTime!
+}
+
+type Member {
+  userId: ID!
+  displayName: String!
+  email: String!
+  role: MemberRole!
+  joinedAt: AWSDateTime!
+}
+
+type TripItem {
+  id: ID!
+  day: AWSDate!
+  order: Int!
+  activityId: String
+  title: String!
+  category: String!
+  cost: Float!
+  startTime: String
+  notes: String
+  imageUrl: String
+  addedBy: String!
+}
+
+type CategorySpend {
+  category: String!
+  amount: Float!
+}
+
+type Destination {
+  slug: ID!
+  name: String!
+  country: String!
+  description: String!
+  imageUrl: String
+  lat: Float!
+  lng: Float!
+}
+
+type Activity {
+  id: ID!
+  name: String!
+  category: String!
+  cost: Float!
+  lat: Float!
+  lng: Float!
+  description: String!
+  tags: [String!]!
+  durationHours: Float
+  imageUrl: String
+  rating: Float
+}
+
+type UserProfile {
+  userId: ID!
+  email: String!
+  displayName: String!
+}
+
+type Presence {
+  userId: ID!
+  tripId: ID!
+  displayName: String!
+  color: String!
+  editingItemId: String
+  lastSeen: AWSDateTime!
+}
+
+type Suggestion {
+  title: String!
+  category: String!
+  cost: Float!
+  rationale: String!
+  activityId: String
+}
+
+type SuggestionSet {
+  day: AWSDate!
+  items: [Suggestion!]!
+}
+
+type TripEvent {
+  tripId: ID!
+  mutationType: String!
+  entity: AWSJSON!
+  actorId: String!
+}
+
+input RegisterUserInput {
+  displayName: String!
+}
+
+input CreateTripInput {
+  name: String!
+  destinationId: String!
+  destinationName: String!
+  startDate: AWSDate!
+  endDate: AWSDate!
+  totalBudget: Float!
+  displayName: String!
+}
+
+input UpdateTripSettingsInput {
+  name: String
+  startDate: AWSDate
+  endDate: AWSDate
+  destinationId: String
+  destinationName: String
+}
+
+input AddItemInput {
+  day: AWSDate!
+  order: Int!
+  activityId: String
+  title: String!
+  category: String!
+  cost: Float!
+  startTime: String
+  notes: String
+  imageUrl: String
+}
+
+input UpdateItemInput {
+  day: AWSDate
+  order: Int
+  startTime: String
+  notes: String
+  title: String
+}
+
+input UpdateTripCoverInput {
+  coverPreset: String
+  coverPhotoDataUrl: String
+  removePhoto: Boolean
+}
+
+input PresenceInput {
+  tripId: ID!
+  displayName: String!
+  color: String!
+  editingItemId: String
+}

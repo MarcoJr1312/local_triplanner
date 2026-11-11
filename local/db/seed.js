@@ -1,6 +1,6 @@
 // Seed idempotente para la base SQLite local.
 // - Aplica local/db/schema.sql
-// - Importa destinos + actividades desde backend/seed/data.json (source='seed', parent_id -> destino)
+// - Importa destinos + actividades desde local/db/seed-data.json (source='seed', parent_id -> destino)
 // - Crea usuario demo + trip demo para arrancar con datos
 // Idempotente: INSERT OR IGNORE; re-ejecutar no duplica.
 
@@ -10,7 +10,7 @@ const path = require('node:path');
 
 const DB_PATH = path.join(__dirname, 'triplanner.sqlite');
 const SCHEMA_PATH = path.join(__dirname, 'schema.sql');
-const SEED_DATA_PATH = path.resolve(__dirname, '..', '..', 'backend', 'seed', 'data.json');
+const SEED_DATA_PATH = path.join(__dirname, 'seed-data.json');
 
 const now = () => new Date().toISOString();
 

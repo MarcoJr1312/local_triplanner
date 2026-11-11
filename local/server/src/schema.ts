@@ -1,4 +1,5 @@
-// Carga del schema GraphQL: el MISMO backend/graphql/schema.graphql + extension local
+// Carga del schema GraphQL: el schema base (local/graphql/schema.graphql, heredado
+// del contrato original de AppSync) + extension local
 // (searchLocations / locationDetails para la integracion HasData).
 
 import fs from 'node:fs';
@@ -7,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const BASE_SCHEMA_PATH = path.resolve(
-  __dirname, '..', '..', '..', 'backend', 'graphql', 'schema.graphql'
+  __dirname, '..', '..', 'graphql', 'schema.graphql'
 );
 
 const EXTENSION = /* GraphQL */ `

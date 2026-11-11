@@ -95,10 +95,9 @@ Next.js frontend (:3000 dev, :3001 prod)
 - API keys for HasData (place search), Resend (email) and DeepSeek (agent)
 
 > The local GraphQL server loads the base schema from
-> `backend/graphql/schema.graphql` and the seed data from
-> `backend/seed/data.json`. Those files live in the reference implementation
-> tree and are **not tracked** in this repository — make them available at
-> `<repo>/backend/` before the first run.
+> `local/graphql/schema.graphql` and the seed data from
+> `local/db/seed-data.json`. Both ship with this repository, so a fresh clone
+> runs without copying anything from the reference implementation.
 
 ## Getting started
 
