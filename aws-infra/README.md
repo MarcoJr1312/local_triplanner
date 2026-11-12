@@ -37,7 +37,22 @@ terraform apply
 
 Note the `state_bucket` output. The `envs/prod` backend uses the bucket name `triplanner-tfstate-<account-id>`; adjust `envs/prod/versions.tf` if your account differs.
 
-## 2. Configure prod
+## 2. Control plane (persistent)
+
+```bash
+cd aws-infra/envs/control-plane
+cp terraform.tfvars.example terraform.tfvars
+terraform init
+terraform apply
+
+aws secretsmanager put-secret-value \
+  --secret-id triplanner/github-token \
+  --secret-string "$GITHUB_TOKEN"
+```
+
+This creates the wake API, idle checker, control table, ECR repositories and the GitHub OIDC role. These resources are not destroyed by the sleep workflow.
+
+## 3. Configure prod
 
 ```bash
 cd aws-infra/envs/prod
@@ -49,13 +64,41 @@ terraform plan
 
 The first `apply` is also the first wake. It creates the VPC, RDS Single-AZ, DynamoDB, S3, ECR, ALB/WAF, ECS services and the control plane.
 
-## 3. Wake and sleep
+## 4. Wake and sleep
 
 - The wake button is **TBD**. The control plane exposes an HTTP API `POST /wake` that dispatches a GitHub `repository_dispatch` event of type `wake`.
 - The GitHub Actions `wake` workflow should run `terraform apply -var="desired_count=1"`, run Postgres migrations and seed (Postgres + DynamoDB), update the Cloudflare CNAME to the new ALB, and finally set the control state to `awake`.
 - The `sleep` workflow runs `terraform destroy` after the sleep-check Lambda sees 30 minutes without ALB traffic. It should set the control state to `sleeping`/`asleep`.
 
-## 4. What survives a destroy
+## 5. GitHub Actions
+
+The workflows in `.github/workflows/` expect:
+
+**Secrets**
+
+| Secret | Value |
+|---|---|
+| `AWS_ROLE_ARN` | `github_actions_role_arn` output from `envs/control-plane` |
+| `CLOUDFLARE_API_TOKEN` | Cloudflare API token (DNS edit) |
+| `CLOUDFLARE_ZONE_ID` | Cloudflare zone ID |
+
+**Variables**
+
+| Variable | Value |
+|---|---|
+| `WEB_IMAGE`, `API_IMAGE`, `AGENT_IMAGE` | ECR image URIs from `envs/control-plane` |
+| `FIREBASE_PROJECT_ID` | Firebase project id |
+| `CERTIFICATE_ARN` | ACM certificate ARN, or empty for HTTP-only |
+| `APP_HOSTNAME` | Public hostname for the CNAME |
+| `CONTROL_TABLE` | `triplanner-control` |
+
+The **wake** workflow runs `terraform apply`, updates Cloudflare, runs `bun run db:migrate` and `bun run db:seed` as one-off ECS tasks, and marks the control table `awake`. The **sleep** workflow runs `terraform destroy` and marks it `asleep`.
+
+The API image must include `db:migrate` and `db:seed` scripts before the workflows can complete.
+
+> The GitHub OIDC role currently uses `AdministratorAccess` because the workflows create and destroy the whole stack. Tighten it to the exact services before using this outside the demo.
+
+## 6. What survives a destroy
 
 - Terraform state bucket.
 - Wake/sleep Lambdas, EventBridge rule and control state table.

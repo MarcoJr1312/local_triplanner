@@ -1,0 +1,112 @@
+name: Wake AWS demo
+
+on:
+  repository_dispatch:
+    types: [wake]
+  workflow_dispatch:
+
+concurrency:
+  group: triplanner-aws
+  cancel-in-progress: false
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "0"
+
+jobs:
+  wake:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: aws-infra/envs/prod
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.15.8"
+
+      - name: Terraform init
+        run: terraform init -input=false
+
+      - name: Terraform apply
+        run: |
+          terraform apply -auto-approve -input=false \
+            -var="desired_count=1" \
+            -var="web_image=${{ vars.WEB_IMAGE }}" \
+            -var="api_image=${{ vars.API_IMAGE }}" \
+            -var="agent_image=${{ vars.AGENT_IMAGE }}" \
+            -var="firebase_project_id=${{ vars.FIREBASE_PROJECT_ID }}" \
+            -var="certificate_arn=${{ vars.CERTIFICATE_ARN }}"
+
+      - name: Update Cloudflare CNAME
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
+          APP_HOSTNAME: ${{ vars.APP_HOSTNAME }}
+        run: |
+          if [ -n "$CLOUDFLARE_API_TOKEN" ] && [ -n "$CLOUDFLARE_ZONE_ID" ] && [ -n "$APP_HOSTNAME" ]; then
+            node ../../scripts/update-cloudflare.mjs "$(terraform output -raw alb_dns_name)"
+          else
+            echo "Cloudflare secrets not configured; skipping DNS update."
+          fi
+
+      - name: Run database migrations
+        run: |
+          CLUSTER=$(terraform output -raw ecs_cluster_name)
+          TASK_DEF=$(terraform output -raw api_task_definition_arn)
+          SUBNETS=$(terraform output -json private_app_subnet_ids | jq -r 'join(",")')
+          SG=$(terraform output -raw api_security_group_id)
+          TASK_ARN=$(aws ecs run-task \
+            --cluster "$CLUSTER" \
+            --task-definition "$TASK_DEF" \
+            --launch-type FARGATE \
+            --network-configuration "awsvpcConfiguration={subnets=[$SUBNETS],securityGroups=[$SG],assignPublicIp=DISABLED}" \
+            --overrides '{"containerOverrides":[{"name":"api","command":["bun","run","db:migrate"]}]}' \
+            --query 'tasks[0].taskArn' --output text)
+          aws ecs wait tasks-stopped --cluster "$CLUSTER" --tasks "$TASK_ARN"
+          EXIT_CODE=$(aws ecs describe-tasks --cluster "$CLUSTER" --tasks "$TASK_ARN" --query 'tasks[0].containers[0].exitCode' --output text)
+          test "$EXIT_CODE" = "0"
+
+      - name: Seed demo data
+        run: |
+          CLUSTER=$(terraform output -raw ecs_cluster_name)
+          TASK_DEF=$(terraform output -raw api_task_definition_arn)
+          SUBNETS=$(terraform output -json private_app_subnet_ids | jq -r 'join(",")')
+          SG=$(terraform output -raw api_security_group_id)
+          TASK_ARN=$(aws ecs run-task \
+            --cluster "$CLUSTER" \
+            --task-definition "$TASK_DEF" \
+            --launch-type FARGATE \
+            --network-configuration "awsvpcConfiguration={subnets=[$SUBNETS],securityGroups=[$SG],assignPublicIp=DISABLED}" \
+            --overrides '{"containerOverrides":[{"name":"api","command":["bun","run","db:seed"]}]}' \
+            --query 'tasks[0].taskArn' --output text)
+          aws ecs wait tasks-stopped --cluster "$CLUSTER" --tasks "$TASK_ARN"
+          EXIT_CODE=$(aws ecs describe-tasks --cluster "$CLUSTER" --tasks "$TASK_ARN" --query 'tasks[0].containers[0].exitCode' --output text)
+          test "$EXIT_CODE" = "0"
+
+      - name: Mark stack as awake
+        env:
+          CONTROL_TABLE: ${{ vars.CONTROL_TABLE }}
+        run: |
+          NOW=$(date -u +%FT%TZ)
+          aws dynamodb put-item \
+            --table-name "$CONTROL_TABLE" \
+            --item "{\"key\":{\"S\":\"stack\"},\"state\":{\"S\":\"awake\"},\"updated_at\":{\"S\":\"$NOW\"},\"last_activity_at\":{\"S\":\"$NOW\"}}"
+
+      - name: Summary
+        run: |
+          echo "### Triplanner is awake" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "ALB: http://$(terraform output -raw alb_dns_name)" >> "$GITHUB_STEP_SUMMARY"

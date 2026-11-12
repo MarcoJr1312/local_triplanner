@@ -1,0 +1,70 @@
+name: Sleep AWS demo
+
+on:
+  repository_dispatch:
+    types: [sleep]
+  workflow_dispatch:
+
+concurrency:
+  group: triplanner-aws
+  cancel-in-progress: false
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "0"
+
+jobs:
+  sleep:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: aws-infra/envs/prod
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.15.8"
+
+      - name: Terraform init
+        run: terraform init -input=false
+
+      - name: Terraform destroy
+        run: |
+          terraform destroy -auto-approve -input=false \
+            -var="web_image=${{ vars.WEB_IMAGE }}" \
+            -var="api_image=${{ vars.API_IMAGE }}" \
+            -var="agent_image=${{ vars.AGENT_IMAGE }}" \
+            -var="firebase_project_id=${{ vars.FIREBASE_PROJECT_ID }}" \
+            -var="certificate_arn=${{ vars.CERTIFICATE_ARN }}"
+
+      - name: Mark stack as asleep
+        if: success()
+        env:
+          CONTROL_TABLE: ${{ vars.CONTROL_TABLE }}
+        run: |
+          NOW=$(date -u +%FT%TZ)
+          aws dynamodb put-item \
+            --table-name "$CONTROL_TABLE" \
+            --item "{\"key\":{\"S\":\"stack\"},\"state\":{\"S\":\"asleep\"},\"updated_at\":{\"S\":\"$NOW\"}}"
+
+      - name: Mark destroy failure
+        if: failure()
+        env:
+          CONTROL_TABLE: ${{ vars.CONTROL_TABLE }}
+        run: |
+          NOW=$(date -u +%FT%TZ)
+          aws dynamodb put-item \
+            --table-name "$CONTROL_TABLE" \
+            --item "{\"key\":{\"S\":\"stack\"},\"state\":{\"S\":\"error\"},\"updated_at\":{\"S\":\"$NOW\"}}"

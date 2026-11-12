@@ -31,6 +31,18 @@ output "uploads_bucket_name" {
   value = module.storage.uploads_bucket_name
 }
 
+output "private_app_subnet_ids" {
+  value = module.network.private_app_subnet_ids
+}
+
+output "api_security_group_id" {
+  value = module.network.api_security_group_id
+}
+
+output "api_task_definition_arn" {
+  value = module.ecs.task_definition_arns["api"]
+}
+
 output "secret_arns" {
   value     = module.storage.secret_arns
   sensitive = true

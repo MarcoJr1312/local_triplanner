@@ -14,3 +14,8 @@ output "github_token_secret_arn" {
 output "ecr_repository_urls" {
   value = module.registry.repository_urls
 }
+
+output "github_actions_role_arn" {
+  description = "Set this as the AWS_ROLE_ARN secret in GitHub Actions."
+  value       = aws_iam_role.github_actions.arn
+}
