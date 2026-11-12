@@ -11,6 +11,7 @@ import PasswordInput from '@/components/PasswordInput';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import VerificationGate from '@/components/VerificationGate';
 import { demoAuthEnabled, localizeApiError } from '@/lib/api';
+import { firebaseEnabled } from '@/lib/firebase';
 import { useAuth } from '@/hooks/useAuth';
 import { useI18n } from '@/lib/i18n';
 
@@ -162,14 +163,16 @@ export default function LoginPage() {
           <h1 className="text-2xl font-bold tracking-tight text-foreground">{t('auth.welcome')}</h1>
           <p className="mt-1 text-sm text-muted-foreground">{t('auth.subtitle')}</p>
 
-          <Tabs value={tab} onValueChange={(v) => setTab(v as AuthTab)} className="mt-6">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="signin">{t('auth.tabSignIn')}</TabsTrigger>
-              <TabsTrigger value="signup">{t('auth.tabSignUp')}</TabsTrigger>
-            </TabsList>
-          </Tabs>
+          {firebaseEnabled && (
+            <>
+              <Tabs value={tab} onValueChange={(v) => setTab(v as AuthTab)} className="mt-6">
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="signin">{t('auth.tabSignIn')}</TabsTrigger>
+                  <TabsTrigger value="signup">{t('auth.tabSignUp')}</TabsTrigger>
+                </TabsList>
+              </Tabs>
 
-          <form className="mt-4 space-y-4" onSubmit={handleSubmit}>
+              <form className="mt-4 space-y-4" onSubmit={handleSubmit}>
             {tab === 'signup' && (
               <div>
                 <Label htmlFor="name" className="mb-1 block">
@@ -246,6 +249,8 @@ export default function LoginPage() {
             <GoogleIcon />
             {t('auth.continueWithGoogle')}
           </Button>
+            </>
+          )}
 
           {demoAuthEnabled && (
             <>

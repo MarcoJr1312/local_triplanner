@@ -11,12 +11,16 @@ import { openDb } from './db.ts';
 import { ensureDemoUser, resolveCurrentUserId } from './auth.ts';
 import { AuthTokenError } from './auth/verify.ts';
 import { HasDataClient } from './hasdata/client.ts';
-import { HASDATA_API_KEY, hasHasDataKey, PORT, assertFirebaseEnv, INTERNAL_TOKEN, isUsingDefaultInternalToken } from './env.ts';
+import { HASDATA_API_KEY, hasHasDataKey, PORT, assertFirebaseEnv, INTERNAL_TOKEN, isUsingDefaultInternalToken, LOCAL_ONLY } from './env.ts';
 import { createInternalRouter } from './internal.ts';
 import { serveUploads } from './uploads.ts';
 import { sweepOnce } from './reminders.ts';
 
-assertFirebaseEnv();
+if (LOCAL_ONLY) {
+  console.warn('[triplanner-local] LOCAL_ONLY=1: Firebase no requerido; auth demo via x-user-id.');
+} else {
+  assertFirebaseEnv();
+}
 
 const db = openDb();
 ensureDemoUser(db);

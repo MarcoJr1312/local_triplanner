@@ -7,7 +7,7 @@ import { DatabaseSync } from 'node:sqlite';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { generateKeyPair, exportJWK, SignJWT } from 'jose';
+import { generateKeyPair, exportJWK, exportPKCS8, SignJWT } from 'jose';
 import type { CryptoKey, JWK } from 'jose';
 
 import { createFirebaseTokenVerifier } from '../src/auth/verify.ts';
@@ -17,6 +17,7 @@ import { resolvers, type Ctx, type PubSub } from '../src/resolvers.ts';
 import { resetVerificationRateLimit } from '../src/auth/rate-limit.ts';
 import { signVerificationToken, resetUsedJtis } from '../src/auth/verify-token.ts';
 import { getServiceAccountPrivateKey } from '../src/auth/service-account.ts';
+import { FIREBASE_SERVICE_ACCOUNT_PATH } from '../src/env.ts';
 import { migrateFirebaseAuth } from '../src/db.ts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -355,14 +356,27 @@ test('authSendVerification: sin name en el claim envia name undefined', async ()
 
 // ---- authConfirmEmail ----
 
+// Los flujos de confirmacion usan la private key REAL del service account desde
+// el resolver. Sin ese archivo (modo local-only) no se pueden ejercitar: skip.
+const hasServiceAccount = fs.existsSync(FIREBASE_SERVICE_ACCOUNT_PATH);
+const confirmTest = hasServiceAccount ? test : test.skip;
+
 // Firma un token PROPIO de verificacion con la private key real del service
-// account (la misma que usa el resolver para verificar).
-const serviceAccountKey = getServiceAccountPrivateKey();
+// account (la misma que usa el resolver para verificar). Sin service account
+// (modo local-only) se genera una clave efimera para el roundtrip.
+let serviceAccountKey: string;
+try {
+  serviceAccountKey = getServiceAccountPrivateKey();
+} catch {
+  const { privateKey: ephemeral } = await generateKeyPair('RS256', { extractable: true });
+  serviceAccountKey = await exportPKCS8(ephemeral);
+  console.warn('[auth.test] service account ausente: usando clave efimera.');
+}
 async function signVerification(uid = 'firebase-uid-123', email = 'maria@example.com'): Promise<string> {
   return signVerificationToken({ uid, email }, serviceAccountKey);
 }
 
-test('authConfirmEmail: verifica en admin, sincroniza usuario y envia bienvenida una vez', async () => {
+confirmTest('authConfirmEmail: verifica en admin, sincroniza usuario y envia bienvenida una vez', async () => {
   resetUsedJtis();
   const db = memoryDb();
   const sent: { to: string; name: string }[] = [];
@@ -387,7 +401,7 @@ test('authConfirmEmail: verifica en admin, sincroniza usuario y envia bienvenida
   assert.ok(row.welcome_sent_at, 'se marca welcome_sent_at al enviar');
 });
 
-test('authConfirmEmail: segunda confirmacion (token distinto) no reenvia la bienvenida', async () => {
+confirmTest('authConfirmEmail: segunda confirmacion (token distinto) no reenvia la bienvenida', async () => {
   resetUsedJtis();
   const db = memoryDb();
   let calls = 0;
@@ -408,7 +422,7 @@ test('authConfirmEmail: segunda confirmacion (token distinto) no reenvia la bien
   assert.equal(calls, 1, 'la bienvenida solo se envia una vez');
 });
 
-test('authConfirmEmail: token invalido -> AUTH_TOKEN_INVALID', async () => {
+confirmTest('authConfirmEmail: token invalido -> AUTH_TOKEN_INVALID', async () => {
   resetUsedJtis();
   const db = memoryDb();
   const ctx = ctxFor(db, { confirmVerification: async () => {} });
@@ -418,7 +432,7 @@ test('authConfirmEmail: token invalido -> AUTH_TOKEN_INVALID', async () => {
   assert.equal(code, 'AUTH_TOKEN_INVALID');
 });
 
-test('authConfirmEmail: replay del mismo token (mismo uid) es idempotente', async () => {
+confirmTest('authConfirmEmail: replay del mismo token (mismo uid) es idempotente', async () => {
   resetUsedJtis();
   const db = memoryDb();
   const ctx = ctxFor(db, { confirmVerification: async () => {}, sendWelcome: async () => {} });
@@ -428,7 +442,7 @@ test('authConfirmEmail: replay del mismo token (mismo uid) es idempotente', asyn
   assert.equal(first.user.userId, second.user.userId);
 });
 
-test('authConfirmEmail: user not found en admin -> AUTH_TOKEN_INVALID', async () => {
+confirmTest('authConfirmEmail: user not found en admin -> AUTH_TOKEN_INVALID', async () => {
   resetUsedJtis();
   const db = memoryDb();
   const ctx = ctxFor(db, {
@@ -444,7 +458,7 @@ test('authConfirmEmail: user not found en admin -> AUTH_TOKEN_INVALID', async ()
   assert.equal(code, 'AUTH_TOKEN_INVALID');
 });
 
-test('authConfirmEmail: fallo generico de admin -> VERIFICATION_CONFIRM_FAILED', async () => {
+confirmTest('authConfirmEmail: fallo generico de admin -> VERIFICATION_CONFIRM_FAILED', async () => {
   resetUsedJtis();
   const db = memoryDb();
   const ctx = ctxFor(db, {

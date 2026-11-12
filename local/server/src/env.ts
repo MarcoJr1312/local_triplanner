@@ -70,6 +70,14 @@ function resolveServiceAccountPath(): string {
 }
 export const FIREBASE_SERVICE_ACCOUNT_PATH = resolveServiceAccountPath();
 
+// ---- Modo local-only ----
+// LOCAL_ONLY=1 permite arrancar el backend sin Firebase (auth demo via x-user-id).
+// No usar en produccion. Si hay config Firebase y llega un Bearer, se sigue
+// verificando el token con jose; el flag solo relaja el arranque.
+export const LOCAL_ONLY = ['1', 'true', 'yes', 'on'].includes(
+  (process.env.LOCAL_ONLY ?? '').toLowerCase(),
+);
+
 // Valida la config Firebase al arranque. Nunca imprime valores.
 export function assertFirebaseEnv(): void {
   const missing: string[] = [];
