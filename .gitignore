@@ -27,3 +27,7 @@ Thumbs.db
 
 # Build de producción (distDir separado)
 frontend-next/.next-prod/
+
+# Configuración local de agentes
+.orkai.yaml
+AGENTS.md
