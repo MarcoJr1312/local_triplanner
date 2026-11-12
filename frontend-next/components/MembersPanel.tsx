@@ -63,41 +63,39 @@ export default function MembersPanel({ trip, presence, currentUserId, onInvite, 
   const sorted = [...trip.members].sort((a, b) => ROLE_ORDER.indexOf(a.role) - ROLE_ORDER.indexOf(b.role));
 
   return (
-    <div className="rounded-2xl border border-border bg-card p-4 shadow-card">
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <h2 className="flex items-center gap-1.5 text-sm font-semibold tracking-tight text-foreground">
+    <div className="side-card card">
+      <div className="side-head">
+        <h3>
           {t('members.title')}
-          <span className="rounded-full bg-muted px-1.5 py-0.5 text-xs font-medium tabular-nums text-muted-foreground">
-            {trip.members.length}
-          </span>
-        </h2>
+          <span className="mono" style={{ marginLeft: 8 }}>{trip.members.length}</span>
+        </h3>
         {canManage && (
           <button
             type="button"
             onClick={onInvite}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm transition duration-150 max-sm:min-h-11 hover:bg-brand-700 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-background"
+            className="btn btn-soft btn-sm"
           >
             <UserPlus className="h-3.5 w-3.5 shrink-0" /> {t('members.invite')}
           </button>
         )}
       </div>
 
-      <div className="mb-4 flex items-center justify-between gap-2">
+      <div className="mb-3 flex items-center justify-between gap-2">
         <PresenceDots presence={presence} currentUserId={currentUserId} />
         {onlineIds.size > 0 && (
-          <span className="shrink-0 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+          <span className="shrink-0 text-[11px] font-medium text-[var(--success)]">
             {t('members.onlineCount', { n: onlineIds.size })}
           </span>
         )}
       </div>
 
-      <ul className="space-y-1">
+      <ul>
         {sorted.map((m) => {
           const isMe = m.userId === currentUserId;
           const online = onlineIds.has(m.userId);
           const canEditRole = isOwner && m.userId !== trip.ownerId && !isMe;
           return (
-            <li key={m.userId} className="flex items-center gap-3 rounded-xl px-2 py-2 transition duration-150 hover:bg-muted/40">
+            <li key={m.userId} className="member-row">
               <div className="relative">
                 <Avatar user={m} size="sm" />
                 <span
@@ -109,14 +107,14 @@ export default function MembersPanel({ trip, presence, currentUserId, onInvite, 
               </div>
 
               <div className="min-w-0 flex-1">
-                <p className="flex items-center gap-1.5 truncate text-sm font-medium text-foreground">
+                <p className="flex items-center gap-1.5 truncate text-[12px] font-semibold text-foreground">
                   {m.displayName}
-                  {isMe && <span className="text-xs font-normal text-muted-foreground">{t('members.you')}</span>}
+                  {isMe && <span className="text-[10px] font-normal text-muted">{t('members.you')}</span>}
                   {m.role === 'owner' && <Crown className="h-3.5 w-3.5 shrink-0 text-amber-400" />}
                 </p>
-                <p className="truncate text-xs text-muted-foreground">{m.email}</p>
+                <p className="truncate text-[10.5px] text-muted">{m.email}</p>
                 {online && (
-                  <p className="mt-0.5 flex items-center gap-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
+                  <p className="mt-0.5 flex items-center gap-1 text-[10px] font-medium text-[var(--success)]">
                     <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> {t('members.online')}
                   </p>
                 )}
@@ -146,7 +144,7 @@ export default function MembersPanel({ trip, presence, currentUserId, onInvite, 
                 <button
                   type="button"
                   onClick={() => handleRemove(m.userId)}
-                  className="inline-flex items-center justify-center rounded-lg p-1 text-muted-foreground/70 transition duration-150 max-sm:min-h-11 max-sm:min-w-11 hover:bg-rose-50 hover:text-rose-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/40 dark:hover:bg-rose-500/15 dark:hover:text-rose-400"
+                  className="fav"
                   aria-label={t('members.removeAria', { name: m.displayName })}
                 >
                   <X className="h-4 w-4 shrink-0" />
@@ -161,7 +159,8 @@ export default function MembersPanel({ trip, presence, currentUserId, onInvite, 
         <button
           type="button"
           onClick={handleLeave}
-          className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg border border-border py-2 text-xs font-medium text-muted-foreground transition duration-150 max-sm:min-h-11 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/40 dark:hover:border-rose-500/30 dark:hover:bg-rose-500/15 dark:hover:text-rose-400"
+          className="btn btn-ghost btn-sm"
+          style={{ width: '100%', marginTop: 12 }}
         >
           <LogOut className="h-3.5 w-3.5 shrink-0" /> {t('members.leave')}
         </button>

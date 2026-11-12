@@ -9,12 +9,12 @@ export default function CategoryBadge({ category, size = 'sm' }: { category: str
   const label = meta.labelKey ? t(meta.labelKey) : meta.label;
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-full font-medium ${meta.badge} ${
+      className={`inline-flex min-w-max items-center gap-1 whitespace-nowrap rounded-full font-medium ${meta.badge} ${
         size === 'xs' ? 'px-1.5 py-0.5 text-[10px]' : 'px-2 py-0.5 text-xs'
       }`}
     >
-      <span className={`h-1.5 w-1.5 rounded-full ${meta.dot}`} />
-      {label}
+      <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${meta.dot}`} />
+      <span className="whitespace-nowrap">{label}</span>
     </span>
   );
 }

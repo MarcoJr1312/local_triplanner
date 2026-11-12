@@ -1,11 +1,13 @@
 import type { Metadata } from 'next';
 import '@fontsource-variable/inter';
+import '@fontsource-variable/jetbrains-mono';
 import { AuthProvider } from '@/hooks/useAuth';
 import ClientOnly from '@/components/ClientOnly';
 import ThemeProvider from '@/components/theme-provider';
 import { I18nProvider } from '@/lib/i18n';
 import { Toaster } from '@/components/ui/sonner';
 import './globals.css';
+import './premium.css';
 
 export const metadata: Metadata = {
   title: 'Triplanner',

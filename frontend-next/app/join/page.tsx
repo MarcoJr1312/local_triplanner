@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 // Pantalla publica de union a un viaje por invitacion (email + codigo).
 // El link del email llega a /join?trip=<id>&code=<code> con el codigo pre-llenado.
@@ -441,3 +441,4 @@ export default function JoinPage() {
     </div>
   );
 }
+

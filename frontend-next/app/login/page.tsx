@@ -2,13 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Compass, MapPin, Sparkles, Users } from 'lucide-react';
+import { Check, Compass, MapPin, Sparkles, Users } from 'lucide-react';
 import { toast } from 'sonner';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import PasswordInput from '@/components/PasswordInput';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import VerificationGate from '@/components/VerificationGate';
 import { demoAuthEnabled, localizeApiError } from '@/lib/api';
 import { firebaseEnabled } from '@/lib/firebase';
@@ -19,23 +14,11 @@ type AuthTab = 'signin' | 'signup';
 
 function GoogleIcon() {
   return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4">
-      <path
-        fill="#4285F4"
-        d="M23.49 12.27c0-.79-.07-1.54-.19-2.27H12v4.51h6.47a5.54 5.54 0 0 1-2.4 3.63v3h3.86c2.26-2.09 3.56-5.17 3.56-8.87Z"
-      />
-      <path
-        fill="#34A853"
-        d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.86-3c-1.08.72-2.45 1.16-4.07 1.16-3.13 0-5.78-2.11-6.73-4.96H1.29v3.09A11.99 11.99 0 0 0 12 24Z"
-      />
-      <path
-        fill="#FBBC05"
-        d="M5.27 14.29a7.2 7.2 0 0 1 0-4.58V6.62H1.29a12 12 0 0 0 0 10.76l3.98-3.09Z"
-      />
-      <path
-        fill="#EA4335"
-        d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.31 0 3.25 2.69 1.29 6.62l3.98 3.09C6.22 6.86 8.87 4.75 12 4.75Z"
-      />
+    <svg viewBox="0 0 24 24" aria-hidden="true" style={{ width: 17, height: 17 }}>
+      <path fill="#4285F4" d="M23.49 12.27c0-.79-.07-1.54-.19-2.27H12v4.51h6.47a5.54 5.54 0 0 1-2.4 3.63v3h3.86c2.26-2.09 3.56-5.17 3.56-8.87Z" />
+      <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.86-3c-1.08.72-2.45 1.16-4.07 1.16-3.13 0-5.78-2.11-6.73-4.96H1.29v3.09A11.99 11.99 0 0 0 12 24Z" />
+      <path fill="#FBBC05" d="M5.27 14.29a7.2 7.2 0 0 1 0-4.58V6.62H1.29a12 12 0 0 0 0 10.76l3.98-3.09Z" />
+      <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.31 0 3.25 2.69 1.29 6.62l3.98 3.09C6.22 6.86 8.87 4.75 12 4.75Z" />
     </svg>
   );
 }
@@ -112,163 +95,167 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-black via-black to-brand-950 p-4">
-      <div className="grid w-full max-w-4xl overflow-hidden rounded-3xl border border-border bg-card shadow-2xl md:grid-cols-2">
-        <div className="relative hidden flex-col justify-between overflow-hidden bg-gradient-to-br from-black via-black to-brand-950 p-10 text-white md:flex">
-          <div className="pointer-events-none absolute -right-16 -top-16 h-64 w-64 rounded-full bg-white/10 blur-3xl" />
-          <div className="pointer-events-none absolute -bottom-24 -left-10 h-72 w-72 rounded-full bg-brand-400/20 blur-3xl" />
-
-          <div className="relative flex items-center gap-2">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/15 ring-1 ring-inset ring-white/20">
-              <Compass className="h-5 w-5" />
-            </span>
-            <span className="text-xl font-bold tracking-tight">Triplanner</span>
-          </div>
-
-          <div className="relative space-y-6">
-            <h2 className="text-2xl font-bold leading-snug tracking-tight">{t('login.heroTitle')}</h2>
-            <ul className="space-y-4 text-sm text-brand-50">
-              <li className="flex items-start gap-3">
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/15">
-                  <MapPin className="h-4 w-4" />
-                </span>
-                <span className="pt-1.5">{t('login.feature1')}</span>
-              </li>
-              <li className="flex items-start gap-3">
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/15">
-                  <Users className="h-4 w-4" />
-                </span>
-                <span className="pt-1.5">{t('login.feature2')}</span>
-              </li>
-              <li className="flex items-start gap-3">
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/15">
-                  <Sparkles className="h-4 w-4" />
-                </span>
-                <span className="pt-1.5">{t('login.feature3')}</span>
-              </li>
-            </ul>
-          </div>
-
-          <p className="relative text-xs text-brand-100">{t('login.demoNote')}</p>
+    <div className="login">
+      <div className="login-art">
+        <div className="login-brand">
+          <span className="rail-logo">
+            <Compass className="icon" />
+          </span>
+          <strong>Triplanner</strong>
         </div>
 
-        <div className="flex flex-col justify-center p-6 sm:p-10">
-          <div className="mb-6 flex items-center gap-2 md:hidden">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-500 text-white shadow-sm">
-              <Compass className="h-5 w-5" />
-            </span>
-            <span className="text-xl font-bold tracking-tight text-foreground">Triplanner</span>
+        <div className="login-copy">
+          <h1>
+            {t('premium.login.headline')} <em>{t('premium.login.headlineAccent')}</em>
+          </h1>
+          <p>{t('premium.login.lead')}</p>
+          <div className="login-features">
+            <div className="login-feature">
+              <span className="fi">
+                <MapPin className="icon-sm" />
+              </span>
+              <div>
+                <strong>{t('premium.login.feature1.title')}</strong>
+                <span>{t('premium.login.feature1.body')}</span>
+              </div>
+            </div>
+            <div className="login-feature">
+              <span className="fi">
+                <Users className="icon-sm" />
+              </span>
+              <div>
+                <strong>{t('premium.login.feature2.title')}</strong>
+                <span>{t('premium.login.feature2.body')}</span>
+              </div>
+            </div>
+            <div className="login-feature">
+              <span className="fi">
+                <Sparkles className="icon-sm" />
+              </span>
+              <div>
+                <strong>{t('premium.login.feature3.title')}</strong>
+                <span>{t('premium.login.feature3.body')}</span>
+              </div>
+            </div>
           </div>
+        </div>
+      </div>
 
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">{t('auth.welcome')}</h1>
-          <p className="mt-1 text-sm text-muted-foreground">{t('auth.subtitle')}</p>
+      <div className="login-panel">
+        <div className="login-card">
+          <div className="login-brand login-brand-mobile">
+            <span className="rail-logo">
+              <Compass className="icon" />
+            </span>
+            <strong>Triplanner</strong>
+          </div>
+          <span className="mono">{t('premium.login.eyebrow')}</span>
+          <h2>{t('premium.login.title')}</h2>
+          <p>{t('premium.login.subtitle')}</p>
 
           {firebaseEnabled && (
             <>
-              <Tabs value={tab} onValueChange={(v) => setTab(v as AuthTab)} className="mt-6">
-                <TabsList className="grid w-full grid-cols-2">
-                  <TabsTrigger value="signin">{t('auth.tabSignIn')}</TabsTrigger>
-                  <TabsTrigger value="signup">{t('auth.tabSignUp')}</TabsTrigger>
-                </TabsList>
-              </Tabs>
-
-              <form className="mt-4 space-y-4" onSubmit={handleSubmit}>
-            {tab === 'signup' && (
-              <div>
-                <Label htmlFor="name" className="mb-1 block">
-                  {t('auth.name')}
-                </Label>
-                <Input
-                  id="name"
-                  type="text"
-                  autoComplete="name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder={t('auth.namePlaceholder')}
-                />
-              </div>
-            )}
-
-            <div>
-              <Label htmlFor="email" className="mb-1 block">
-                {t('auth.email')}
-              </Label>
-              <Input
-                id="email"
-                type="email"
-                autoComplete="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder={t('auth.emailPlaceholder')}
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="password" className="mb-1 block">
-                {t('auth.password')}
-              </Label>
-              <PasswordInput
-                id="password"
-                autoComplete={tab === 'signin' ? 'current-password' : 'new-password'}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder={t('auth.passwordPlaceholder')}
-              />
-            </div>
-
-            {tab === 'signin' && (
-              <div className="text-right">
+              <div className="tabs" style={{ marginBottom: 18 }}>
                 <button
                   type="button"
-                  onClick={handleReset}
-                  className="text-xs font-medium text-primary hover:text-primary/90"
+                  className={`tab${tab === 'signin' ? ' active' : ''}`}
+                  onClick={() => setTab('signin')}
                 >
-                  {t('auth.forgotPassword')}
+                  {t('auth.tabSignIn')}
+                </button>
+                <button
+                  type="button"
+                  className={`tab${tab === 'signup' ? ' active' : ''}`}
+                  onClick={() => setTab('signup')}
+                >
+                  {t('auth.tabSignUp')}
                 </button>
               </div>
-            )}
 
-            <Button type="submit" disabled={submitting} className="w-full">
-              {submitting
-                ? tab === 'signin'
-                  ? t('auth.signingIn')
-                  : t('auth.signingUp')
-                : tab === 'signin'
-                  ? t('auth.signIn')
-                  : t('auth.signUp')}
-            </Button>
-          </form>
+              <form className="login-form" onSubmit={handleSubmit}>
+                {tab === 'signup' && (
+                  <div className="field">
+                    <label htmlFor="name">{t('auth.name')}</label>
+                    <input
+                      id="name"
+                      className="input"
+                      type="text"
+                      autoComplete="name"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder={t('auth.namePlaceholder')}
+                    />
+                  </div>
+                )}
+                <div className="field">
+                  <label htmlFor="email">{t('premium.login.email')}</label>
+                  <input
+                    id="email"
+                    className="input"
+                    type="email"
+                    autoComplete="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder={t('auth.emailPlaceholder')}
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="password">{t('premium.login.password')}</label>
+                  <input
+                    id="password"
+                    className="input"
+                    type="password"
+                    autoComplete={tab === 'signin' ? 'current-password' : 'new-password'}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder={t('auth.passwordPlaceholder')}
+                  />
+                </div>
+                {tab === 'signin' && (
+                  <div style={{ textAlign: 'right' }}>
+                    <button
+                      type="button"
+                      onClick={handleReset}
+                      style={{ fontSize: 12, color: 'var(--primary)', fontWeight: 600 }}
+                    >
+                      {t('auth.forgotPassword')}
+                    </button>
+                  </div>
+                )}
+                <button className="btn btn-primary btn-block" type="submit" disabled={submitting}>
+                  {submitting
+                    ? tab === 'signin'
+                      ? t('auth.signingIn')
+                      : t('auth.signingUp')
+                    : tab === 'signin'
+                      ? t('premium.login.submit')
+                      : t('auth.signUp')}
+                </button>
+              </form>
 
-          <div className="my-5 flex items-center gap-3">
-            <span className="h-px flex-1 bg-border" />
-            <span className="text-xs uppercase text-muted-foreground">{t('auth.or')}</span>
-            <span className="h-px flex-1 bg-border" />
-          </div>
-
-          <Button type="button" variant="outline" onClick={handleGoogle} className="w-full">
-            <GoogleIcon />
-            {t('auth.continueWithGoogle')}
-          </Button>
+              <div className="divider" />
+              <button type="button" className="btn btn-ghost btn-block" onClick={handleGoogle}>
+                <GoogleIcon />
+                {t('auth.continueWithGoogle')}
+              </button>
             </>
           )}
 
           {demoAuthEnabled && (
             <>
-              <div className="my-5 flex items-center gap-3">
-                <span className="h-px flex-1 bg-border" />
-                <span className="text-xs uppercase text-muted-foreground">{t('auth.or')}</span>
-                <span className="h-px flex-1 bg-border" />
-              </div>
-              <Button
+              {firebaseEnabled && <div className="divider" />}
+              <button
                 type="button"
-                variant="outline"
+                className={`btn btn-block ${firebaseEnabled ? 'btn-ghost' : 'btn-primary'}`}
                 onClick={handleDemo}
                 disabled={demoSubmitting}
-                className="w-full text-muted-foreground hover:text-foreground"
               >
-                {demoSubmitting ? t('auth.signingIn') : t('auth.demoLogin')}
-              </Button>
-              <p className="mt-3 text-center text-xs text-muted-foreground">{t('auth.demoHint')}</p>
+                {demoSubmitting ? t('auth.signingIn') : t('premium.login.demo')}
+              </button>
+              <div className="login-foot">
+                <Check className="icon-sm" />
+                {t('premium.login.note')}
+              </div>
             </>
           )}
         </div>

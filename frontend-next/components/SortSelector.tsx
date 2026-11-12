@@ -38,7 +38,7 @@ export default function SortSelector({ value, onChange }: SortSelectorProps) {
         <button
           type="button"
           aria-label={t('sort.by')}
-          className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-2 text-sm font-medium text-muted-foreground transition duration-150 max-sm:min-h-11 hover:text-foreground active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+          className="btn btn-ghost btn-sm"
         >
           <ArrowUpDown className="h-4 w-4 shrink-0" />
           {t('sort.by')}

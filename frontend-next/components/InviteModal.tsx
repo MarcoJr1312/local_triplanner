@@ -74,7 +74,7 @@ export default function InviteModal({ open, tripId, tripName, onClose }: InviteM
               reset();
               onClose();
             }}
-            className="rounded-xl px-4 py-2 text-sm font-medium text-foreground/90 transition duration-150 hover:bg-muted active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40"
+            className="btn btn-ghost btn-sm"
           >
             {done ? t('common.close') : t('common.cancel')}
           </button>
@@ -83,7 +83,7 @@ export default function InviteModal({ open, tripId, tripName, onClose }: InviteM
               type="submit"
               form="invite-form"
               disabled={sending}
-              className="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition duration-150 hover:bg-brand-700 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 disabled:opacity-60 max-sm:min-h-11"
+              className="btn btn-primary btn-sm"
             >
               <Send className="h-4 w-4" />
               {sending ? t('invite.sending') : t('invite.send')}
@@ -101,11 +101,9 @@ export default function InviteModal({ open, tripId, tripName, onClose }: InviteM
           </p>
         </div>
       ) : (
-        <form id="invite-form" onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label htmlFor="invite-email" className="mb-1 block text-sm font-medium text-foreground">
-              {t('auth.email')}
-            </label>
+        <form id="invite-form" onSubmit={handleSubmit} style={{ display: 'grid', gap: 15 }}>
+          <div className="field">
+            <label htmlFor="invite-email">{t('auth.email')}</label>
             <input
               id="invite-email"
               type="email"
@@ -113,21 +111,21 @@ export default function InviteModal({ open, tripId, tripName, onClose }: InviteM
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder={t('invite.emailPlaceholder')}
-              className="w-full rounded-xl border border-input px-3.5 py-2.5 text-base outline-none md:text-sm transition duration-150 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
+              className="input"
             />
-            <p className="mt-1.5 text-xs text-muted-foreground">
+            <p className="text-xs text-muted">
               {t('invite.hint')}
             </p>
           </div>
           <fieldset>
-            <legend className="mb-1.5 block text-sm font-medium text-foreground">
+            <legend className="mb-1.5 block text-[12.5px] font-semibold text-foreground">
               {t('invite.roleLabel')}
             </legend>
             <div className="grid gap-2 sm:grid-cols-2">
               {ROLE_OPTIONS.map((option) => (
                 <label
                   key={option.value}
-                  className="relative flex cursor-pointer items-start gap-2.5 rounded-xl border border-input p-3 transition duration-150 hover:bg-muted has-[:checked]:border-brand-500 has-[:checked]:bg-brand-500/5 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-brand-500/40"
+                  className={`dest-option flex cursor-pointer items-start gap-2.5${role === option.value ? ' active' : ''}`}
                 >
                   <input
                     type="radio"
@@ -135,17 +133,17 @@ export default function InviteModal({ open, tripId, tripName, onClose }: InviteM
                     value={option.value}
                     checked={role === option.value}
                     onChange={() => setRole(option.value)}
-                    className="mt-0.5 h-4 w-4 shrink-0 accent-brand-600"
+                    className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--primary)]"
                   />
                   <span className="flex flex-col gap-0.5">
-                    <span className="text-sm font-medium text-foreground">{t(option.labelKey)}</span>
-                    <span className="text-xs text-muted-foreground">{t(option.descKey)}</span>
+                    <span className="text-[12.5px] font-semibold text-foreground">{t(option.labelKey)}</span>
+                    <span className="text-[10.5px] text-muted">{t(option.descKey)}</span>
                   </span>
                 </label>
               ))}
             </div>
           </fieldset>
-          {error && <p className="text-sm text-rose-600 dark:text-rose-400">{error}</p>}
+          {error && <p className="text-sm text-[var(--danger)]">{error}</p>}
         </form>
       )}
     </Modal>

@@ -164,7 +164,7 @@ export default function ProfileModal({ open, onClose }: ProfileModalProps) {
           <button
             type="button"
             onClick={onClose}
-            className="rounded-xl px-4 py-2 text-sm font-medium text-foreground/90 transition duration-150 hover:bg-muted active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40"
+            className="btn btn-ghost btn-sm"
           >
             {t('common.cancel')}
           </button>
@@ -172,7 +172,7 @@ export default function ProfileModal({ open, onClose }: ProfileModalProps) {
             type="button"
             onClick={handleSave}
             disabled={saving}
-            className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition duration-150 hover:bg-brand-700 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 disabled:opacity-60 max-sm:min-h-11"
+            className="btn btn-primary btn-sm"
           >
             {saving ? t('common.saving') : t('common.save')}
           </button>
@@ -186,7 +186,7 @@ export default function ProfileModal({ open, onClose }: ProfileModalProps) {
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-input px-3 py-1.5 text-xs font-medium text-foreground transition duration-150 hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40 max-sm:min-h-11"
+              className="btn btn-ghost btn-sm"
             >
               <Camera className="h-3.5 w-3.5" />
               {previewUrl ? t('profile.changePhoto') : t('profile.uploadPhoto')}
@@ -195,7 +195,7 @@ export default function ProfileModal({ open, onClose }: ProfileModalProps) {
               <button
                 type="button"
                 onClick={handleRemove}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-input px-3 py-1.5 text-xs font-medium text-rose-600 dark:text-rose-400 transition duration-150 hover:bg-rose-50 dark:hover:bg-rose-500/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/40 max-sm:min-h-11"
+                className="btn btn-ghost btn-sm text-[var(--danger)]"
               >
                 <Trash2 className="h-3.5 w-3.5" />
                 {t('profile.removePhoto')}
@@ -215,26 +215,22 @@ export default function ProfileModal({ open, onClose }: ProfileModalProps) {
           <p className="text-xs text-muted-foreground">{t('profile.photoHint')}</p>
         </div>
 
-        <div>
-          <label htmlFor="profile-name" className="mb-1 block text-sm font-medium text-foreground">
-            {t('profile.name')}
-          </label>
+        <div className="field">
+          <label htmlFor="profile-name">{t('profile.name')}</label>
           <input
             id="profile-name"
             value={name}
             onChange={(e) => setName(e.target.value)}
             maxLength={40}
             placeholder={t('profile.namePlaceholder')}
-            className="w-full rounded-xl border border-input px-3.5 py-2.5 text-base outline-none md:text-sm transition duration-150 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
+            className="input"
           />
         </div>
 
-        <div>
-          <label htmlFor="profile-language" className="mb-1 block text-sm font-medium text-foreground">
-            {t('profile.language')}
-          </label>
+        <div className="field">
+          <label htmlFor="profile-language">{t('profile.language')}</label>
           <Select value={language} onValueChange={(v) => setLanguage(v as Locale)}>
-            <SelectTrigger id="profile-language" className="h-auto w-full rounded-xl px-3 py-2.5 text-sm">
+            <SelectTrigger id="profile-language" className="input">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -242,7 +238,7 @@ export default function ProfileModal({ open, onClose }: ProfileModalProps) {
               <SelectItem value="en">{t('profile.languageEn')}</SelectItem>
             </SelectContent>
           </Select>
-          <p className="mt-1 text-xs text-muted-foreground">{t('profile.languageHint')}</p>
+          <p className="text-xs text-muted">{t('profile.languageHint')}</p>
         </div>
 
         <section className="border-t border-border pt-4">

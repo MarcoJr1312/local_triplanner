@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 // Pagina de verificacion de email. El link del email (generado por el backend)
 // apunta directo aqui: /verify?token=<jwt>. Confirmamos el token llamando a
@@ -85,8 +85,8 @@ function VerifyContent() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-black via-black to-brand-950 p-4">
-      <div className="w-full max-w-md rounded-3xl border border-border bg-card p-6 shadow-2xl sm:p-8">
+    <div className="flex min-h-screen items-center justify-center bg-background p-4">
+      <div className="w-full max-w-md rounded-[20px] border border-border bg-card p-6 shadow-card-hover sm:p-8">
         <div className="flex flex-col items-center text-center">
           {state.status === 'applying' && (
             <>
@@ -149,7 +149,7 @@ function VerifyContent() {
 
 function VerifyFallback() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-black via-black to-brand-950 p-4">
+    <div className="flex min-h-screen items-center justify-center bg-background p-4">
       <div className="h-10 w-10 animate-spin rounded-full border-4 border-white/30 border-t-white" />
     </div>
   );
@@ -162,3 +162,4 @@ export default function VerifyPage() {
     </Suspense>
   );
 }
+
