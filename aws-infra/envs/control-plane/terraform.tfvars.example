@@ -1,0 +1,5 @@
+region      = "us-east-1"
+project     = "triplanner"
+github_repo = "MarcoJr1312/aws_triplanner"
+alb_name    = "triplanner-alb"
+target_group_name = "triplanner-web"

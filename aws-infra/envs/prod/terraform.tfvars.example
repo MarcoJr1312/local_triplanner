@@ -1,0 +1,10 @@
+region        = "us-east-1"
+project       = "triplanner"
+certificate_arn = ""
+firebase_project_id = "triplanner-a0e06"
+desired_count = 0
+
+# Fill these from `terraform output ecr_repository_urls` in envs/control-plane.
+web_image   = "484826611314.dkr.ecr.us-east-1.amazonaws.com/triplanner/web:latest"
+api_image   = "484826611314.dkr.ecr.us-east-1.amazonaws.com/triplanner/api:latest"
+agent_image = "484826611314.dkr.ecr.us-east-1.amazonaws.com/triplanner/agent:latest"
