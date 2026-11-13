@@ -12,11 +12,23 @@ import {
   signInWithPopup,
   signOut,
   updateProfile,
+  type Auth,
   type Unsubscribe,
   type User,
 } from 'firebase/auth';
 import { ApiError, api } from './api';
 import { auth } from './firebase';
+
+// Firebase es opcional en local: sin configuracion publica, la app usa el modo
+// demo y estas funciones fallan con un codigo estable en vez de romper el bundle.
+function requireAuth(): Auth {
+  if (!auth) {
+    throw new ApiError('Firebase Auth no configurado; usa el modo demo.', {
+      code: 'FIREBASE_NOT_CONFIGURED',
+    });
+  }
+  return auth;
+}
 
 // Mapa de codigos de firebase/auth → codigos estables de Triplanner.
 const FIREBASE_CODE_MAP: Record<string, string> = {
@@ -56,7 +68,7 @@ export function mapFirebaseError(err: unknown): ApiError {
 
 export async function signInEmail(email: string, password: string): Promise<User> {
   try {
-    const credential = await signInWithCredential(auth, EmailAuthProvider.credential(email, password));
+    const credential = await signInWithCredential(requireAuth(), EmailAuthProvider.credential(email, password));
     return credential.user;
   } catch (err) {
     throw mapFirebaseError(err);
@@ -65,7 +77,7 @@ export async function signInEmail(email: string, password: string): Promise<User
 
 export async function signInGoogle(): Promise<User> {
   try {
-    const credential = await signInWithPopup(auth, new GoogleAuthProvider());
+    const credential = await signInWithPopup(requireAuth(), new GoogleAuthProvider());
     return credential.user;
   } catch (err) {
     throw mapFirebaseError(err);
@@ -76,7 +88,7 @@ export async function signUpEmail(email: string, password: string, name?: string
   // Nota: createUserWithEmailAndPassword NO envia email de verificacion; eso lo
   // dispara el backend con authSendVerification (via sendVerification()).
   try {
-    const credential = await createUserWithEmailAndPassword(auth, email, password);
+    const credential = await createUserWithEmailAndPassword(requireAuth(), email, password);
     // El nombre viaja en el claim `name` del token; sin esto el perfil y los
     // emails usan el prefijo del email. updateProfile actualiza el user local.
     const displayName = name?.trim();
@@ -95,11 +107,11 @@ export async function signUpEmail(email: string, password: string, name?: string
 
 // Hay sesion de Firebase activa (independiente del gate de email verificado).
 export function hasActiveFirebaseSession(): boolean {
-  return auth.currentUser !== null;
+  return auth?.currentUser != null;
 }
 
 export async function sendVerification(): Promise<boolean> {
-  const user = auth.currentUser;
+  const user = auth?.currentUser;
   if (!user) {
     throw new ApiError('No hay una sesión de Firebase activa.', { code: 'AUTH_TOKEN_INVALID' });
   }
@@ -109,32 +121,38 @@ export async function sendVerification(): Promise<boolean> {
 
 export async function resetPassword(email: string): Promise<void> {
   try {
-    await sendPasswordResetEmail(auth, email);
+    await sendPasswordResetEmail(requireAuth(), email);
   } catch (err) {
     throw mapFirebaseError(err);
   }
 }
 
 export async function signOutFirebase(): Promise<void> {
+  if (!auth) return;
   await signOut(auth);
 }
 
 export function onAuthChange(callback: (user: User | null) => void): Unsubscribe {
+  if (!auth) {
+    // Sin Firebase configurado no hay listener: el primer evento es "sin sesion".
+    callback(null);
+    return () => {};
+  }
   return onAuthStateChanged(auth, callback);
 }
 
 // Recarga el usuario actual (por ejemplo tras pulsar el link de verificacion)
 // y lo devuelve ya actualizado. `null` si no hay sesion.
 export async function reloadFirebaseUser(): Promise<User | null> {
-  const user = auth.currentUser;
+  const user = auth?.currentUser;
   if (!user) return null;
   await user.reload();
-  return auth.currentUser;
+  return auth?.currentUser ?? null;
 }
 
 // Token fresco (forceRefresh=true obliga a refrescar; el token dura 1h).
 export async function getIdToken(forceRefresh = false): Promise<string | null> {
-  const user = auth.currentUser;
+  const user = auth?.currentUser;
   if (!user) return null;
   return user.getIdToken(forceRefresh);
 }

@@ -7,6 +7,7 @@ import {
   ArrowLeft,
   CalendarDays,
   Check,
+  Clock,
   Copy,
   MapPin,
   Pencil,
@@ -16,6 +17,7 @@ import {
   Sparkles,
   TrendingUp,
   UserPlus,
+  Users,
   Wallet,
 } from 'lucide-react';
 import { api, localizeApiError, subscribePresence, subscribeTrip } from '@/lib/api';
@@ -75,23 +77,19 @@ function StatCard({
   label,
   value,
   extra,
-  className,
 }: {
   icon: ReactNode;
   label: string;
   value: string;
   extra?: string;
-  className?: string;
 }) {
   return (
-    <div className={`flex items-center gap-3 rounded-[16px] border border-border bg-card p-4 shadow-card transition-shadow duration-200 hover:shadow-card-hover ${className ?? ''}`}>
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[11px] bg-primary/10 text-primary">
-        {icon}
-      </span>
-      <div className="min-w-0">
-        <p className="text-[0.72rem] text-muted-foreground">{label}</p>
-        <p className="text-[1.05rem] font-bold tabular-nums tracking-[-0.01em] text-foreground">{value}</p>
-        {extra && <p className="mt-0.5 text-[0.72rem] text-muted-foreground">{extra}</p>}
+    <div className="stat card">
+      <span className="stat-icon">{icon}</span>
+      <div>
+        <div className="stat-label">{label}</div>
+        <div className="stat-value">{value}</div>
+        {extra && <div className="stat-delta">{extra}</div>}
       </div>
     </div>
   );
@@ -505,77 +503,63 @@ function TripDetailContent() {
 
   return (
     <AppShell>
-      <Link
-        href="/"
-        className="mb-4 inline-flex items-center gap-1.5 rounded-lg text-sm font-medium text-muted-foreground transition duration-150 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-      >
+      <Link href="/" className="back-link">
         <ArrowLeft className="h-4 w-4" /> {t('nav.myTrips')}
       </Link>
 
-      {/* Hero */}
       <header
-        className="relative mb-5 flex min-h-[200px] max-sm:min-h-[140px] flex-col overflow-hidden rounded-[20px] shadow-card-hover sm:h-[200px]"
+        className="trip-cover"
         style={cover.kind === 'default' && cover.gradient ? { background: cover.gradient } : undefined}
       >
         {cover.kind === 'preset' && cover.gradient && (
           <div className={`absolute inset-0 ${cover.gradient}`} />
         )}
-
         {cover.kind === 'photo' && cover.photoUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={cover.photoUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
         ) : null}
-
-        {cover.kind === 'default' && (
-          <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-[8rem] font-bold leading-none text-white/25">
-            {trip.destinationName.trim().slice(0, 1).toUpperCase() || '?'}
-          </span>
-        )}
-
-        {cover.kind === 'preset' && CoverIcon && (
-          <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-white/30">
-            <CoverIcon className="h-24 w-24" strokeWidth={1.25} />
-          </span>
-        )}
-
-        <div
-          className="pointer-events-none absolute inset-0"
-          style={{ background: 'linear-gradient(180deg, rgb(10 8 20 / 0.15), rgb(10 8 20 / 0.72))' }}
-        />
-        <div className="relative mt-auto flex flex-wrap items-end gap-x-3 gap-y-2 px-5 pb-4 pt-5 text-white">
-          <div className="min-w-0">
-            <h1 className="truncate text-[1.45rem] font-bold tracking-[-0.02em]">
+        <span className="monogram">
+          {trip.destinationName.trim().slice(0, 1).toUpperCase() || '?'}
+        </span>
+        <div className="cover-content">
+          <div>
+            <span className="mono" style={{ color: 'rgba(255,255,255,.65)' }}>
+              {trip.destinationName}
+            </span>
+            <h1>
               {trip.name.toLowerCase().startsWith(trip.destinationName.toLowerCase())
                 ? trip.name
                 : `${trip.destinationName} — ${trip.name}`}
             </h1>
-            <p className="mt-1 text-sm text-white/85">
-              {formatDateRange(trip.startDate, trip.endDate, locale)} · {days.length}{' '}
-              {t(days.length === 1 ? 'units.day' : 'units.days')} · {trip.members.length}{' '}
-              {t(trip.members.length === 1 ? 'units.member' : 'units.members')}
-            </p>
+            <div className="cover-meta">
+              <span>
+                <CalendarDays /> {formatDateRange(trip.startDate, trip.endDate, locale)}
+              </span>
+              <span>
+                <Clock /> {days.length} {t(days.length === 1 ? 'units.day' : 'units.days')}
+              </span>
+              <span>
+                <Users /> {trip.members.length}{' '}
+                {t(trip.members.length === 1 ? 'units.member' : 'units.members')}
+              </span>
+            </div>
           </div>
-
-          <div className="flex-1" />
-
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="cover-actions">
             {canEdit && (
               <button
                 type="button"
                 onClick={() => setShowSettings(true)}
-                className={GLASS_BUTTON}
+                className="btn btn-ghost btn-sm"
               >
                 <Settings className="h-4 w-4" /> {t('trip.settings')}
               </button>
             )}
-
-            <button type="button" onClick={() => setShowInvite(true)} className={GLASS_BUTTON}>
+            <button type="button" onClick={() => setShowInvite(true)} className="btn btn-ghost btn-sm">
               <UserPlus className="h-4 w-4" /> {t('members.invite')}
             </button>
-
-            <div className="flex items-center">
+            <div className="avatar-stack">
               {heroMembers.map((m) => (
-                <span key={m.userId} title={m.displayName} className="relative -ml-1.5 first:ml-0">
+                <span key={m.userId} title={m.displayName} className="relative">
                   <Avatar user={m} size="sm" />
                   {onlineIds.has(m.userId) && (
                     <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-card bg-emerald-500" />
@@ -590,8 +574,7 @@ function TripDetailContent() {
         </div>
       </header>
 
-      {/* Stats */}
-      <div className="mb-5 grid grid-cols-2 gap-4 sm:grid-cols-3">
+      <div className="trip-stats">
         <StatCard
           icon={<Wallet className="h-5 w-5" />}
           label={t('budget.total')}
@@ -607,29 +590,26 @@ function TripDetailContent() {
           icon={<CalendarDays className="h-5 w-5" />}
           label={t('budget.avgPerDay')}
           value={formatMoney(avgPerDay, 0, locale)}
-          className="max-sm:col-span-2"
         />
       </div>
 
-      <div className={`grid grid-cols-1 gap-5 ${view === 'itinerary' ? 'min-[900px]:grid-cols-[minmax(0,1fr)_310px]' : ''}`}>
-        <div className="min-w-0 space-y-4">
-          {/* Switcher de vista (mismo estilo de píldoras que los días) */}
-          <div className="flex gap-2">
-            {(['itinerary', 'calendar'] as const).map((v) => (
-              <button
-                key={v}
-                type="button"
-                onClick={() => setView(v)}
-                aria-pressed={view === v}
-                className={`shrink-0 rounded-full px-3.5 py-1.5 text-sm transition duration-150 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 ${
-                  view === v
-                    ? 'bg-primary font-semibold text-primary-foreground'
-                    : 'border border-border bg-card text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                {t(v === 'itinerary' ? 'view.itinerary' : 'view.calendar')}
-              </button>
-            ))}
+      <div className={`trip-layout${view === 'calendar' ? ' calendar' : ''}`}>
+        <div>
+          <div className="section-head">
+            <div className="tabs">
+              {(['itinerary', 'calendar'] as const).map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => setView(v)}
+                  aria-pressed={view === v}
+                  className={`tab${view === v ? ' active' : ''}`}
+                >
+                  {t(v === 'itinerary' ? 'view.itinerary' : 'view.calendar')}
+                </button>
+              ))}
+            </div>
+            <span className="mono">{formatDateRange(trip.startDate, trip.endDate, locale)}</span>
           </div>
 
           {view === 'calendar' ? (
@@ -645,48 +625,27 @@ function TripDetailContent() {
             />
           ) : (
             <>
-              {/* Días */}
-              <div className="scrollbar-thin flex gap-2 overflow-x-auto pb-1 max-sm:snap-x max-sm:snap-mandatory max-sm:scroll-px-4">
-            {days.map((d, i) => (
-              <button
-                key={d}
-                type="button"
-                onClick={() => setActiveDay(d)}
-                className={`shrink-0 rounded-full px-3.5 py-1.5 text-sm transition duration-150 active:scale-[0.98] max-sm:snap-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 ${
-                  d === activeDay
-                    ? 'bg-primary font-semibold text-primary-foreground'
-                    : 'border border-border bg-card text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                {t('trip.dayTab', { n: i + 1, date: formatTabDate(d, locale) })}
-              </button>
-            ))}
-          </div>
-
-          {/* Actividades del día */}
-          <section className="rounded-[16px] border border-border bg-card p-4 shadow-card sm:p-5">
-            <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-2">
-              <div className="min-w-0">
-                <h2 className="text-[0.95rem] font-semibold tracking-[-0.01em] text-foreground">
-                  {t('trip.planOfDay', { n: activeDay ? days.indexOf(activeDay) + 1 : '' })}
-                </h2>
-                {activeDay && (
-                  <p className="text-xs text-muted-foreground">{formatLongDate(activeDay, locale)}</p>
-                )}
+              <div className="day-tabs">
+                {days.map((d, i) => (
+                  <button
+                    key={d}
+                    type="button"
+                    onClick={() => setActiveDay(d)}
+                    className={`day-tab${d === activeDay ? ' active' : ''}`}
+                  >
+                    {t('trip.dayTab', { n: i + 1, date: formatTabDate(d, locale) })}
+                  </button>
+                ))}
               </div>
-              <div className="flex-1" />
-              <div className="flex flex-wrap gap-2">
+
+              <div className="action-row">
                 <SortSelector value={sortMode} onChange={handleSortModeChange} />
                 <button
                   type="button"
                   onClick={() => setShowRoute(true)}
                   disabled={routeStops.length === 0}
-                  title={
-                    routeStops.length === 0
-                      ? t('trip.noRouteTitle')
-                      : t('trip.openRouteTitle')
-                  }
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700 max-sm:min-h-11 transition duration-150 hover:bg-emerald-100 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-emerald-500/15 dark:text-emerald-300 dark:hover:bg-emerald-500/25"
+                  title={routeStops.length === 0 ? t('trip.noRouteTitle') : t('trip.openRouteTitle')}
+                  className="btn btn-ghost btn-sm"
                 >
                   <Route className="h-4 w-4" /> {t('trip.formRoute')}
                 </button>
@@ -695,156 +654,174 @@ function TripDetailContent() {
                     <button
                       type="button"
                       onClick={() => setShowSuggestions(true)}
-                      className="inline-flex items-center gap-1.5 rounded-xl bg-violet-50 px-3 py-2 text-sm font-semibold text-violet-700 max-sm:min-h-11 transition duration-150 hover:bg-violet-100 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/40 dark:bg-violet-500/15 dark:text-violet-300 dark:hover:bg-violet-500/25"
+                      className="btn btn-soft btn-sm"
                     >
                       <Sparkles className="h-4 w-4" /> {t('trip.askSuggestions')}
                     </button>
                     <button
                       type="button"
                       onClick={() => setShowAdd(true)}
-                      className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground shadow-sm transition duration-150 max-sm:min-h-11 hover:bg-primary/90 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                      className="btn btn-primary btn-sm"
+                      style={{ marginLeft: 'auto' }}
                     >
                       <Plus className="h-4 w-4" /> {t('items.addTitle')}
                     </button>
                   </>
                 )}
               </div>
-            </div>
 
-            {routeOverflow && (
-              <p className="mb-3 text-xs text-amber-600 dark:text-amber-400">
-                {t('trip.routeOverflow', { n: MAX_ROUTE_STOPS, total: routeStops.length })}
-              </p>
-            )}
+              {routeOverflow && (
+                <p style={{ marginBottom: 12, fontSize: 12, color: 'var(--warning)' }}>
+                  {t('trip.routeOverflow', { n: MAX_ROUTE_STOPS, total: routeStops.length })}
+                </p>
+              )}
 
-            {itemsForDay.length === 0 ? (
-              <div className="rounded-[16px] border border-dashed border-border bg-card p-8 text-center">
-                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-                  <MapPin className="h-6 w-6" />
+              <div className="plan-card card">
+                <div className="plan-title">
+                  <h3>{t('trip.planOfDay', { n: activeDay ? days.indexOf(activeDay) + 1 : '' })}</h3>
+                  {activeDay && <span>{formatLongDate(activeDay, locale)}</span>}
                 </div>
-                <p className="mt-4 text-sm font-semibold text-foreground">{t('trip.empty.title')}</p>
-                <p className="mt-1 text-sm text-muted-foreground">{t('trip.empty.subtitle')}</p>
-                {canEdit && (
-                  <button
-                    type="button"
-                    onClick={() => setShowAdd(true)}
-                    className="mt-5 inline-flex items-center gap-1.5 rounded-xl bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground transition duration-150 max-sm:min-h-11 hover:bg-primary/90 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                  >
-                    <Plus className="h-4 w-4" /> {t('trip.empty.cta')}
-                  </button>
+
+                {itemsForDay.length === 0 ? (
+                  <div style={{ padding: '32px 16px', textAlign: 'center' }}>
+                    <div
+                      style={{
+                        margin: '0 auto',
+                        width: 46,
+                        height: 46,
+                        display: 'grid',
+                        placeItems: 'center',
+                        borderRadius: 13,
+                        background: 'var(--primary-soft)',
+                        color: 'var(--primary)',
+                      }}
+                    >
+                      <MapPin className="h-5 w-5" />
+                    </div>
+                    <p style={{ marginTop: 14, fontWeight: 600, fontSize: 13 }}>{t('trip.empty.title')}</p>
+                    <p style={{ marginTop: 3, fontSize: 12, color: 'var(--muted)' }}>
+                      {t('trip.empty.subtitle')}
+                    </p>
+                    {canEdit && (
+                      <button
+                        type="button"
+                        onClick={() => setShowAdd(true)}
+                        className="btn btn-primary btn-sm"
+                        style={{ marginTop: 16 }}
+                      >
+                        <Plus className="h-4 w-4" /> {t('trip.empty.cta')}
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="timeline">
+                    {itemsForDay.map((item) => (
+                      <ItemCard
+                        key={item.id}
+                        item={{
+                          ...item,
+                          isFavorite: favOverrides[item.id] ?? item.isFavorite,
+                          reminderEnabled: reminderOverrides[item.id] ?? item.reminderEnabled,
+                        }}
+                        members={trip.members}
+                        canEdit={canEdit}
+                        currentUserId={user?.userId ?? null}
+                        days={days}
+                        editingBy={
+                          presence.find(
+                            (p) => p.editingItemId === item.id && p.userId !== (user?.userId ?? null)
+                          )?.displayName ?? null
+                        }
+                        onEdit={() => setEditingItem(item)}
+                        onView={() => setDetailItem(item)}
+                        onMove={(day) => handleMove(item.id, day)}
+                        onRemove={() => handleRemove(item.id)}
+                        onCostChange={(cost) => handleCostChange(item.id, cost)}
+                        onToggleFavorite={() => handleToggleFavorite(item)}
+                        onToggleReminder={() => handleToggleReminder(item)}
+                      />
+                    ))}
+                  </div>
                 )}
               </div>
-            ) : (
-              <div className="space-y-2.5">
-                {itemsForDay.map((item) => (
-                  <ItemCard
-                    key={item.id}
-                    item={{ ...item, isFavorite: favOverrides[item.id] ?? item.isFavorite, reminderEnabled: reminderOverrides[item.id] ?? item.reminderEnabled }}
-                    members={trip.members}
-                    canEdit={canEdit}
-                    currentUserId={user?.userId ?? null}
-                    days={days}
-                    editingBy={
-                      presence.find(
-                        (p) => p.editingItemId === item.id && p.userId !== (user?.userId ?? null)
-                      )?.displayName ?? null
-                    }
-                    onEdit={() => setEditingItem(item)}
-                    onView={() => setDetailItem(item)}
-                    onMove={(day) => handleMove(item.id, day)}
-                    onRemove={() => handleRemove(item.id)}
-                    onCostChange={(cost) => handleCostChange(item.id, cost)}
-                    onToggleFavorite={() => handleToggleFavorite(item)}
-                    onToggleReminder={() => handleToggleReminder(item)}
-                  />
-                ))}
-              </div>
-            )}
-          </section>
             </>
           )}
         </div>
 
-        {/* Columna lateral (presupuesto/miembros/sugerencias): se OCULTA en
-            modo calendario para dar todo el ancho a la grilla. Decisión: la
-            vista de calendario prioriza el espacio horizontal; el presupuesto
-            sigue accesible desde la vista de itinerario. */}
         {view === 'itinerary' && (
-        <div className="flex flex-col gap-4">
-          <div className="rounded-[16px] border border-border bg-card p-4 shadow-card">
-            <div className="mb-3 flex items-center justify-between gap-2">
-              <h2 className="flex items-center gap-1.5 text-sm font-semibold tracking-[-0.01em] text-foreground">
-                <Wallet className="h-4 w-4 text-muted-foreground" /> {t('budget.title')}
-              </h2>
-              {canEdit &&
-                (editingBudget ? (
-                  <div className="flex items-center gap-1">
-                    <input
-                      type="number"
-                      min={0}
-                      step={10}
-                      value={budgetDraft}
-                      onChange={(e) => setBudgetDraft(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') saveBudget();
-                      }}
-                      autoFocus
-                      className="w-24 rounded-lg border border-input bg-background px-2 py-1 text-base text-foreground outline-none transition duration-150 focus:border-primary focus:ring-2 focus:ring-primary/20 md:text-sm"
-                    />
+          <div className="side-stack">
+            <div className="side-card card">
+              <div className="side-head">
+                <h3>{t('budget.title')}</h3>
+                {canEdit &&
+                  (editingBudget ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <input
+                        type="number"
+                        min={0}
+                        step={10}
+                        value={budgetDraft}
+                        onChange={(e) => setBudgetDraft(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') saveBudget();
+                        }}
+                        autoFocus
+                        className="input"
+                        style={{ width: 96, height: 32, fontSize: 12 }}
+                      />
+                      <button type="button" onClick={saveBudget} className="btn btn-soft btn-sm">
+                        {t('common.ok')}
+                      </button>
+                    </div>
+                  ) : (
                     <button
                       type="button"
-                      onClick={saveBudget}
-                      className="rounded-lg bg-primary px-2 py-1 text-xs font-semibold text-primary-foreground transition duration-150 hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                      onClick={() => {
+                        setBudgetDraft(String(trip.totalBudget));
+                        setEditingBudget(true);
+                      }}
+                      className="icon-btn"
+                      aria-label={t('budget.adjust')}
                     >
-                      {t('common.ok')}
+                      <Pencil className="h-4 w-4" />
                     </button>
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setBudgetDraft(String(trip.totalBudget));
-                      setEditingBudget(true);
-                    }}
-                    className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-muted-foreground transition duration-150 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-                  >
-                    <Pencil className="h-3.5 w-3.5" /> {t('budget.adjust')}
-                  </button>
-                ))}
-            </div>
-            <BudgetBar total={trip.totalBudget} spent={trip.spent} />
-            {trip.spentByCategory.length > 0 && (
-              <div className="mt-4 border-t border-border pt-4">
-                <p className="mb-2.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  {t('budget.byCategory')}
-                </p>
-                <CategoryBars spentByCategory={trip.spentByCategory} totalBudget={trip.totalBudget} />
+                  ))}
               </div>
-            )}
-          </div>
+              <BudgetBar total={trip.totalBudget} spent={trip.spent} />
+              {trip.spentByCategory.length > 0 && (
+                <div style={{ marginTop: 16, borderTop: '1px solid var(--border)', paddingTop: 15 }}>
+                  <p className="mono" style={{ marginBottom: 10 }}>
+                    {t('budget.byCategory')}
+                  </p>
+                  <CategoryBars spentByCategory={trip.spentByCategory} totalBudget={trip.totalBudget} />
+                </div>
+              )}
+            </div>
 
-          <MembersPanel
-            trip={trip}
-            presence={presence ?? []}
-            currentUserId={user?.userId ?? null}
-            onInvite={() => setShowInvite(true)}
-            onLeft={() => router.push('/')}
-          />
+            <MembersPanel
+              trip={trip}
+              presence={presence ?? []}
+              currentUserId={user?.userId ?? null}
+              onInvite={() => setShowInvite(true)}
+              onLeft={() => router.push('/')}
+            />
 
-          <div className="rounded-[16px] border border-border bg-card p-4 shadow-card">
-            <h2 className="text-sm font-semibold tracking-[-0.01em] text-foreground">{t('suggestions.title')}</h2>
-            <p className="mt-1.5 text-xs text-muted-foreground">{t('trip.suggestionsSubtitle')}</p>
-            {canEdit && (
-              <button
-                type="button"
-                onClick={() => setShowSuggestions(true)}
-                className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-violet-50 px-3 py-2 text-sm font-semibold text-violet-700 max-sm:min-h-11 transition duration-150 hover:bg-violet-100 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/40 dark:bg-violet-500/15 dark:text-violet-300 dark:hover:bg-violet-500/25"
-              >
-                <Sparkles className="h-4 w-4" /> {t('trip.askSuggestions')}
-              </button>
-            )}
+            <div className="side-card card ai-card">
+              <div className="side-head">
+                <h3>{t('suggestions.title')}</h3>
+              </div>
+              <p>{t('trip.suggestionsSubtitle')}</p>
+              {canEdit && (
+                <button
+                  type="button"
+                  onClick={() => setShowSuggestions(true)}
+                  className="btn btn-primary btn-sm"
+                >
+                  <Sparkles className="h-4 w-4" /> {t('trip.askSuggestions')}
+                </button>
+              )}
+            </div>
           </div>
-        </div>
         )}
       </div>
 
@@ -857,7 +834,12 @@ function TripDetailContent() {
             day={activeDay}
             onClose={() => setShowAdd(false)}
           />
-          <SuggestionsPanel open={showSuggestions} trip={trip} day={activeDay} onClose={() => setShowSuggestions(false)} />
+          <SuggestionsPanel
+            open={showSuggestions}
+            trip={trip}
+            day={activeDay}
+            onClose={() => setShowSuggestions(false)}
+          />
         </>
       )}
       <InviteModal open={showInvite} tripId={trip.id} tripName={trip.name} onClose={() => setShowInvite(false)} />
@@ -889,10 +871,22 @@ function TripDetailContent() {
         onClose={() => setShowTemplatePlan(false)}
         onAdded={() => setShowTemplatePlan(false)}
       />
-      <ItemEditModal open={!!editingItem} item={editingItem} tripId={trip.id} onClose={() => setEditingItem(null)} />
+      <ItemEditModal
+        open={!!editingItem}
+        item={editingItem}
+        tripId={trip.id}
+        onClose={() => setEditingItem(null)}
+      />
       <LocationDetailModal
         open={!!detailItem}
-        item={detailItem ? { ...detailItem, reminderEnabled: reminderOverrides[detailItem.id] ?? detailItem.reminderEnabled } : null}
+        item={
+          detailItem
+            ? {
+                ...detailItem,
+                reminderEnabled: reminderOverrides[detailItem.id] ?? detailItem.reminderEnabled,
+              }
+            : null
+        }
         tripId={trip.id}
         members={trip.members}
         canEdit={canEdit}

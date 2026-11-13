@@ -168,7 +168,7 @@ export default function CalendarView({
                                 {item.startTime}
                               </span>
                             )}
-                            <span className="min-w-0 flex-1 truncate text-xs text-foreground">
+                            <span className="hidden min-w-0 flex-1 truncate text-xs text-foreground sm:inline">
                               {item.title}
                             </span>
                           </button>

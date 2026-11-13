@@ -1,0 +1,76 @@
+// Shared fixtures for the Postgres integration tests.
+// Tests never touch the dev database: they run against `triplanner_test`,
+// created on demand. Every helper is null-safe so suites skip when Postgres
+// is down.
+
+import { randomUUID } from 'node:crypto';
+import { Client } from 'pg';
+import { DEFAULT_DATABASE_URL, PgDb, type AsyncDb } from '../../src/pg/db.ts';
+import { migrate } from '../../src/db/migrate.ts';
+
+const ADMIN_URL = process.env.DATABASE_URL ?? DEFAULT_DATABASE_URL;
+const TEST_DB = 'triplanner_test';
+
+function withDatabase(url: string, database: string): string {
+  const parsed = new URL(url);
+  parsed.pathname = `/${database}`;
+  return parsed.toString();
+}
+
+export const pgUrl = process.env.TEST_DATABASE_URL ?? withDatabase(ADMIN_URL, TEST_DB);
+
+async function ensureTestDatabase(): Promise<void> {
+  if (process.env.TEST_DATABASE_URL) return;
+  const client = new Client({ connectionString: ADMIN_URL });
+  await client.connect();
+  try {
+    const { rows } = await client.query('SELECT 1 FROM pg_database WHERE datname = $1', [TEST_DB]);
+    if (rows.length === 0) await client.query(`CREATE DATABASE ${TEST_DB}`);
+  } finally {
+    await client.end();
+  }
+}
+
+export async function connectPg(): Promise<PgDb | null> {
+  try {
+    await ensureTestDatabase();
+    const db = await PgDb.connect(pgUrl);
+    await migrate(pgUrl);
+    return db;
+  } catch {
+    return null;
+  }
+}
+
+export async function insertUser(db: AsyncDb, displayName = 'Test User'): Promise<string> {
+  const id = randomUUID();
+  await db
+    .prepare('INSERT INTO users (id, email, display_name) VALUES (?, ?, ?)')
+    .run(id, `test-${id}@example.com`, displayName);
+  return id;
+}
+
+export async function insertTrip(db: AsyncDb, ownerId: string): Promise<string> {
+  const id = randomUUID();
+  await db
+    .prepare(
+      `INSERT INTO trips (id, name, start_date, end_date, owner_id, invite_code)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+    )
+    .run(id, 'Trip de prueba', '2026-01-01', '2026-01-05', ownerId, randomUUID().replaceAll('-', '').slice(0, 12));
+  return id;
+}
+
+export async function deleteTrip(db: AsyncDb, tripId: string): Promise<void> {
+  await db.prepare('DELETE FROM invitations WHERE trip_id = ?').run(tripId);
+  await db.prepare('DELETE FROM trips WHERE id = ?').run(tripId);
+}
+
+export async function deleteUser(db: AsyncDb, userId: string): Promise<void> {
+  await db.prepare('DELETE FROM user_favorites WHERE user_id = ?').run(userId);
+  await db.prepare('DELETE FROM user_interests WHERE user_id = ?').run(userId);
+  await db.prepare('DELETE FROM suggestion_chats WHERE user_id = ?').run(userId);
+  await db.prepare('DELETE FROM trips WHERE owner_id = ?').run(userId);
+  await db.prepare('DELETE FROM users WHERE id = ?').run(userId);
+}
+

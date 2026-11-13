@@ -4,7 +4,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { SignJWT, generateKeyPair, importPKCS8 } from 'jose';
+import { SignJWT, generateKeyPair, importPKCS8, exportPKCS8 } from 'jose';
 import type { CryptoKey } from 'jose';
 import {
   signVerificationToken,
@@ -16,7 +16,16 @@ import {
 } from '../src/auth/verify-token.ts';
 import { getServiceAccountPrivateKey } from '../src/auth/service-account.ts';
 
-const privateKeyPem = getServiceAccountPrivateKey();
+// Local-only: sin firebase-service-account.json se genera una clave efimera
+// para validar el roundtrip criptografico. Con service account se usa la real.
+let privateKeyPem: string;
+try {
+  privateKeyPem = getServiceAccountPrivateKey();
+} catch {
+  const { privateKey } = await generateKeyPair('RS256', { extractable: true });
+  privateKeyPem = await exportPKCS8(privateKey);
+  console.warn('[verify-token.test] service account ausente: usando clave efimera.');
+}
 
 test('sign/verify roundtrip con la private key del service account', async () => {
   resetUsedJtis();

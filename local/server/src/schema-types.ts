@@ -2,9 +2,8 @@
 // + las extensiones locales (searchLocations, locationDetails, locationById).
 // Se mantienen alineados a mano con el schema (fuente: local/graphql/schema.graphql).
 
-import type { DatabaseSync } from 'node:sqlite';
-
-export type Db = DatabaseSync;
+// The server runs on Postgres now; `Db` is the async handle from src/pg/db.ts.
+export type { AsyncDb as Db } from './pg/db.ts';
 
 // ---- Filas de SQLite (nombres snake_case de la tabla) ----
 
@@ -18,6 +17,7 @@ export interface UserRow {
   firebase_uid: string | null;
   email_verified: number;
   welcome_sent_at: string | null;
+  created_at: string;
 }
 
 export interface TripRow {
@@ -35,6 +35,9 @@ export interface TripRow {
   status: string;
   currency: string;
   destination_id: string | null;
+  destination_name?: string | null;
+  destination_lat?: number | null;
+  destination_lng?: number | null;
   total_budget: number | null;
   timezone: string;
 }
@@ -66,6 +69,8 @@ export interface LocationRow {
   duration_hours: number | null;
   parent_id: string | null;
   last_updated: string | null;
+  created_at?: string | null;
+  expires_at?: number | null;
 }
 
 export interface TripItemRow {

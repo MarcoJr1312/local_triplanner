@@ -1,14 +1,11 @@
-// Serving estatico de /uploads/*.
-// - Adjuntos (/uploads/attachments/*): SOLO con URL firmada (sig+exp+uid).
-//   Sin firma, firma invalida o exp vencida -> 403.
-// - Avatares y portadas: publicos por diseno (se muestran fuera del contexto
-//   del viaje). Cache publica; los adjuntos firmados usan Cache-Control private.
-// - Se mantiene el guard de path traversal.
+// Serves /uploads/* from Storage.
+// - Attachments require a valid short-lived signature (sig+exp+uid).
+// - Avatars and covers are public by design.
+// - Path traversal is rejected inside the storage backend.
 
-import { readFileSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { UPLOADS_DIR } from './profile.ts';
+import type { Storage } from './storage.ts';
 import { verifyAttachmentUrl } from './attachment-tokens.ts';
 
 const MIME_BY_EXT: Record<string, string> = {
@@ -20,13 +17,7 @@ const MIME_BY_EXT: Record<string, string> = {
   '.pdf': 'application/pdf',
 };
 
-function uploadsBase(): string {
-  return process.env.TRIPLANNER_UPLOADS_OVERRIDE
-    ? path.resolve(process.env.TRIPLANNER_UPLOADS_OVERRIDE)
-    : UPLOADS_DIR;
-}
-
-export function serveUploads(req: IncomingMessage, res: ServerResponse): boolean {
+export async function serveUploads(req: IncomingMessage, res: ServerResponse, storage: Storage): Promise<boolean> {
   const url = new URL(req.url ?? '/', 'http://localhost');
   if (!url.pathname.startsWith('/uploads/')) return false;
 
@@ -36,26 +27,30 @@ export function serveUploads(req: IncomingMessage, res: ServerResponse): boolean
     return true;
   }
 
-  const rel = decodeURIComponent(url.pathname.slice('/uploads/'.length));
-  const base = uploadsBase();
-  const abs = path.resolve(base, rel);
-  // Guard contra path traversal: el archivo debe quedar dentro de uploads/
-  if (abs !== base && !abs.startsWith(base + path.sep)) {
+  const key = decodeURIComponent(url.pathname.slice('/uploads/'.length));
+  if (key.split('/').includes('..')) {
     res.writeHead(404).end('Not found');
     return true;
   }
-  if (!existsSync(abs) || path.extname(abs) === '') {
+
+  const ext = path.extname(key).toLowerCase();
+  if (!ext) {
     res.writeHead(404).end('Not found');
     return true;
   }
-  const ext = path.extname(abs).toLowerCase();
+
+  const bytes = await storage.read(key);
+  if (!bytes) {
+    res.writeHead(404).end('Not found');
+    return true;
+  }
+
   const isPdf = ext === '.pdf';
   res.writeHead(200, {
     'Content-Type': MIME_BY_EXT[ext] ?? 'application/octet-stream',
-    // inline para que el iframe del navegador renderice el PDF
     'Content-Disposition': isPdf ? 'inline' : 'inline; filename="upload"',
     'Cache-Control': isAttachment ? 'private, no-store' : 'public, max-age=86400',
   });
-  res.end(readFileSync(abs));
+  res.end(bytes);
   return true;
 }

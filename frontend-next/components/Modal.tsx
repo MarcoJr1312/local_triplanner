@@ -54,26 +54,28 @@ export default function Modal({
           if (!dismissible) e.preventDefault();
         }}
         className={cn(
-          'flex max-h-[85dvh] w-[calc(100%-2rem)] flex-col gap-0 overflow-hidden rounded-2xl p-0 shadow-2xl',
+          'flex max-h-[85dvh] w-[calc(100%-2rem)] flex-col gap-0 overflow-hidden rounded-[20px] border border-[var(--border-strong)] bg-card p-0 shadow-card-hover',
           position,
           sizes[size]
         )}
       >
-        <div className="flex items-center justify-between border-b border-border px-5 py-4">
-          <DialogTitle className="text-base font-semibold tracking-tight text-foreground">
+        <div className="flex items-center justify-between gap-4 border-b border-border px-6 py-5">
+          <DialogTitle className="text-[18px] font-semibold tracking-[-0.03em] text-foreground">
             {title}
           </DialogTitle>
           {!hideClose && (
             <DialogClose
               aria-label="Cerrar"
-              className="rounded-lg p-1.5 text-muted-foreground transition duration-150 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+              className="icon-btn shrink-0"
             >
               <X className="h-5 w-5" />
             </DialogClose>
           )}
         </div>
-        <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto px-5 py-4">{children}</div>
-        {footer && <div className="border-t border-border bg-muted/40 px-5 py-3">{footer}</div>}
+        <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto px-6 py-5">{children}</div>
+        {footer && (
+          <div className="border-t border-border bg-[var(--surface-2)] px-6 py-4">{footer}</div>
+        )}
       </DialogContent>
     </Dialog>
   );

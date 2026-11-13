@@ -1,69 +1,81 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { MapPin, Plus } from 'lucide-react';
+import {
+  ArrowRight,
+  CalendarDays,
+  Clock,
+  MapPin,
+  Plus,
+  Search,
+  Sparkles,
+  Users,
+  Wallet,
+} from 'lucide-react';
 import { api } from '@/lib/api';
 import { useAuth } from '@/hooks/useAuth';
 import { useQuery } from '@/hooks/useQuery';
-import { parseDate, toIsoDate } from '@/lib/format';
-import { useI18n, type Translate } from '@/lib/i18n';
+import { formatDateRange, formatMoney, listDays } from '@/lib/format';
+import { useI18n } from '@/lib/i18n';
 import type { Trip } from '@/lib/types';
 import AppShell from '@/components/AppShell';
-import Avatar from '@/components/Avatar';
 import RequireAuth from '@/components/RequireAuth';
 import NewTripModal from '@/components/NewTripModal';
 import Modal from '@/components/Modal';
 import InterestsPicker from '@/components/InterestsPicker';
-import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import TripCard from '@/components/home/TripCard';
+import { getTripCover } from '@/lib/trip-presets';
 
-const DAY_MS = 86_400_000;
-
-function greetingSubtitle(t: Translate, trips: Trip[]): string {
-  if (trips.length === 0) return t('home.subtitleEmpty');
-  const count =
-    trips.length === 1 ? t('home.tripsCountOne') : t('home.tripsCountMany', { n: trips.length });
-
-  const today = toIsoDate(new Date());
-  const next = trips
-    .filter((t) => t.startDate >= today)
-    .sort((a, b) => a.startDate.localeCompare(b.startDate))[0];
-
-  if (!next) return `${count} · ${t('home.noUpcoming')}`;
-
-  const daysUntil = Math.round(
-    (parseDate(next.startDate).getTime() - parseDate(today).getTime()) / DAY_MS
-  );
-  const when =
-    daysUntil <= 0
-      ? t('home.nextToday')
-      : daysUntil === 1
-        ? t('home.nextTomorrow')
-        : t('home.nextInDays', { n: daysUntil });
-
-  return `${count} · ${when}`;
+function capitalize(value: string): string {
+  return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
-function TripCardSkeleton() {
+function TripCover({ trip, className, children }: { trip: Trip; className: string; children?: ReactNode }) {
+  const cover = getTripCover(trip);
+  const letter = trip.destinationName.trim().slice(0, 1).toUpperCase() || '?';
   return (
-    <div className="overflow-hidden rounded-[18px] border border-border bg-card shadow-card">
-      <Skeleton className="h-[140px] rounded-none" />
-      <div className="space-y-3 p-4">
-        <div className="flex items-center justify-between gap-2.5">
-          <Skeleton className="h-4 w-1/2" />
-          <Skeleton className="h-5 w-16 rounded-full" />
+    <div
+      className={className}
+      data-letter={letter}
+      style={
+        cover.kind === 'default' && cover.gradient ? { background: cover.gradient } : undefined
+      }
+    >
+      {cover.kind === 'preset' && cover.gradient && (
+        <div className={`absolute inset-0 ${cover.gradient}`} />
+      )}
+      {cover.kind === 'photo' && cover.photoUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={cover.photoUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
+      ) : null}
+      {children}
+    </div>
+  );
+}
+
+function MiniTripCard({ trip }: { trip: Trip }) {
+  const { t, locale } = useI18n();
+  const days = listDays(trip.startDate, trip.endDate).length;
+  return (
+    <Link href={`/trip/${trip.id}`} className="trip-card card block">
+      <TripCover trip={trip} className="tc-cover" />
+      <div className="tc-body">
+        <span className="mono">{trip.destinationName}</span>
+        <h3>{trip.name}</h3>
+        <div className="tc-meta">
+          {formatDateRange(trip.startDate, trip.endDate, locale)} · {days}{' '}
+          {t(days === 1 ? 'units.day' : 'units.days')}
         </div>
-        <Skeleton className="h-3 w-3/4" />
-        <Skeleton className="h-2 w-full rounded-full" />
-        <div className="flex items-center gap-1.5 pt-1">
-          <Skeleton className="h-[26px] w-[26px] rounded-full" />
-          <Skeleton className="h-[26px] w-[26px] rounded-full" />
-          <Skeleton className="h-[26px] w-[26px] rounded-full" />
+        <div className="tc-foot">
+          <span className="badge badge-food">
+            {formatMoney(trip.spent)} / {formatMoney(trip.totalBudget)}
+          </span>
+          <span className="btn btn-soft btn-sm">{t('premium.openTrip')}</span>
         </div>
       </div>
-    </div>
+    </Link>
   );
 }
 
@@ -80,10 +92,33 @@ function TripsContent() {
   const [showInterests, setShowInterests] = useState(false);
   const firstName = user?.displayName.split(' ')[0] ?? '';
   const list = trips ?? [];
+  const sorted = [...list].sort((a, b) => a.startDate.localeCompare(b.startDate));
+  const featured = sorted[0] ?? null;
+  const rest = sorted.slice(1);
+  const totalBudget = list.reduce((sum, t) => sum + t.totalBudget, 0);
+  const totalSpent = list.reduce((sum, t) => sum + t.spent, 0);
+  const available = Math.max(0, totalBudget - totalSpent);
+  const daysAhead = featured ? listDays(featured.startDate, featured.endDate).length : 0;
+  const nextItems = featured
+    ? [...featured.items]
+        .sort((a, b) => {
+          const day = a.day.localeCompare(b.day);
+          if (day !== 0) return day;
+          return (a.startTime ?? '99:99').localeCompare(b.startTime ?? '99:99');
+        })
+        .slice(0, 3)
+    : [];
+
+  const todayLabel = capitalize(
+    new Date().toLocaleDateString(locale === 'en' ? 'en-US' : 'es-ES', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+    })
+  );
 
   // Popup de intereses: solo si el usuario aún no tiene ninguno y no lo ha
-  // descartado en esta sesión (sessionStorage por usuario; no reaparece al
-  // navegar al Home dentro de la misma pestaña).
+  // descartado en esta sesión (sessionStorage por usuario).
   const interestsKey = user ? `triplanner.interestsPrompted.${user.userId}` : null;
 
   useEffect(() => {
@@ -97,9 +132,7 @@ function TripsContent() {
         if (terms.length === 0) setShowInterests(true);
         else sessionStorage.setItem(interestsKey, '1');
       })
-      .catch(() => {
-        // Si falla la consulta no bloqueamos el Home con el popup.
-      });
+      .catch(() => undefined);
     return () => {
       cancelled = true;
     };
@@ -115,68 +148,262 @@ function TripsContent() {
     dismissInterests();
   };
 
-  // La lista se refresca sola (api.createTrip → notify()), así que aquí solo
-  // encadenamos los modales del flujo.
   const handleCreated = (trip: Trip) => {
     setShowNew(false);
-    // El popup de plantilla vive DENTRO del dashboard del viaje creado
-    // (feedback Marco): navegamos al viaje con el flag ?template=1.
     router.push(`/trip/${trip.id}?template=1`);
   };
 
+  const roleKey =
+    featured?.myRole === 'owner'
+      ? 'roles.owner'
+      : featured?.myRole === 'editor'
+        ? 'roles.editor'
+        : 'roles.viewer';
+
+  const categoryLabel = (category: string) =>
+    category === 'food'
+      ? t('categories.food')
+      : category === 'activity'
+        ? t('categories.activity')
+        : category === 'nightlife'
+          ? t('categories.nightlife')
+          : category === 'transporte'
+            ? t('categories.transporte')
+            : category === 'alojamiento'
+              ? t('categories.alojamiento')
+              : t('categories.sight');
+
   return (
     <AppShell>
-      <div className="mb-6 flex flex-wrap items-center gap-x-4 gap-y-3">
-        <div className="min-w-0 flex-1">
-          <h1 className="truncate text-[1.45rem] font-bold tracking-[-0.02em] text-foreground">
-            {firstName ? t('home.greeting', { name: firstName }) : t('home.greetingGuest')}
-          </h1>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            {loading ? t('home.loading') : greetingSubtitle(t, list)}
+      <div className="page-head">
+        <div>
+          <span className="mono">{todayLabel}</span>
+          <h1>{firstName ? t('premium.greeting', { name: firstName }) : t('home.greetingGuest')}</h1>
+          <p>
+            {loading
+              ? t('home.loading')
+              : list.length > 0
+                ? t('premium.dashboard.subtitle', { trips: list.length, days: daysAhead })
+                : t('home.subtitleEmpty')}
           </p>
         </div>
-        <Button
-          type="button"
-          onClick={() => setShowNew(true)}
-          className="order-last h-auto w-full gap-2 rounded-xl px-4 py-2.5 font-semibold shadow-sm sm:order-none sm:w-auto"
-        >
-          <Plus className="h-4 w-4" />
-          {t('home.newTrip')}
-        </Button>
-        {user && (
-          <span className="relative shrink-0">
-            <Avatar user={user} size="md" />
-            <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-card bg-emerald-500" />
+        <div className="head-actions">
+          <Link href="/search" className="btn btn-ghost">
+            <Search className="icon-sm" /> {t('premium.explore')}
+          </Link>
+          <button type="button" className="btn btn-primary" onClick={() => setShowNew(true)}>
+            <Plus className="icon-sm" /> {t('premium.newTrip')}
+          </button>
+        </div>
+      </div>
+
+      <div className="stats">
+        <div className="stat card">
+          <span className="stat-icon">
+            <MapPin className="icon" />
           </span>
-        )}
+          <div>
+            <div className="stat-label">{t('premium.stat.trips')}</div>
+            <div className="stat-value">{list.length}</div>
+            <div className="stat-delta">+0</div>
+          </div>
+        </div>
+        <div className="stat card">
+          <span className="stat-icon">
+            <CalendarDays className="icon" />
+          </span>
+          <div>
+            <div className="stat-label">{t('premium.stat.days')}</div>
+            <div className="stat-value">{daysAhead}</div>
+            <div className="stat-delta">
+              {featured ? formatDateRange(featured.startDate, featured.endDate, locale) : '—'}
+            </div>
+          </div>
+        </div>
+        <div className="stat card">
+          <span className="stat-icon">
+            <Wallet className="icon" />
+          </span>
+          <div>
+            <div className="stat-label">{t('premium.stat.budget')}</div>
+            <div className="stat-value">{formatMoney(available)}</div>
+            <div className="stat-delta">
+              {t('premium.stat.of', { total: formatMoney(totalBudget) })}
+            </div>
+          </div>
+        </div>
       </div>
 
       {loading ? (
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-[repeat(auto-fill,minmax(300px,1fr))]">
-          {[0, 1, 2].map((i) => (
-            <TripCardSkeleton key={i} />
-          ))}
+        <div className="featured card" style={{ padding: 24 }}>
+          <Skeleton className="h-64 w-full rounded-xl" />
         </div>
-      ) : list.length > 0 ? (
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-[repeat(auto-fill,minmax(300px,1fr))]">
-          {list.map((t) => (
-            <TripCard key={t.id} trip={t} onOpen={() => router.push(`/trip/${t.id}`)} />
-          ))}
+      ) : featured ? (
+        <div className="dash-grid">
+          <div>
+            <Link href={`/trip/${featured.id}`} className="featured card">
+              <TripCover trip={featured} className="featured-cover">
+                <span className="cover-badge">
+                  <CalendarDays className="icon-sm" /> {t('premium.upcoming')}
+                </span>
+              </TripCover>
+              <div className="featured-body">
+                <div>
+                  <div>
+                    <span className="mono">{featured.destinationName}</span>
+                    <h2>{featured.name}</h2>
+                    <div className="featured-meta">
+                      <span>
+                        <CalendarDays /> {formatDateRange(featured.startDate, featured.endDate, locale)}
+                      </span>
+                      <span>
+                        <Users /> {featured.members.length}{' '}
+                        {t(featured.members.length === 1 ? 'units.member' : 'units.members')}
+                      </span>
+                      <span>
+                        <Clock /> {daysAhead} {t('units.days')}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <div className="featured-budget">
+                  <div className="row">
+                    <span>{t('premium.budget')}</span>
+                    <strong>
+                      {formatMoney(featured.spent)}{' '}
+                      <span style={{ color: 'var(--muted)', fontWeight: 500 }}>
+                        {t('premium.stat.of', { total: formatMoney(featured.totalBudget) })}
+                      </span>
+                    </strong>
+                  </div>
+                  <div className="progress">
+                    <span
+                      style={{
+                        width: `${featured.totalBudget > 0 ? Math.min(100, (featured.spent / featured.totalBudget) * 100) : 0}%`,
+                      }}
+                    />
+                  </div>
+                  <div className="row">
+                    <span>
+                      {featured.totalBudget > 0
+                        ? `${((featured.spent / featured.totalBudget) * 100).toFixed(1)}%`
+                        : '0%'}
+                    </span>
+                    <span>
+                      {formatMoney(featured.spent / Math.max(1, daysAhead))} / {t('units.day')}
+                    </span>
+                  </div>
+                </div>
+                <div className="featured-foot">
+                  <div className="avatar-stack">
+                    <span className="avatar">
+                      {featured.members[0]?.displayName?.charAt(0).toUpperCase() || 'D'}
+                    </span>
+                    <span className="avatar avatar-sm" style={{ background: 'var(--surface-3)', color: 'var(--muted)', border: '2px solid var(--surface)' }}>
+                      +
+                    </span>
+                  </div>
+                  <span className="btn btn-primary btn-sm">
+                    {t('premium.openTrip')} <ArrowRight className="icon-sm" />
+                  </span>
+                </div>
+              </div>
+            </Link>
+
+            <div className="trip-grid">
+              {rest.map((trip) => (
+                <MiniTripCard key={trip.id} trip={trip} />
+              ))}
+              <button type="button" className="new-trip card" onClick={() => setShowNew(true)}>
+                <span className="plus">
+                  <Plus className="icon" />
+                </span>
+                <strong style={{ fontSize: 13, color: 'var(--text)' }}>{t('premium.createTrip')}</strong>
+                <span style={{ fontSize: 11.5 }}>{t('premium.createTripHint')}</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="side-stack">
+            <div className="side-card card">
+              <div className="side-head">
+                <h3>{t('premium.next')}</h3>
+                <span className="mono">Día 1</span>
+              </div>
+              {nextItems.length > 0 ? (
+                nextItems.map((item) => (
+                  <div key={item.id} className="next-item">
+                    <span className="next-time">{item.startTime?.slice(0, 5) ?? '—'}</span>
+                    <div className="next-info">
+                      <strong>{item.title}</strong>
+                      <span>
+                        {categoryLabel(item.category)} · {formatMoney(item.cost)}
+                      </span>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p style={{ fontSize: 12, color: 'var(--muted)' }}>{t('home.subtitleEmpty')}</p>
+              )}
+              <Link href={`/trip/${featured.id}`} className="btn btn-ghost btn-block btn-sm" style={{ marginTop: 14 }}>
+                {t('premium.viewItinerary')}
+              </Link>
+            </div>
+
+            <div className="side-card card">
+              <div className="side-head">
+                <h3>{t('premium.team')}</h3>
+                <span className="mono">
+                  {featured.members.length}{' '}
+                  {t(featured.members.length === 1 ? 'units.member' : 'units.members')}
+                </span>
+              </div>
+              {featured.members.slice(0, 3).map((member) => (
+                <div key={member.userId} className="team-row">
+                  <div className="team-person">
+                    <span className="avatar">{member.displayName.charAt(0).toUpperCase()}</span>
+                    <div>
+                      <strong>{member.displayName}</strong>
+                      <span>{member.email}</span>
+                    </div>
+                  </div>
+                  <span className="badge badge-sight">{t(roleKey)}</span>
+                </div>
+              ))}
+              <Link href={`/trip/${featured.id}`} className="btn btn-ghost btn-block btn-sm" style={{ marginTop: 12 }}>
+                <Plus className="icon-sm" /> {t('premium.invite')}
+              </Link>
+            </div>
+
+            <div className="side-card card ai-card">
+              <div className="side-head">
+                <h3>
+                  <Sparkles className="icon-sm" style={{ verticalAlign: -2, marginRight: 5, color: 'var(--primary)' }} />
+                  {t('premium.ai.title')}
+                </h3>
+              </div>
+              <p>
+                {t('premium.ai.body', {
+                  days: daysAhead,
+                  budget: formatMoney(available),
+                })}
+              </p>
+              <Link href={`/trip/${featured.id}`} className="btn btn-primary btn-sm">
+                {t('premium.ai.cta')}
+              </Link>
+            </div>
+          </div>
         </div>
       ) : (
-        <div className="rounded-[18px] border border-dashed border-border bg-card p-8 text-center shadow-card sm:p-12">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-            <MapPin className="h-6 w-6" />
+        <div className="card" style={{ padding: 48, textAlign: 'center' }}>
+          <div style={{ margin: '0 auto', width: 48, height: 48, display: 'grid', placeItems: 'center', borderRadius: 14, background: 'var(--primary-soft)', color: 'var(--primary)' }}>
+            <MapPin className="icon" />
           </div>
-          <p className="mt-4 text-sm font-semibold text-foreground">{t('home.empty.title')}</p>
-          <p className="mt-1 text-sm text-muted-foreground">{t('home.empty.subtitle')}</p>
-          <Button
-            type="button"
-            onClick={() => setShowNew(true)}
-            className="mt-5 h-auto w-full rounded-xl px-4 py-2.5 font-semibold shadow-sm sm:w-auto"
-          >
+          <p style={{ marginTop: 16, fontWeight: 600 }}>{t('home.empty.title')}</p>
+          <p style={{ marginTop: 4, fontSize: 13, color: 'var(--muted)' }}>{t('home.empty.subtitle')}</p>
+          <button type="button" className="btn btn-primary" style={{ marginTop: 18 }} onClick={() => setShowNew(true)}>
             {t('home.empty.cta')}
-          </Button>
+          </button>
         </div>
       )}
 

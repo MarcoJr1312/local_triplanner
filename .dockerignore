@@ -1,0 +1,15 @@
+**/node_modules
+**/.next
+**/.next-prod
+**/.venv
+**/__pycache__
+**/*.sqlite
+**/*.sqlite-*
+**/uploads
+**/.env
+**/firebase-service-account.json
+aws-infra/**/.terraform
+aws-infra/**/*.tfstate
+aws-infra/**/*.tfplan
+.git
+.github

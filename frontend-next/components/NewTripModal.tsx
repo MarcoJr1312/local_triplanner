@@ -111,7 +111,7 @@ export default function NewTripModal({ open, onClose, onCreated }: NewTripModalP
           <button
             type="button"
             onClick={onClose}
-            className="rounded-xl px-4 py-2 text-sm font-medium text-foreground/90 transition duration-150 hover:bg-muted active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40"
+            className="btn btn-ghost btn-sm"
           >
             {t('common.cancel')}
           </button>
@@ -119,16 +119,16 @@ export default function NewTripModal({ open, onClose, onCreated }: NewTripModalP
             type="submit"
             form="new-trip-form"
             disabled={saving || !selected}
-            className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition duration-150 hover:bg-brand-700 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 disabled:opacity-60 max-sm:min-h-11"
+            className="btn btn-primary btn-sm"
           >
             {saving ? t('trips.creating') : t('trips.create')}
           </button>
         </div>
       }
     >
-      <form id="new-trip-form" onSubmit={handleSubmit} className="space-y-4">
+      <form id="new-trip-form" onSubmit={handleSubmit} style={{ display: 'grid', gap: 15 }}>
         <div>
-          <label className="mb-1 block text-sm font-medium text-foreground">{t('trips.destination')}</label>
+          <label className="mb-1 block text-[12.5px] font-semibold text-foreground">{t('trips.destination')}</label>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             {loadingDests
               ? [0, 1, 2, 3].map((i) => (
@@ -145,69 +145,57 @@ export default function NewTripModal({ open, onClose, onCreated }: NewTripModalP
                     type="button"
                     key={d.slug}
                     onClick={() => handleDestination(d.slug)}
-                    className={`flex items-center gap-3 rounded-xl border p-2 text-left transition duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40 ${
-                      d.slug === destinationId
-                        ? 'border-brand-500 ring-2 ring-brand-500/25'
-                        : 'border-border hover:border-input'
-                    }`}
+                    className={`dest-option flex items-center gap-3${d.slug === destinationId ? ' active' : ''}`}
                   >
                     <SmartImage src={d.imageUrl} alt={d.name} className="h-10 w-10 shrink-0 rounded-lg object-cover" iconClassName="h-4 w-4" />
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-foreground">{d.name}</p>
-                      <p className="truncate text-xs text-muted-foreground">{d.country}</p>
+                      <strong className="truncate">{d.name}</strong>
+                      <span className="truncate">{d.country}</span>
                     </div>
                   </button>
                 ))}
           </div>
         </div>
 
-        <div>
-          <label htmlFor="trip-name" className="mb-1 block text-sm font-medium text-foreground">
-            {t('trips.name')}
-          </label>
+        <div className="field">
+          <label htmlFor="trip-name">{t('trips.name')}</label>
           <input
             id="trip-name"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="w-full rounded-xl border border-input px-3.5 py-2.5 text-base outline-none md:text-sm transition duration-150 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
+            className="input"
             placeholder={t('trips.namePlaceholder')}
           />
         </div>
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div>
-            <label htmlFor="start-date" className="mb-1 block text-sm font-medium text-foreground">
-              {t('trips.startDate')}
-            </label>
+          <div className="field">
+            <label htmlFor="start-date">{t('trips.startDate')}</label>
             <input
               id="start-date"
               type="date"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
-              className="h-11 w-full appearance-none rounded-xl border border-input bg-background px-3.5 text-base outline-none md:text-sm transition duration-150 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
+              className="input"
             />
           </div>
-          <div>
-            <label htmlFor="end-date" className="mb-1 block text-sm font-medium text-foreground">
-              {t('trips.endDate')}
-            </label>
+          <div className="field">
+            <label htmlFor="end-date">{t('trips.endDate')}</label>
             <input
               id="end-date"
               type="date"
               value={endDate}
               min={startDate}
               onChange={(e) => setEndDate(e.target.value)}
-              className="h-11 w-full appearance-none rounded-xl border border-input bg-background px-3.5 text-base outline-none md:text-sm transition duration-150 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
+              className="input"
             />
           </div>
         </div>
 
-        <div>
-          <label htmlFor="budget" className="mb-1 block text-sm font-medium text-foreground">
-            {t('budget.total')}
-          </label>
+        <div className="field">
+          <label htmlFor="budget">{t('budget.total')}</label>
           <div className="flex items-center gap-2">
-            <span className="text-lg font-semibold text-muted-foreground">$</span>
+            <span className="text-lg font-semibold text-muted">$</span>
             <input
               id="budget"
               type="number"
@@ -215,13 +203,13 @@ export default function NewTripModal({ open, onClose, onCreated }: NewTripModalP
               step={10}
               value={totalBudget}
               onChange={(e) => setTotalBudget(Number(e.target.value))}
-              className="w-full rounded-xl border border-input px-3.5 py-2.5 text-base outline-none md:text-sm transition duration-150 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
+              className="input"
             />
           </div>
-          {dayCount > 0 && <p className="mt-1 text-xs text-muted-foreground">{t('trips.daysOfTravel', { n: dayCount })}</p>}
+          {dayCount > 0 && <p className="text-xs text-muted">{t('trips.daysOfTravel', { n: dayCount })}</p>}
         </div>
 
-        {error && <p className="text-sm text-rose-600 dark:text-rose-400">{error}</p>}
+        {error && <p className="text-sm text-[var(--danger)]">{error}</p>}
       </form>
     </Modal>
   );

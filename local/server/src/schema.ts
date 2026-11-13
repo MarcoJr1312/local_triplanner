@@ -7,9 +7,13 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const BASE_SCHEMA_PATH = path.resolve(
-  __dirname, '..', '..', 'graphql', 'schema.graphql'
-);
+// Repo: local/server/src -> local/graphql. Container: /app/src -> /app/graphql.
+const BASE_SCHEMA_PATH =
+  [
+    path.resolve(__dirname, '..', '..', 'graphql', 'schema.graphql'),
+    path.resolve(__dirname, '..', 'graphql', 'schema.graphql'),
+  ].find((candidate) => fs.existsSync(candidate)) ??
+  path.resolve(__dirname, '..', '..', 'graphql', 'schema.graphql');
 
 const EXTENSION = /* GraphQL */ `
 extend type Query {
