@@ -44,7 +44,7 @@ def _resolve_database_url() -> str:
     password = quote(str(secret.get("password", "")), safe="")
     database = _env("DB_NAME", "postgres")
     port = _env("DB_PORT", "5432")
-    return f"postgres://{user}:{password}@{host}:{port}/{database}?sslmode=require"
+    return f"postgres://{user}:{password}@{host}:{port}/{database}?sslmode=no-verify"
 
 
 @dataclass(frozen=True)
