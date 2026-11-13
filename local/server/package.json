@@ -8,16 +8,19 @@
     "start": "bun src/index.ts",
     "dev": "bun --watch src/index.ts",
     "seed": "bun ../db/seed.js",
+    "db:migrate": "bun src/db/migrate.ts",
     "test": "bun test",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "firebase-admin": "^14.5.0",
     "graphql-yoga": "^5.13.0",
-    "jose": "^6.2.12"
+    "jose": "^6.2.12",
+    "pg": "^8.23.1"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",
+    "@types/pg": "^8.23.1",
     "typescript": "^7.0.2"
   }
 }

@@ -1,0 +1,25 @@
+# Local Postgres for triplanner (server + agent).
+# pgvector image so the agent can use the same instance for embeddings.
+# Start:  docker compose up -d
+# Stop:   docker compose down          (keeps the volume)
+# Reset:  docker compose down -v       (drops data, demo-grade)
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    container_name: triplanner-postgres
+    environment:
+      POSTGRES_USER: triplanner
+      POSTGRES_PASSWORD: triplanner
+      POSTGRES_DB: triplanner
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U triplanner -d triplanner"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  pgdata:
