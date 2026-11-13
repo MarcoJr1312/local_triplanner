@@ -147,8 +147,14 @@ CREATE TABLE IF NOT EXISTS user_interests (
   term       text NOT NULL,
   source     text NOT NULL DEFAULT 'custom' CHECK (source IN ('picked', 'custom')),
   created_at timestamptz NOT NULL DEFAULT now(),
+  -- Monotonic insertion order: created_at is the transaction timestamp, so it
+  -- cannot break ties inside a single replace-all write.
+  seq        bigint GENERATED ALWAYS AS IDENTITY,
   UNIQUE (user_id, term)
 );
+
+-- Existing databases created before `seq` existed.
+ALTER TABLE user_interests ADD COLUMN IF NOT EXISTS seq bigint GENERATED ALWAYS AS IDENTITY;
 
 CREATE INDEX IF NOT EXISTS idx_user_interests_user ON user_interests(user_id);
 
