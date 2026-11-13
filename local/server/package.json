@@ -10,6 +10,7 @@
     "seed": "bun ../db/seed.js",
     "db:migrate": "bun src/db/migrate.ts",
     "catalogue:bootstrap": "bun src/catalogue/bootstrap.ts",
+    "db:seed": "bun src/seed.ts",
     "test": "bun test",
     "typecheck": "tsc --noEmit"
   },
