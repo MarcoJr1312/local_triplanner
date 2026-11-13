@@ -7,8 +7,10 @@ to Google Maps routes or an Uber deep link.
 
 The product UI is **Spanish by default**, with an **es/en** switch.
 
-**Status:** local development only — no deployment for now. Everything runs on
-localhost (`:3000` → `:4000` → `:4100`).
+**Status:** local development plus a **full-ephemeral AWS demo** in `us-east-1`.
+The app stack is created on demand and destroyed after 30 minutes without
+traffic; only a small control plane stays alive. DNS is not configured yet, so
+the ALB DNS name changes on every wake.
 
 ## Features
 
@@ -21,14 +23,15 @@ localhost (`:3000` → `:4000` → `:4100`).
 - **Calendar view** — every day of the trip in a monthly grid.
 - **Attachments** — tickets and documents per activity; the uploader chooses
   who can see each file. PDFs render inline.
-- **Places search** — cache-first HasData search with favorites first.
+- **Places search** — cache-first HasData search with favorites first, backed by
+  a DynamoDB catalogue.
 - **Routes** — multi-stop Google Maps route ordered by start time (max 10
   stops), with an optional current-location origin.
 - **Uber** — per-activity deep link with the destination preloaded.
 - **Email** — invitations and activity reminders via Resend.
 - **Profiles** — name, avatar, language and light/dark theme.
-- **Auth** — Firebase Auth (email + password and Google) with email
-  verification.
+- **Auth** — Firebase Auth (email + password and Google) when configured;
+  otherwise demo auth via `x-user-id`.
 
 ## Architecture
 
@@ -36,43 +39,53 @@ localhost (`:3000` → `:4000` → `:4100`).
 Browser
   │
   ▼
-Next.js frontend (:3000 dev, :3001 prod)
-  ├─ /api/graphql ─────────── proxy ──▶ GraphQL server (:4000) ──▶ Postgres + DynamoDB
-  ├─ /api/agent/* ─────────── proxy ──▶ Agent service (:4100)  ──▶ ChromaDB + DeepSeek
-  └─ /uploads/* ──────────── rewrite ─▶ GraphQL server static uploads
+Next.js frontend
+  ├─ /api/graphql ─────────── proxy ──▶ GraphQL server ──▶ Postgres
+  │                                                    └─▶ DynamoDB (locations)
+  ├─ /api/agent/* ─────────── proxy ──▶ Agent service ──▶ Postgres (pgvector) + DeepSeek
+  └─ /uploads/* ───────────── route ──▶ GraphQL server ──▶ Storage (local disk or S3)
 ```
 
-- The browser only talks to the Next.js origin. It never sees backend URLs or
-  credentials.
-- The HasData and Resend keys live **server-side only**, in `local/.env`.
-- No sensitive value is ever exposed through `NEXT_PUBLIC_*`.
+- The browser only talks to the Next.js origin. It never sees backend URLs.
+- HasData, Resend, DeepSeek and Firebase credentials live **server-side only**.
+- No sensitive value is exposed through `NEXT_PUBLIC_*`.
 
 ## Tech stack
 
 | Area | Stack |
 |---|---|
 | Frontend (`frontend-next/`) | Next.js 15 App Router, React 19, TypeScript, shadcn/ui on Radix, Tailwind v4, next-themes, sonner |
-| Backend (`local/server/`) | TypeScript on Bun, graphql-yoga, Postgres (`pg`), DynamoDB (locations), `firebase-admin`, `jose` |
+| Backend (`local/server/`) | TypeScript on Bun, graphql-yoga, Postgres (`pg`), DynamoDB (locations), Storage abstraction, `firebase-admin`, `jose` |
 | Agent (`local/agent-service/`) | Python 3.12, uv, FastAPI, Agno, pgvector (Postgres), DeepSeek |
 | Data (`local/db/`) | Postgres `pg/schema.sql` + idempotent seed; DynamoDB catalogue seeded from `seed-data.json` |
-| Infrastructure | Local only: `:3000` → `:4000` → `:4100`, no AWS, no public URL |
+| Local infra | Docker Compose: Postgres 17 + pgvector, DynamoDB Local, MinIO |
+| AWS demo | ECS Fargate, RDS Postgres Single-AZ, DynamoDB, S3, ALB + WAF, ECR, Terraform + GitHub Actions OIDC |
+
+### Data placement
+
+- **Postgres / RDS** — users, trips, members, items, invitations, attachments
+  metadata, favorites, interests, chats, reminders, agent embeddings.
+- **DynamoDB** — the `locations` catalogue (HasData results, `place_id` /
+  `data_id` GSIs, TTL). Postgres stores denormalized place snapshots, so trip
+  reads never fan out to DynamoDB.
+- **Storage** — avatars, trip covers and attachment bytes. Local disk in dev,
+  S3 in AWS. Attachment URLs stay short-lived HMAC-signed.
 
 ## Repository layout
 
 ```
 .
 ├── frontend-next/          Next.js app (App Router, shadcn/ui, i18n)
-│   ├── app/                routes, layout, API proxies
-│   ├── components/         UI components
-│   ├── hooks/              auth, query, store hooks
-│   └── lib/                API client, i18n, routes, formatting, types
 ├── local/
 │   ├── server/             GraphQL API, auth, uploads, HasData, email
-│   ├── agent-service/      FastAPI suggestion agent
+│   ├── agent-service/      FastAPI suggestion agent (pgvector)
 │   ├── db/                 pg/schema.sql + seed-data.json
+│   ├── graphql/            base schema
 │   └── .env.example        backend configuration template
-├── AGENTS.md               project conventions for AI agents
-└── .orkai.yaml             project memory configuration
+├── aws-infra/              Terraform: bootstrap, control plane, prod stack
+├── .github/workflows/      build-images, wake, sleep
+├── docker-compose.yml      local Postgres + DynamoDB + MinIO
+└── AGENTS.md               project conventions for AI agents
 ```
 
 ### Frontend routes
@@ -86,99 +99,104 @@ Next.js frontend (:3000 dev, :3001 prod)
 | `/verify` | Email verification |
 | `/api/graphql` | GraphQL proxy to the backend |
 | `/api/agent/[...path]` | Proxy to the agent service |
+| `/uploads/[...path]` | Runtime proxy to backend object storage |
 
 ## Prerequisites
 
 - [Bun](https://bun.sh/) (JS package manager and runtime)
-- [Docker](https://www.docker.com/) for the local Postgres and DynamoDB containers
+- [Docker](https://www.docker.com/) for Postgres, DynamoDB Local and MinIO
 - [uv](https://docs.astral.sh/uv/) and Python 3.12+ (agent service)
-- **Optional:** a `firebase-service-account.json` for real Firebase auth. Without
-  it the app runs in demo mode (`LOCAL_ONLY=1`).
-- **Optional:** API keys for HasData (place search), Resend (email) and DeepSeek
-  (agent). Missing keys disable only those features.
+- **Optional:** Firebase service account for real auth, HasData/Resend/DeepSeek
+  keys. Missing keys disable only those features.
 
-> The local GraphQL server loads the base schema from
-> `local/graphql/schema.graphql` and the seed data from
-> `local/db/seed-data.json`. Both ship with this repository, so a fresh clone
-> runs without copying anything from the reference implementation.
+## Local development
 
-## Getting started
-
-### 1. Backend configuration
+### 1. Data stores
 
 ```bash
+docker compose up -d            # Postgres 17 + pgvector, DynamoDB Local, MinIO
 cp local/.env.example local/.env
-# Optional: fill in HASDATA_API_KEY, RESEND_API_KEY and the Firebase values.
-# With LOCAL_ONLY=1 and no Firebase config the app uses demo auth (x-user-id).
-```
-
-### 2. Data stores
-
-```bash
-docker compose up -d          # Postgres 17 (pgvector) + DynamoDB Local
 cd local/server
-bun run db:migrate            # schema applied to Postgres
-bun run db:seed               # Postgres demo data + DynamoDB catalogue
+bun install
+bun run db:migrate              # Postgres schema
+bun run db:seed                 # demo data + DynamoDB catalogue
 ```
 
-Both commands are idempotent. The seed creates two destinations, their
-activities, and a demo user/trip.
+The seed is idempotent and creates two destinations, their activities and a demo
+user/trip. The server also bootstraps schema and catalogue on boot when
+`LOCAL_ONLY=1`.
 
-### 3. Services
-
-Run each service in its own terminal:
+### 2. Services
 
 ```bash
 # GraphQL API — http://localhost:4000/graphql (GraphiQL enabled)
-cd local/server && bun install && bun run dev
+cd local/server && bun run dev
 
 # Frontend — http://localhost:3000
 cd frontend-next && bun install && bun run dev
 
-# Agent service — http://localhost:4100
+# Agent — http://localhost:4100
 cd local/agent-service && uv sync
 uv run uvicorn tripsuggest.main:app --host 127.0.0.1 --port 4100
 ```
 
-Configure the agent through `local/agent-service/.env` (see
-`local/agent-service/.env.example`). The agent authenticates backend calls with
-the shared `INTERNAL_TOKEN`.
+### 3. Storage
+
+By default bytes go to `local/server/uploads` (gitignored). To use MinIO:
+
+```bash
+S3_BUCKET=triplanner-uploads
+S3_ENDPOINT=http://localhost:9000
+S3_FORCE_PATH_STYLE=1
+AWS_ACCESS_KEY_ID=triplanner
+AWS_SECRET_ACCESS_KEY=triplanner123
+```
+
+The MinIO console is at http://localhost:9001.
 
 ### 4. Verify
 
-- Open http://localhost:3000.
-- GraphiQL: http://localhost:4000/graphql.
-- Agent health: `curl http://localhost:4100/health`.
+- http://localhost:3000
+- GraphiQL: http://localhost:4000/graphql
+- Agent health: `curl http://localhost:4100/health`
 
 ## Configuration
 
-Backend (`local/.env`) — never committed:
+### Backend (`local/.env`)
 
 | Variable | Purpose |
 |---|---|
 | `HASDATA_API_KEY` | Places search (backend only) |
 | `RESEND_API_KEY`, `RESEND_FROM` | Invitation and reminder emails |
-| `APP_URL` | Public frontend base for invitation links (local: `http://localhost:3000`) |
-| `LOCAL_ONLY` | `1` = boot without Firebase, demo auth via `x-user-id` |
+| `APP_URL` | Public frontend base for invitation links |
+| `LOCAL_ONLY` | `1` = demo auth via `x-user-id` and no Firebase requirement |
+| `BOOTSTRAP_LOCAL` | Create schema/table on boot (defaults to `LOCAL_ONLY`; `0` in AWS) |
 | `LOCAL_PORT` | GraphQL port (default `4000`) |
-| `ATTACHMENT_TOKEN_SECRET` | HMAC secret for short-lived attachment URLs |
+| `ATTACHMENT_TOKEN_SECRET` | HMAC secret for signed attachment URLs |
 | `INTERNAL_TOKEN` | Shared secret for `/internal/*` endpoints |
 | `AGENT_BASE_URL` | Agent base URL (default `http://127.0.0.1:4100`) |
+| `DATABASE_URL` | Postgres connection string (local default `triplanner` db) |
+| `DB_SECRET_ARN`, `DB_HOST`, `DB_PORT`, `DB_NAME` | AWS: build the URL from the RDS-managed secret |
+| `S3_BUCKET`, `S3_ENDPOINT`, `S3_FORCE_PATH_STYLE` | Object storage (unset = local disk) |
 | `FIREBASE_PROJECT_ID`, `FIREBASE_WEB_API_KEY` | Firebase project config |
 | `FIREBASE_SERVICE_ACCOUNT_PATH` | Admin SDK service account JSON |
 
-Frontend (`frontend-next/.env`):
+### Frontend (`frontend-next/.env.local`)
 
 | Variable | Purpose |
 |---|---|
-| `NEXT_PRIVATE_BACKEND_URL` | Server-side GraphQL backend URL |
+| `NEXT_PRIVATE_BACKEND_URL` | Server-side GraphQL URL (falls back to `localhost:4000`) |
+| `NEXT_PRIVATE_BACKEND_ORIGIN` | Optional uploads origin (derived from the GraphQL URL) |
 
-Agent (`local/agent-service/.env`):
+### Agent (`local/agent-service/.env`)
 
 | Variable | Purpose |
 |---|---|
 | `DEEPSEEK_API_KEY` | LLM provider |
 | `INTERNAL_TOKEN` | Shared secret with the backend |
+| `DATABASE_URL` | Postgres with pgvector (same database as the backend) |
+| `BACKEND_URL` | Internal backend base URL (default `http://127.0.0.1:4000`) |
+| `AGENT_DEMO_MODE` | `true` = accept `X-User-Id` without Firebase |
 | `AGENT_FIREBASE_SERVICE_ACCOUNT_PATH` | Firebase Admin service account |
 | `FIREBASE_PROJECT_ID` | Project whose tokens are verified |
 | `AGENT_LLM_MODEL` | Model name (optional) |
@@ -186,49 +204,118 @@ Agent (`local/agent-service/.env`):
 ## Testing
 
 ```bash
-# Backend: unit tests + strict typecheck
+# Backend: 81 integration tests (Postgres + DynamoDB + MinIO) + strict typecheck
 cd local/server && bun test
 cd local/server && bunx tsc --noEmit
 
-# Agent service
+# Agent: 10 tests against triplanner_agent_test (deterministic embedder)
 cd local/agent-service && uv run python tests/test_m2.py
 
 # Frontend helpers (routes, geolocation, Uber links)
 cd frontend-next && bun test
 ```
 
-Tests must stay green before any merge.
+The backend suites run against `triplanner_test`; they never touch dev data.
 
-## Local-only mode
+## AWS demo (ephemeral)
 
-The project currently runs **only locally**. There is no active deployment and
-no public URL; do not point the frontend or the docs at one.
+Terraform lives in `aws-infra/`. The **app stack** (VPC, NAT, ECS, ALB/WAF, RDS,
+DynamoDB, S3, secrets, logs) is destroyed on sleep. A small **control plane**
+survives: state bucket, wake/sleep Lambdas, EventBridge rule, control table, ECR,
+ACM certificate, GitHub OIDC role and the GitHub token secret.
 
-- `local/.env` sets `LOCAL_ONLY=1`, so the backend boots without Firebase and
-  accepts the demo identity via `x-user-id`.
-- `frontend-next/.env.local` leaves the `NEXT_PUBLIC_FIREBASE_*` variables unset,
-  so Firebase is disabled and the login page offers the demo user only.
-- To enable real Firebase auth later, fill the four `NEXT_PUBLIC_FIREBASE_*`
-  variables, `FIREBASE_PROJECT_ID`, `FIREBASE_WEB_API_KEY` and the service
-  account file, then remove `LOCAL_ONLY=1`.
+### Layout
 
-### Legacy production notes (not used currently)
+```
+aws-infra/
+├── bootstrap/            S3 state bucket (apply once)
+├── modules/              network, data, storage, registry, ingress, ecs, control-plane
+├── envs/control-plane/   persistent stack (Lambdas, ECR, OIDC role)
+└── envs/prod/            ephemeral app stack
+```
 
-The previous deployment ran `NEXT_PROD=1` behind nginx with Basic Auth. That
-flow is kept only as reference; do not redeploy without explicit owner approval.
+### One-time setup
+
+```bash
+cd aws-infra/bootstrap && terraform init && terraform apply
+
+cd ../envs/control-plane
+cp terraform.tfvars.example terraform.tfvars   # github_repo + immutable ids
+terraform init && terraform apply
+```
+
+Then store the GitHub token used by the sleep Lambda:
+
+```bash
+aws secretsmanager put-secret-value \
+  --secret-id triplanner/github-token \
+  --secret-string file://token.txt
+```
+
+### GitHub configuration
+
+Secret: `AWS_ROLE_ARN` = `arn:aws:iam::484826611314:role/triplanner-github-actions`.
+
+Variables: `WEB_IMAGE`, `API_IMAGE`, `AGENT_IMAGE` (ECR `:latest` URIs),
+`FIREBASE_PROJECT_ID`, `CONTROL_TABLE`. `CERTIFICATE_ARN` and `APP_HOSTNAME` stay
+empty until ACM and DNS exist.
+
+### Wake / sleep
+
+- **Wake** — `POST /wake` (control-plane API) dispatches the `wake` workflow; it
+  runs `terraform apply`, migrations and seed, then marks the stack `awake`.
+- **Sleep** — an EventBridge rule runs every 5 minutes; after ~30 minutes without
+  ALB traffic the Lambda dispatches `sleep`, which runs `terraform destroy`.
+- **Data loss on destroy is accepted.** RDS is Single-AZ and has no final
+  snapshot; S3 and DynamoDB are force-deleted.
+- Expected cold start is 8–12 minutes; a clean destroy→wake measurement is still
+  pending.
+- The stack is **HTTP only** until an ACM certificate and Cloudflare DNS are
+  configured.
+
+### Images
+
+`.github/workflows/build-images.yml` builds `web`, `api` and `agent` from the
+repo-root Dockerfiles and pushes commit-SHA + `:latest` tags to ECR. It runs on
+`main` (the OIDC role only trusts `refs/heads/main`) and manually.
+
+`wake.yml` expects the API image to contain `db:migrate` and `db:seed`, and it
+overrides the container command for the one-off tasks.
+
+### Cost
+
+Idle (app destroyed): roughly **$1/month** (control plane, ECR, secret, state).
+Awake: roughly **$0.15–0.30/hour** (RDS Single-AZ, ECS, ALB, NAT).
 
 ## Conventions and guardrails
 
-- **Security** — membership checks on every read and mutation; uploads are
-  gated by per-file visibility and short-lived HMAC URLs; no secrets in the
-  client or the repository.
+- **Security** — membership checks on every read and mutation; attachments gated
+  by per-file visibility and short-lived HMAC URLs; no secrets in the client or
+  the repository.
 - **i18n** — every UI string goes through `t()`, with mirrored `es`/`en` keys;
   API errors travel as stable codes.
-- **Data** - `local/db/pg/schema.sql` is the single source of truth for the
-  relational store; the seed is idempotent; `*.sqlite`, uploads and Chroma data
-  are gitignored.
-- **Branches** — one `feature/*` branch per delivery, pushed only to that
-  branch, never to `main`.
-- **No AWS deploys** — the original AWS stack is reference only.
+- **Data** — `local/db/pg/schema.sql` is the source of truth for Postgres; the
+  seed is idempotent; uploads, local env files and Terraform state are
+  gitignored.
+- **Branches** — one `feature/*` or `fix/*` branch per delivery, pushed only to
+  that branch. `main` changes through PRs.
+- **AWS deploys** — zero applies or destroys without explicit owner
+  authorization; the wake/sleep button is the standing authorization for the
+  demo stack.
+
+## Troubleshooting
+
+- **Next.js `Cannot find module './<n>.js'`** — never run `next build` while
+  `next dev` serves the same `.next` directory. Kill dev, delete
+  `frontend-next/.next`, restart. Builds use separate directories.
+- **GitHub Actions `Not authorized to perform sts:AssumeRoleWithWebIdentity`** —
+  the OIDC `sub` claim now includes immutable ids
+  (`repo:owner@id/repo@id:ref:refs/heads/main`). The trust policy accepts both
+  formats; keep `github_owner_id` / `github_repo_id` in the control-plane vars.
+- **ECS task fails before starting** — every `secrets` entry must have a value
+  (`AWSCURRENT`). Empty Terraform-created secret containers block task startup.
+- **RDS `self signed certificate in chain`** — the runtime does not ship the RDS
+  CA bundle; the demo connects with `sslmode=no-verify` (TLS without CA
+  verification).
 
 See [AGENTS.md](AGENTS.md) for the full project working agreement.
