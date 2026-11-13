@@ -42,6 +42,7 @@ class Settings:
     llm_base_url: str
     llm_model: str
     demo_mode: bool
+    database_url: str
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -58,6 +59,7 @@ class Settings:
             llm_base_url=_env("AGENT_LLM_BASE_URL", "https://api.deepseek.com"),
             llm_model=_env("AGENT_LLM_MODEL", "deepseek-v4-pro"),
             demo_mode=_env("AGENT_DEMO_MODE", "true").lower() != "false",
+            database_url=_env("DATABASE_URL", "postgres://triplanner:triplanner@localhost:5432/triplanner"),
         )
 
 
