@@ -34,7 +34,8 @@ export async function resolveDatabaseUrl(): Promise<string> {
     throw new Error('RDS secret does not contain username/password');
   }
 
-  // rds.force_ssl=1 is set in the Terraform parameter group.
-  cached = `postgres://${encodeURIComponent(secret.username)}:${encodeURIComponent(secret.password)}@${host}:${port}/${database}?sslmode=require`;
+  // rds.force_ssl=1 is set in the Terraform parameter group. `no-verify`
+  // keeps the connection encrypted; the demo does not ship the RDS CA bundle.
+  cached = `postgres://${encodeURIComponent(secret.username)}:${encodeURIComponent(secret.password)}@${host}:${port}/${database}?sslmode=no-verify`;
   return cached;
 }

@@ -28,8 +28,9 @@ class BackendError(Exception):
 
 
 class BackendClient:
-    def __init__(self, base_url: str = DEFAULT_BACKEND_URL):
-        self._base_url = base_url.rstrip("/")
+    def __init__(self, base_url: str | None = None):
+        resolved = base_url or get_settings().backend_url or DEFAULT_BACKEND_URL
+        self._base_url = resolved.rstrip("/")
         self._token = get_settings().internal_token
 
     def _headers(self, user_id: str | None = None, user_email: str | None = None) -> dict[str, str]:

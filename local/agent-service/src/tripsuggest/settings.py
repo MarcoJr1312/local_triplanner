@@ -44,7 +44,7 @@ def _resolve_database_url() -> str:
     password = quote(str(secret.get("password", "")), safe="")
     database = _env("DB_NAME", "postgres")
     port = _env("DB_PORT", "5432")
-    return f"postgres://{user}:{password}@{host}:{port}/{database}?sslmode=require"
+    return f"postgres://{user}:{password}@{host}:{port}/{database}?sslmode=no-verify"
 
 
 @dataclass(frozen=True)
@@ -70,6 +70,7 @@ class Settings:
     llm_model: str
     demo_mode: bool
     database_url: str
+    backend_url: str
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -87,6 +88,7 @@ class Settings:
             llm_model=_env("AGENT_LLM_MODEL", "deepseek-v4-pro"),
             demo_mode=_env("AGENT_DEMO_MODE", "true").lower() != "false",
             database_url=_resolve_database_url(),
+            backend_url=_env("BACKEND_URL", "http://127.0.0.1:4000"),
         )
 
 

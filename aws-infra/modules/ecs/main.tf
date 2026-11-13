@@ -231,7 +231,8 @@ resource "aws_ecs_task_definition" "api" {
       ]
       environment = [
         { name = "NODE_ENV", value = "production" },
-        { name = "LOCAL_ONLY", value = "0" },
+        { name = "LOCAL_ONLY", value = "1" },
+        { name = "BOOTSTRAP_LOCAL", value = "0" },
         { name = "LOCAL_PORT", value = "4000" },
         { name = "DB_HOST", value = var.db_host },
         { name = "DB_PORT", value = tostring(var.db_port) },
@@ -294,10 +295,12 @@ resource "aws_ecs_task_definition" "agent" {
         { name = "DB_SECRET_ARN", value = var.db_secret_arn },
         { name = "AWS_REGION", value = var.aws_region },
         { name = "FIREBASE_PROJECT_ID", value = var.firebase_project_id },
-        { name = "AGENT_DEMO_MODE", value = "false" },
+        { name = "AGENT_DEMO_MODE", value = "true" },
+        { name = "BACKEND_URL", value = "http://api.${local.namespace}:4000" },
       ]
       secrets = [
         { name = "DEEPSEEK_API_KEY", valueFrom = var.secret_arns["deepseek-api-key"] },
+        { name = "INTERNAL_TOKEN", valueFrom = var.secret_arns["internal-token"] },
       ]
       logConfiguration = {
         logDriver = "awslogs"
@@ -374,7 +377,7 @@ resource "aws_ecs_service" "api" {
   service_registries {
     registry_arn   = aws_service_discovery_service.api.arn
     container_name = "api"
-    container_port = 4000
+    # No container_port: Cloud Map uses A records here (SRV would require it).
   }
 
   deployment_circuit_breaker {
@@ -408,7 +411,7 @@ resource "aws_ecs_service" "agent" {
   service_registries {
     registry_arn   = aws_service_discovery_service.agent.arn
     container_name = "agent"
-    container_port = 4100
+    # No container_port: Cloud Map uses A records here (SRV would require it).
   }
 
   deployment_circuit_breaker {
