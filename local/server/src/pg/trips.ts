@@ -233,7 +233,8 @@ export interface AddItemInput {
   title: string;
   category: string;
   cost?: number | null;
-  day?: string | null;
+  /** Required by the schema: every item belongs to a day. */
+  day: string;
   order?: number | null;
   startTime?: string | null;
   notes?: string | null;
@@ -266,8 +267,8 @@ export async function addItem(
       input.title,
       input.category,
       input.cost ?? 0,
-      input.day ?? null,
-      input.order ?? null,
+      input.day,
+      input.order ?? 0,
       input.startTime ?? null,
       input.notes ?? null,
       input.imageUrl ?? null,
