@@ -24,10 +24,13 @@ data "aws_iam_policy_document" "github_assume" {
       values   = ["sts.amazonaws.com"]
     }
 
+    # Only the default branch can assume the deploy role. repository_dispatch
+    # runs the workflow from the default branch, so this is sufficient for
+    # wake/sleep and it keeps every feature branch out of the account.
     condition {
-      test     = "StringLike"
+      test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:${var.github_repo}:*"]
+      values   = ["repo:${var.github_repo}:ref:refs/heads/main"]
     }
   }
 }

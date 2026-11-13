@@ -1,6 +1,7 @@
 output "wake_url" {
   description = "HTTP API endpoint that dispatches the wake workflow."
-  value       = "${aws_apigatewayv2_stage.wake.invoke_url}/wake"
+  # $default stage invoke_url carries a trailing slash; do not double it.
+  value = "${trimsuffix(aws_apigatewayv2_stage.wake.invoke_url, "/")}/wake"
 }
 
 output "control_table_name" {

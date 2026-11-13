@@ -74,14 +74,20 @@ resource "aws_dynamodb_table" "locations" {
   }
 
   global_secondary_index {
-    name            = "place_id-index"
-    hash_key        = "place_id"
+    name = "place_id-index"
+    key_schema {
+      attribute_name = "place_id"
+      key_type       = "HASH"
+    }
     projection_type = "ALL"
   }
 
   global_secondary_index {
-    name            = "data_id-index"
-    hash_key        = "data_id"
+    name = "data_id-index"
+    key_schema {
+      attribute_name = "data_id"
+      key_type       = "HASH"
+    }
     projection_type = "ALL"
   }
 
