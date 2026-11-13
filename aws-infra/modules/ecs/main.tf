@@ -374,7 +374,7 @@ resource "aws_ecs_service" "api" {
   service_registries {
     registry_arn   = aws_service_discovery_service.api.arn
     container_name = "api"
-    container_port = 4000
+    # No container_port: Cloud Map uses A records here (SRV would require it).
   }
 
   deployment_circuit_breaker {
@@ -408,7 +408,7 @@ resource "aws_ecs_service" "agent" {
   service_registries {
     registry_arn   = aws_service_discovery_service.agent.arn
     container_name = "agent"
-    container_port = 4100
+    # No container_port: Cloud Map uses A records here (SRV would require it).
   }
 
   deployment_circuit_breaker {
