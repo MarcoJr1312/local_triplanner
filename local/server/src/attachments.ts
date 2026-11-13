@@ -76,7 +76,7 @@ function ensureAttachmentsDir(): void {
   mkdirSync(ATTACHMENTS_DIR(), { recursive: true });
 }
 
-function decodeDataUrl(dataUrl: string): { ext: string; buffer: Buffer } {
+export function decodeDataUrl(dataUrl: string): { ext: string; buffer: Buffer } {
   const m = /^data:([a-z0-9.+-]+\/[a-z0-9.+-]+);base64,(.+)$/.exec(dataUrl.trim());
   if (!m) throw new Error('El archivo debe venir en base64.');
   const mime = m[1]!;

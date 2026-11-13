@@ -1,0 +1,270 @@
+// Postgres port of attachments.ts. Bytes go through Storage; the DB stores the
+// storage key, and the public/signed URL is derived from it.
+
+import { randomUUID } from 'node:crypto';
+import { signAttachmentUrl } from '../attachment-tokens.ts';
+import {
+  decodeDataUrl,
+  type AddAttachmentInput,
+  type AttachmentGql,
+  type AttachmentRow,
+  type AttachmentVisibility,
+  type AttachmentVisibilityMode,
+} from '../attachments.ts';
+import type { Storage } from '../storage.ts';
+import type { AsyncDb } from './db.ts';
+
+interface AttachmentRowWithUploader extends AttachmentRow {
+  uploaded_by_name: string | null;
+}
+
+const ATTACHMENT_SELECT = `
+  SELECT a.*, u.display_name AS uploaded_by_name
+  FROM item_attachments a
+  LEFT JOIN users u ON u.id = a.created_by
+`;
+
+export async function listAttachmentViewerIds(db: AsyncDb, attachmentId: string): Promise<string[]> {
+  const rows = await db
+    .prepare('SELECT user_id FROM attachment_viewers WHERE attachment_id = ? ORDER BY user_id ASC')
+    .all<{ user_id: string }>(attachmentId);
+  return rows.map((r) => r.user_id);
+}
+
+async function hasViewerRows(db: AsyncDb, attachmentId: string): Promise<boolean> {
+  const row = await db
+    .prepare('SELECT 1 AS ok FROM attachment_viewers WHERE attachment_id = ? LIMIT 1')
+    .get(attachmentId);
+  return Boolean(row);
+}
+
+// Central visibility rule (unchanged):
+// - uploader always sees it
+// - granted viewer sees it
+// - legacy attachment with no viewer rows: any trip member sees it
+// - otherwise nobody (not even the owner)
+export async function canViewAttachment(db: AsyncDb, attachmentId: string, userId: string): Promise<boolean> {
+  const row = await db
+    .prepare(
+      `SELECT a.created_by AS created_by, a.visibility AS visibility, i.trip_id AS trip_id
+       FROM item_attachments a
+       JOIN trip_items i ON i.id = a.item_id
+       WHERE a.id = ?`,
+    )
+    .get<{ created_by: string; visibility: AttachmentVisibilityMode; trip_id: string }>(attachmentId);
+  if (!row) return false;
+  if (row.created_by === userId) return true;
+
+  const isViewer = await db
+    .prepare('SELECT 1 AS ok FROM attachment_viewers WHERE attachment_id = ? AND user_id = ?')
+    .get(attachmentId, userId);
+  if (isViewer) return true;
+
+  if (row.visibility === 'legacy') {
+    return isTripMember(db, row.trip_id, userId);
+  }
+  return false;
+}
+
+export async function toAttachmentGql(
+  db: AsyncDb,
+  storage: Storage,
+  row: AttachmentRowWithUploader,
+  callerUserId: string | null,
+  signUrls = Boolean(callerUserId),
+): Promise<AttachmentGql> {
+  const isUploader = callerUserId !== null && callerUserId === row.created_by;
+  const viewerIds = isUploader ? await listAttachmentViewerIds(db, row.id) : null;
+  const publicPath = storage.publicPath(row.path);
+  return {
+    id: row.id,
+    fileName: row.file_name,
+    mimeType: row.mime_type,
+    sizeBytes: row.size_bytes,
+    url: callerUserId && signUrls ? signAttachmentUrl(publicPath, callerUserId) : publicPath,
+    createdAt: row.created_at,
+    uploadedByName: row.uploaded_by_name ?? null,
+    viewerIds,
+    visibility: row.visibility === 'legacy' || (await hasViewerRows(db, row.id)) ? 'shared' : 'private',
+    createdBy: row.created_by,
+  };
+}
+
+export async function listAttachmentsByItem(
+  db: AsyncDb,
+  storage: Storage,
+  itemId: string,
+  userId?: string | null,
+): Promise<AttachmentGql[]> {
+  const rows = await db
+    .prepare(`${ATTACHMENT_SELECT} WHERE a.item_id = ? ORDER BY a.created_at ASC`)
+    .all<AttachmentRowWithUploader>(itemId);
+
+  const visible: AttachmentGql[] = [];
+  for (const row of rows) {
+    if (userId && !(await canViewAttachment(db, row.id, userId))) continue;
+    visible.push(await toAttachmentGql(db, storage, row, userId ?? null));
+  }
+  return visible;
+}
+
+export async function findAttachment(db: AsyncDb, attachmentId: string): Promise<AttachmentRowWithUploader | null> {
+  const row = await db
+    .prepare(`${ATTACHMENT_SELECT} WHERE a.id = ?`)
+    .get<AttachmentRowWithUploader>(attachmentId);
+  return row ?? null;
+}
+
+export async function getAttachmentForUser(
+  db: AsyncDb,
+  storage: Storage,
+  attachmentId: string,
+  userId: string,
+): Promise<AttachmentGql | null> {
+  const row = await findAttachment(db, attachmentId);
+  if (!row) return null;
+  if (!(await canViewAttachment(db, attachmentId, userId))) return null;
+  return toAttachmentGql(db, storage, row, userId, true);
+}
+
+export async function addAttachment(
+  db: AsyncDb,
+  storage: Storage,
+  itemId: string,
+  createdBy: string,
+  input: AddAttachmentInput,
+  viewerIds?: readonly string[],
+): Promise<AttachmentGql> {
+  const name = input.fileName.trim().slice(0, 120) || 'archivo';
+  const { ext, buffer } = decodeDataUrl(input.dataUrl);
+  const id = randomUUID();
+  const key = `attachments/${itemId}/${id}.${ext}`;
+  await storage.put(key, buffer, input.mimeType);
+
+  // Uploader is an implicit viewer: no row for them. Omitting viewerIds keeps
+  // the legacy flow (visible to trip members); passing it (even empty) means
+  // explicit visibility (empty -> private).
+  const explicitVisibility = viewerIds !== undefined;
+  const uniqueViewers = [...new Set(viewerIds ?? [])].filter((viewerId) => viewerId !== createdBy);
+  const visibility: AttachmentVisibilityMode = !explicitVisibility
+    ? 'legacy'
+    : uniqueViewers.length > 0
+      ? 'shared'
+      : 'private';
+
+  await db
+    .prepare(
+      `INSERT INTO item_attachments (id, item_id, file_name, mime_type, size_bytes, path, created_by, visibility)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .run(id, itemId, name, input.mimeType, buffer.length, key, createdBy, visibility);
+
+  for (const viewerId of uniqueViewers) {
+    await db
+      .prepare('INSERT INTO attachment_viewers (attachment_id, user_id) VALUES (?, ?) ON CONFLICT DO NOTHING')
+      .run(id, viewerId);
+  }
+
+  const row = await findAttachment(db, id);
+  if (!row) throw new Error('No se pudo guardar el adjunto');
+  // Internal call: relative URL; the resolver re-reads a signed one for the caller.
+  return toAttachmentGql(db, storage, row, createdBy, false);
+}
+
+export async function invalidAttachmentViewers(
+  db: AsyncDb,
+  tripId: string,
+  viewerIds: readonly string[],
+): Promise<string[]> {
+  const invalid: string[] = [];
+  for (const viewerId of new Set(viewerIds)) {
+    if (!(await isTripMember(db, tripId, viewerId))) invalid.push(viewerId);
+  }
+  return invalid;
+}
+
+export async function replaceAttachmentViewers(
+  db: AsyncDb,
+  attachmentId: string,
+  viewerIds: readonly string[],
+): Promise<void> {
+  const uniqueViewers = [...new Set(viewerIds)];
+  const visibility: AttachmentVisibilityMode = uniqueViewers.length > 0 ? 'shared' : 'private';
+
+  await db.transaction(async (tx) => {
+    await tx.prepare('DELETE FROM attachment_viewers WHERE attachment_id = ?').run(attachmentId);
+    for (const viewerId of uniqueViewers) {
+      await tx
+        .prepare('INSERT INTO attachment_viewers (attachment_id, user_id) VALUES (?, ?) ON CONFLICT DO NOTHING')
+        .run(attachmentId, viewerId);
+    }
+    await tx.prepare('UPDATE item_attachments SET visibility = ? WHERE id = ?').run(visibility, attachmentId);
+  });
+}
+
+export async function removeAttachment(
+  db: AsyncDb,
+  storage: Storage,
+  attachmentId: string,
+): Promise<AttachmentRow | null> {
+  const row = await db
+    .prepare('SELECT * FROM item_attachments WHERE id = ?')
+    .get<AttachmentRow>(attachmentId);
+  if (!row) return null;
+  await db.prepare('DELETE FROM attachment_viewers WHERE attachment_id = ?').run(attachmentId);
+  await db.prepare('DELETE FROM item_attachments WHERE id = ?').run(attachmentId);
+  await storage.delete(row.path);
+  return row;
+}
+
+export async function findAttachmentItemTrip(
+  db: AsyncDb,
+  attachmentId: string,
+): Promise<{ itemId: string; tripId: string } | null> {
+  const row = await db
+    .prepare(
+      `SELECT a.item_id AS "itemId", i.trip_id AS "tripId"
+       FROM item_attachments a
+       JOIN trip_items i ON i.id = a.item_id
+       WHERE a.id = ?`,
+    )
+    .get<{ itemId: string; tripId: string }>(attachmentId);
+  return row ?? null;
+}
+
+export async function findItemTrip(db: AsyncDb, itemId: string): Promise<string | null> {
+  const row = await db.prepare('SELECT trip_id FROM trip_items WHERE id = ?').get<{ trip_id: string }>(itemId);
+  return row?.trip_id ?? null;
+}
+
+// Removes every attachment of a trip: rows first, then bytes (best effort).
+export async function removeAttachmentsByTrip(db: AsyncDb, storage: Storage, tripId: string): Promise<void> {
+  const rows = await db
+    .prepare(
+      `SELECT a.path AS path
+       FROM item_attachments a
+       JOIN trip_items i ON i.id = a.item_id
+       WHERE i.trip_id = ?`,
+    )
+    .all<{ path: string }>(tripId);
+
+  await db.transaction(async (tx) => {
+    await tx
+      .prepare(
+        'DELETE FROM attachment_viewers WHERE attachment_id IN (SELECT a.id FROM item_attachments a JOIN trip_items i ON i.id = a.item_id WHERE i.trip_id = ?)',
+      )
+      .run(tripId);
+    await tx
+      .prepare('DELETE FROM item_attachments WHERE item_id IN (SELECT id FROM trip_items WHERE trip_id = ?)')
+      .run(tripId);
+  });
+
+  for (const row of rows) await storage.delete(row.path);
+}
+
+export async function isTripMember(db: AsyncDb, tripId: string, userId: string): Promise<boolean> {
+  const row = await db
+    .prepare('SELECT 1 AS ok FROM trip_members WHERE trip_id = ? AND user_id = ?')
+    .get(tripId, userId);
+  return Boolean(row);
+}
