@@ -1,5 +1,8 @@
 region      = "us-east-1"
 project     = "triplanner"
 github_repo = "MarcoJr1312/aws_triplanner"
+# Immutable ids GitHub puts in the OIDC sub claim (owner@id/repo@id).
+github_owner_id = "191898791"
+github_repo_id  = "1455568244"
 alb_name    = "triplanner-alb"
 target_group_name = "triplanner-web"
