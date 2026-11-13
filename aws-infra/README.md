@@ -72,7 +72,12 @@ The first `apply` is also the first wake. It creates the VPC, RDS Single-AZ, Dyn
 
 ## 5. GitHub Actions
 
-The workflows in `.github/workflows/` expect:
+The workflows in `.github/workflows/` expect the settings below.
+
+> GitHub now includes immutable ids in the OIDC `sub` claim
+> (`repo:owner@id/repo@id:ref:refs/heads/main`). The control-plane tfvars must
+> carry `github_owner_id` and `github_repo_id`; the role trusts both that form
+> and the legacy one.
 
 **Secrets**
 
@@ -95,6 +100,8 @@ The workflows in `.github/workflows/` expect:
 The **build-images** workflow builds `web`, `api` and `agent` from the Dockerfiles (context = repo root), pushes `<sha>` and `:latest` tags to ECR, and runs on `main` plus manual dispatch. The OIDC role only trusts `refs/heads/main`, so dispatch it from that branch. Point the three `*_IMAGE` variables at the `:latest` URIs.
 
 The **wake** workflow runs `terraform apply`, updates Cloudflare, runs `bun run db:migrate` and `bun run db:seed` as one-off ECS tasks, and marks the control table `awake`. The **sleep** workflow runs `terraform destroy` and marks it `asleep`.
+
+The app stack also creates Secrets Manager containers for `hasdata-api-key`, `resend-api-key`, `deepseek-api-key`, `firebase-service-account` and `internal-token`. ECS fetches every injected secret before starting a task, so each one must have an `AWSCURRENT` value; the app treats the literal `unset` as "feature disabled".
 
 The API image must include `db:migrate` and `db:seed` scripts before the workflows can complete.
 
@@ -119,3 +126,6 @@ Everything else is destroyed, including RDS, DynamoDB, S3 uploads and app secret
 - Cold start is expected to be ~8–12 minutes; measure the first apply.
 - `desired_count` defaults to 0. The wake workflow must pass `-var="desired_count=1"` (or update ECS services after apply).
 - Next.js `NEXT_PUBLIC_*` Firebase values are build-time; set them in the image build, not only in the ECS task environment.
+- ECS runs with `LOCAL_ONLY=1` (demo auth via `x-user-id`) and `BOOTSTRAP_LOCAL=0`: Terraform owns the schema and the DynamoDB table, so the task must not try to create them.
+- The runtime does not ship the Amazon RDS CA bundle; the demo connects with `sslmode=no-verify` (TLS without CA verification).
+- The agent needs `BACKEND_URL` and `INTERNAL_TOKEN` in its task definition to reach the API's `/internal/*` endpoints.

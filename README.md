@@ -219,73 +219,137 @@ The backend suites run against `triplanner_test`; they never touch dev data.
 
 ## AWS demo (ephemeral)
 
-Terraform lives in `aws-infra/`. The **app stack** (VPC, NAT, ECS, ALB/WAF, RDS,
-DynamoDB, S3, secrets, logs) is destroyed on sleep. A small **control plane**
-survives: state bucket, wake/sleep Lambdas, EventBridge rule, control table, ECR,
-ACM certificate, GitHub OIDC role and the GitHub token secret.
+Terraform lives in `aws-infra/`. Two stacks share one S3 state bucket: a small
+**control plane** that survives sleep, and the **app stack** that is created on
+wake and destroyed on sleep.
 
-### Layout
+### AWS architecture
 
 ```
-aws-infra/
-├── bootstrap/            S3 state bucket (apply once)
-├── modules/              network, data, storage, registry, ingress, ecs, control-plane
-├── envs/control-plane/   persistent stack (Lambdas, ECR, OIDC role)
-└── envs/prod/            ephemeral app stack
+GitHub Actions (OIDC) ──▶ Terraform apply/destroy + ECR pushes
+
+Internet
+  │
+  ▼
+ALB + AWS WAF ──▶ ECS web (Next.js) ──/api/graphql──▶ ECS api (Bun + GraphQL)
+                                                        ├──▶ RDS Postgres (relational)
+                                                        ├──▶ RDS pgvector (agent embeddings)
+                                                        ├──▶ DynamoDB (locations)
+                                                        └──▶ S3 (avatars, covers, attachments)
+                     ECS web ──/api/agent/*──▶ ECS agent (FastAPI, internal only)
 ```
+
+### Stacks and state
+
+| Stack | State key | Lifecycle |
+|---|---|---|
+| `bootstrap/` | `bootstrap/terraform.tfstate` | applied once; S3 state bucket |
+| `envs/control-plane/` | `control-plane/terraform.tfstate` | persistent (~$1/month) |
+| `envs/prod/` | `prod/terraform.tfstate` | destroyed on sleep |
+
+All state lives in `s3://triplanner-tfstate-484826611314` with native lockfile,
+versioning, SSE-AES256 and public access blocked.
+
+### Control plane (persistent)
+
+| Resource | Purpose |
+|---|---|
+| S3 state bucket | versioned, encrypted, public access blocked |
+| DynamoDB `triplanner-control` | stack state: `asleep` / `waking` / `awake` / `sleeping` / `error` |
+| Wake Lambda + API Gateway `POST /wake` | dispatches `repository_dispatch("wake")` |
+| Sleep Lambda + EventBridge `rate(5 minutes)` | checks ALB traffic and dispatches sleep after 30 idle minutes |
+| ECR `triplanner/{web,api,agent}` | images survive destroy |
+| Secrets Manager `triplanner/github-token` | PAT used by the sleep Lambda (`Actions: write`) |
+| GitHub OIDC provider + `triplanner-github-actions` role | assumed only from `refs/heads/main`; accepts legacy and immutable-id `sub` claims |
+
+### App stack (destroyed on sleep)
+
+| Module | Resources |
+|---|---|
+| `network` | VPC `10.0.0.0/16`, 2 AZs, public/private subnets, NAT, VPC endpoints, security groups |
+| `data` | RDS Postgres 16 Single-AZ (`db.t4g.micro`, gp3, encrypted, `rds.force_ssl=1`, managed master secret); DynamoDB `triplanner-locations` (pk `id`, `place_id`/`data_id` GSIs, TTL) |
+| `storage` | S3 uploads bucket (SSE, versioning, public blocked), KMS key, Secrets Manager containers for HasData/Resend/DeepSeek/Firebase/internal token |
+| `registry` | ECR lifecycle policies |
+| `ingress` | ALB, AWS WAF, optional ACM certificate, target group |
+| `ecs` | Fargate cluster, Cloud Map namespace `triplanner.local` (A records), web/api/agent task definitions and services, log groups, task roles |
+
+The API container gets `DATABASE_URL` from the RDS-managed secret and runs with
+`LOCAL_ONLY=1` (demo auth) plus `BOOTSTRAP_LOCAL=0` (Terraform owns the schema and
+catalogue). The agent gets `BACKEND_URL=http://api.triplanner.local:4000` and
+`INTERNAL_TOKEN`, and resolves its own DB URL from the same secret.
 
 ### One-time setup
 
 ```bash
-cd aws-infra/bootstrap && terraform init && terraform apply
-
-cd ../envs/control-plane
-cp terraform.tfvars.example terraform.tfvars   # github_repo + immutable ids
+# 1. state bucket
+cd aws-infra/bootstrap
 terraform init && terraform apply
-```
 
-Then store the GitHub token used by the sleep Lambda:
+# 2. persistent control plane
+cd ../envs/control-plane
+cp terraform.tfvars.example terraform.tfvars
+terraform init && terraform apply
 
-```bash
+# 3. token for the sleep Lambda (PAT with Actions: write)
 aws secretsmanager put-secret-value \
   --secret-id triplanner/github-token \
   --secret-string file://token.txt
 ```
 
-### GitHub configuration
-
-Secret: `AWS_ROLE_ARN` = `arn:aws:iam::484826611314:role/triplanner-github-actions`.
-
-Variables: `WEB_IMAGE`, `API_IMAGE`, `AGENT_IMAGE` (ECR `:latest` URIs),
-`FIREBASE_PROJECT_ID`, `CONTROL_TABLE`. `CERTIFICATE_ARN` and `APP_HOSTNAME` stay
-empty until ACM and DNS exist.
-
-### Wake / sleep
-
-- **Wake** — `POST /wake` (control-plane API) dispatches the `wake` workflow; it
-  runs `terraform apply`, migrations and seed, then marks the stack `awake`.
-- **Sleep** — an EventBridge rule runs every 5 minutes; after ~30 minutes without
-  ALB traffic the Lambda dispatches `sleep`, which runs `terraform destroy`.
-- **Data loss on destroy is accepted.** RDS is Single-AZ and has no final
-  snapshot; S3 and DynamoDB are force-deleted.
-- Expected cold start is 8–12 minutes; a clean destroy→wake measurement is still
-  pending.
-- The stack is **HTTP only** until an ACM certificate and Cloudflare DNS are
-  configured.
+The control-plane tfvars needs `github_repo` plus the immutable
+`github_owner_id` / `github_repo_id`; GitHub includes them in the OIDC `sub`
+claim.
 
 ### Images
 
 `.github/workflows/build-images.yml` builds `web`, `api` and `agent` from the
-repo-root Dockerfiles and pushes commit-SHA + `:latest` tags to ECR. It runs on
-`main` (the OIDC role only trusts `refs/heads/main`) and manually.
+repo-root Dockerfiles, pushes `<sha>` and `:latest` tags to ECR, and fails fast if
+a repository is missing. It runs on `main` (the OIDC role only trusts that ref)
+and via manual dispatch.
 
-`wake.yml` expects the API image to contain `db:migrate` and `db:seed`, and it
-overrides the container command for the one-off tasks.
+The API image keeps `CMD` (not `ENTRYPOINT`) so `wake.yml` can override it with
+`bun run db:migrate` / `bun run db:seed`.
 
-### Cost
+### GitHub settings
 
-Idle (app destroyed): roughly **$1/month** (control plane, ECR, secret, state).
-Awake: roughly **$0.15–0.30/hour** (RDS Single-AZ, ECS, ALB, NAT).
+Secret: `AWS_ROLE_ARN`.
+
+Variables: `WEB_IMAGE`, `API_IMAGE`, `AGENT_IMAGE`, `FIREBASE_PROJECT_ID`,
+`CONTROL_TABLE`; later `CERTIFICATE_ARN` and `APP_HOSTNAME` (plus the Cloudflare
+secrets `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ZONE_ID`).
+
+### Wake / sleep flow
+
+1. `POST /wake` → Lambda sets `waking` → GitHub `repository_dispatch("wake")`.
+2. `wake.yml` runs `terraform apply` (~8–12 min), updates the Cloudflare CNAME if
+   configured, runs migrations and seed as one-off ECS tasks, and marks `awake`.
+3. Every 5 minutes the sleep Lambda reads `RequestCount` /
+   `ActiveConnectionCount`; after 30 idle minutes it sets `sleeping` and
+   dispatches `sleep`.
+4. `sleep.yml` runs `terraform destroy` and marks `asleep`.
+
+Manual equivalents:
+
+```bash
+cd aws-infra/envs/prod
+terraform output                      # ALB DNS, cluster, subnets, bucket
+aws ecs run-task ...                  # db:migrate / db:seed one-off
+aws logs get-log-events ...           # /ecs/triplanner/{web,api,agent}
+```
+
+### Data and cost
+
+- **Destroyed:** VPC, NAT, ECS, ALB/WAF, RDS, DynamoDB, S3 objects, app secrets and
+  logs. No final RDS snapshot; data loss is accepted.
+- **Survives:** state bucket, control table, wake/sleep Lambdas, EventBridge, ECR
+  images, ACM certificate, OIDC role and the GitHub token secret.
+- Idle ≈ **$1/month**; awake ≈ **$0.15–0.30/hour**.
+- HTTP-only until ACM + DNS; the ALB DNS name changes on every wake.
+- `wake.yml` uses `-auto-approve` for the button-driven demo; that exception is
+  recorded on the deploy task. No other apply/destroy runs without owner
+  approval.
+
+See [`aws-infra/README.md`](aws-infra/README.md) for the full runbook.
 
 ## Conventions and guardrails
 
