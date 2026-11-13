@@ -67,6 +67,8 @@ export interface LocationRow {
   duration_hours: number | null;
   parent_id: string | null;
   last_updated: string | null;
+  created_at?: string | null;
+  expires_at?: number | null;
 }
 
 export interface TripItemRow {
