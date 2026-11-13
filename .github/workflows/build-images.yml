@@ -41,10 +41,13 @@ jobs:
         include:
           - service: web
             dockerfile: frontend-next/Dockerfile
+            env_var: WEB_IMAGE
           - service: api
             dockerfile: local/server/Dockerfile
+            env_var: API_IMAGE
           - service: agent
             dockerfile: local/agent-service/Dockerfile
+            env_var: AGENT_IMAGE
 
     steps:
       - uses: actions/checkout@v4
@@ -90,5 +93,5 @@ jobs:
             echo ""
             echo "\`${{ steps.ecr.outputs.registry }}/triplanner/${{ matrix.service }}:${{ inputs.tag || github.sha }}\`"
             echo ""
-            echo "Update the \`${{ upper(matrix.service) }}_IMAGE\` repository variable to the \`:latest\` URI."
+            echo "Update the \`${{ matrix.env_var }}\` repository variable to the \`:latest\` URI."
           } >> "$GITHUB_STEP_SUMMARY"
