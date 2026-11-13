@@ -22,6 +22,7 @@ import {
   INTERNAL_TOKEN,
   isUsingDefaultInternalToken,
   LOCAL_ONLY,
+  BOOTSTRAP_LOCAL,
 } from './env.ts';
 import { createInternalRouter } from './internal.ts';
 import { serveUploads } from './uploads.ts';
@@ -39,7 +40,7 @@ const db = await PgDb.connect(databaseUrl);
 
 // Local bootstrapping: schema + catalogue table must exist before serving.
 // In AWS both are provisioned by the wake workflow (migration/seed tasks).
-if (LOCAL_ONLY) {
+if (BOOTSTRAP_LOCAL) {
   await migrate(databaseUrl);
   await ensureTable();
 }

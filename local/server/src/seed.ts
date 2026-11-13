@@ -14,6 +14,7 @@ import { DynamoLocationCatalogue } from './catalogue/dynamo.ts';
 import { ensureTable } from './catalogue/bootstrap.ts';
 import type { LocationCatalogue } from './catalogue/types.ts';
 import type { AsyncDb } from './pg/db.ts';
+import { BOOTSTRAP_LOCAL } from './env.ts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SEED_DATA_PATH = path.resolve(__dirname, '..', '..', 'db', 'seed-data.json');
@@ -142,7 +143,9 @@ if (import.meta.main) {
   const url = await resolveDatabaseUrl();
   const data = JSON.parse(readFileSync(SEED_DATA_PATH, 'utf8')) as SeedData;
 
-  await ensureTable();
+  // Local dev bootstraps the catalogue table. In AWS Terraform owns it and the
+  // task role has data-plane permissions only (no DescribeTable/CreateTable).
+  if (BOOTSTRAP_LOCAL) await ensureTable();
   await migrate(url);
   const db = await PgDb.connect(url);
   const catalogue = new DynamoLocationCatalogue();

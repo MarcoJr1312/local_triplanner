@@ -15,11 +15,11 @@ try {
   // .env opcional: la key tambien puede venir del entorno del proceso
 }
 
-export const HASDATA_API_KEY = process.env.HASDATA_API_KEY ?? '';
+export const HASDATA_API_KEY = process.env.HASDATA_API_KEY === 'unset' ? '' : (process.env.HASDATA_API_KEY ?? '');
 export const hasHasDataKey = () => HASDATA_API_KEY.length > 0;
 
 // ---- Resend (emails de invitacion) ----
-export const RESEND_API_KEY = process.env.RESEND_API_KEY ?? '';
+export const RESEND_API_KEY = process.env.RESEND_API_KEY === 'unset' ? '' : (process.env.RESEND_API_KEY ?? '');
 // Free tier: 'Triplanner <onboarding@resend.dev>' solo envia al email verificado
 // de la cuenta; con dominio verificado se cambia por 'Triplanner <viajes@tudominio>'.
 export const RESEND_FROM = process.env.RESEND_FROM ?? 'Triplanner <onboarding@resend.dev>';
@@ -77,6 +77,14 @@ export const FIREBASE_SERVICE_ACCOUNT_PATH = resolveServiceAccountPath();
 export const LOCAL_ONLY = ['1', 'true', 'yes', 'on'].includes(
   (process.env.LOCAL_ONLY ?? '').toLowerCase(),
 );
+
+// Local-only bootstrapping (schema + DynamoDB table). It is implicit in
+// LOCAL_ONLY, but ECS sets BOOTSTRAP_LOCAL=0: the demo still uses LOCAL_ONLY=1
+// for x-user-id auth while Terraform owns the infrastructure.
+export const BOOTSTRAP_LOCAL =
+  process.env.BOOTSTRAP_LOCAL !== undefined
+    ? ['1', 'true', 'yes', 'on'].includes(process.env.BOOTSTRAP_LOCAL.toLowerCase())
+    : LOCAL_ONLY;
 
 // Valida la config Firebase al arranque. Nunca imprime valores.
 export function assertFirebaseEnv(): void {

@@ -70,6 +70,7 @@ class Settings:
     llm_model: str
     demo_mode: bool
     database_url: str
+    backend_url: str
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -87,6 +88,7 @@ class Settings:
             llm_model=_env("AGENT_LLM_MODEL", "deepseek-v4-pro"),
             demo_mode=_env("AGENT_DEMO_MODE", "true").lower() != "false",
             database_url=_resolve_database_url(),
+            backend_url=_env("BACKEND_URL", "http://127.0.0.1:4000"),
         )
 
 
