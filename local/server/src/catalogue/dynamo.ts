@@ -30,8 +30,9 @@ export interface CatalogueOptions {
 export function resolveEndpoint(explicit?: string): string | undefined {
   if (explicit !== undefined) return explicit || undefined;
   if (process.env.DYNAMODB_ENDPOINT !== undefined) return process.env.DYNAMODB_ENDPOINT || undefined;
-  // In AWS (LOCAL_ONLY=0) the SDK must resolve the real regional endpoint.
-  return process.env.LOCAL_ONLY === '0' ? undefined : LOCAL_DYNAMO_ENDPOINT;
+  // Fargate sets AWS_EXECUTION_ENV; there the SDK must use the regional endpoint.
+  if (process.env.AWS_EXECUTION_ENV) return undefined;
+  return LOCAL_DYNAMO_ENDPOINT;
 }
 
 function buildClient(endpoint: string | undefined, region: string): DynamoDBDocumentClient {
