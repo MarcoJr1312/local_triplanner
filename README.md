@@ -37,7 +37,7 @@ Browser
   │
   ▼
 Next.js frontend (:3000 dev, :3001 prod)
-  ├─ /api/graphql ─────────── proxy ──▶ GraphQL server (:4000) ──▶ SQLite
+  ├─ /api/graphql ─────────── proxy ──▶ GraphQL server (:4000) ──▶ Postgres + DynamoDB
   ├─ /api/agent/* ─────────── proxy ──▶ Agent service (:4100)  ──▶ ChromaDB + DeepSeek
   └─ /uploads/* ──────────── rewrite ─▶ GraphQL server static uploads
 ```
@@ -52,9 +52,9 @@ Next.js frontend (:3000 dev, :3001 prod)
 | Area | Stack |
 |---|---|
 | Frontend (`frontend-next/`) | Next.js 15 App Router, React 19, TypeScript, shadcn/ui on Radix, Tailwind v4, next-themes, sonner |
-| Backend (`local/server/`) | TypeScript on Bun, graphql-yoga, SQLite (`node:sqlite`), `firebase-admin`, `jose` |
+| Backend (`local/server/`) | TypeScript on Bun, graphql-yoga, Postgres (`pg`), DynamoDB (locations), `firebase-admin`, `jose` |
 | Agent (`local/agent-service/`) | Python 3.12, uv, FastAPI, Agno, ChromaDB, DeepSeek |
-| Data (`local/db/`) | Versioned `schema.sql` + idempotent `seed.js` |
+| Data (`local/db/`) | Postgres `pg/schema.sql` + idempotent seed; DynamoDB catalogue seeded from `seed-data.json` |
 | Infrastructure | Local only: `:3000` → `:4000` → `:4100`, no AWS, no public URL |
 
 ## Repository layout
@@ -69,7 +69,7 @@ Next.js frontend (:3000 dev, :3001 prod)
 ├── local/
 │   ├── server/             GraphQL API, auth, uploads, HasData, email
 │   ├── agent-service/      FastAPI suggestion agent
-│   ├── db/                 schema.sql + seed.js
+│   ├── db/                 pg/schema.sql + seed-data.json
 │   └── .env.example        backend configuration template
 ├── AGENTS.md               project conventions for AI agents
 └── .orkai.yaml             project memory configuration
@@ -90,7 +90,7 @@ Next.js frontend (:3000 dev, :3001 prod)
 ## Prerequisites
 
 - [Bun](https://bun.sh/) (JS package manager and runtime)
-- Node.js 22+ (the seed script uses the built-in `node:sqlite`)
+- [Docker](https://www.docker.com/) for the local Postgres and DynamoDB containers
 - [uv](https://docs.astral.sh/uv/) and Python 3.12+ (agent service)
 - **Optional:** a `firebase-service-account.json` for real Firebase auth. Without
   it the app runs in demo mode (`LOCAL_ONLY=1`).
@@ -112,14 +112,17 @@ cp local/.env.example local/.env
 # With LOCAL_ONLY=1 and no Firebase config the app uses demo auth (x-user-id).
 ```
 
-### 2. Database
+### 2. Data stores
 
 ```bash
-cd local/db && node seed.js
+docker compose up -d          # Postgres 17 (pgvector) + DynamoDB Local
+cd local/server
+bun run db:migrate            # schema applied to Postgres
+bun run db:seed               # Postgres demo data + DynamoDB catalogue
 ```
 
-The seed is idempotent (`CREATE TABLE IF NOT EXISTS` + `INSERT OR IGNORE`) and
-creates two destinations, their activities, and a demo user/trip.
+Both commands are idempotent. The seed creates two destinations, their
+activities, and a demo user/trip.
 
 ### 3. Services
 
@@ -221,8 +224,9 @@ flow is kept only as reference; do not redeploy without explicit owner approval.
   client or the repository.
 - **i18n** — every UI string goes through `t()`, with mirrored `es`/`en` keys;
   API errors travel as stable codes.
-- **Data** — `local/db/schema.sql` is the single source of truth; the seed is
-  idempotent; `*.sqlite`, uploads and Chroma data are gitignored.
+- **Data** - `local/db/pg/schema.sql` is the single source of truth for the
+  relational store; the seed is idempotent; `*.sqlite`, uploads and Chroma data
+  are gitignored.
 - **Branches** — one `feature/*` branch per delivery, pushed only to that
   branch, never to `main`.
 - **No AWS deploys** — the original AWS stack is reference only.
