@@ -2,7 +2,7 @@
 // Every helper returns null-safe handles so suites skip when Postgres is down.
 
 import { randomUUID } from 'node:crypto';
-import { DEFAULT_DATABASE_URL, PgDb } from '../../src/pg/db.ts';
+import { DEFAULT_DATABASE_URL, PgDb, type AsyncDb } from '../../src/pg/db.ts';
 import { migrate } from '../../src/db/migrate.ts';
 
 export const pgUrl = process.env.DATABASE_URL ?? DEFAULT_DATABASE_URL;
@@ -17,7 +17,7 @@ export async function connectPg(): Promise<PgDb | null> {
   }
 }
 
-export async function insertUser(db: PgDb, displayName = 'Test User'): Promise<string> {
+export async function insertUser(db: AsyncDb, displayName = 'Test User'): Promise<string> {
   const id = randomUUID();
   await db
     .prepare('INSERT INTO users (id, email, display_name) VALUES (?, ?, ?)')
@@ -25,7 +25,7 @@ export async function insertUser(db: PgDb, displayName = 'Test User'): Promise<s
   return id;
 }
 
-export async function insertTrip(db: PgDb, ownerId: string): Promise<string> {
+export async function insertTrip(db: AsyncDb, ownerId: string): Promise<string> {
   const id = randomUUID();
   await db
     .prepare(
@@ -36,15 +36,16 @@ export async function insertTrip(db: PgDb, ownerId: string): Promise<string> {
   return id;
 }
 
-export async function deleteTrip(db: PgDb, tripId: string): Promise<void> {
+export async function deleteTrip(db: AsyncDb, tripId: string): Promise<void> {
   await db.prepare('DELETE FROM invitations WHERE trip_id = ?').run(tripId);
   await db.prepare('DELETE FROM trips WHERE id = ?').run(tripId);
 }
 
-export async function deleteUser(db: PgDb, userId: string): Promise<void> {
+export async function deleteUser(db: AsyncDb, userId: string): Promise<void> {
   await db.prepare('DELETE FROM user_favorites WHERE user_id = ?').run(userId);
   await db.prepare('DELETE FROM user_interests WHERE user_id = ?').run(userId);
   await db.prepare('DELETE FROM suggestion_chats WHERE user_id = ?').run(userId);
   await db.prepare('DELETE FROM trips WHERE owner_id = ?').run(userId);
   await db.prepare('DELETE FROM users WHERE id = ?').run(userId);
 }
+

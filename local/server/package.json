@@ -7,10 +7,9 @@
   "scripts": {
     "start": "bun src/index.ts",
     "dev": "bun --watch src/index.ts",
-    "seed": "bun ../db/seed.js",
     "db:migrate": "bun src/db/migrate.ts",
-    "catalogue:bootstrap": "bun src/catalogue/bootstrap.ts",
     "db:seed": "bun src/seed.ts",
+    "catalogue:bootstrap": "bun src/catalogue/bootstrap.ts",
     "test": "bun test",
     "typecheck": "tsc --noEmit"
   },

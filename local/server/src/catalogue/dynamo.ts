@@ -163,6 +163,10 @@ export class DynamoLocationCatalogue implements LocationCatalogue {
     return rows.sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0) || a.name.localeCompare(b.name));
   }
 
+  async listPlaces(): Promise<LocationRow[]> {
+    return this.scanAll('attribute_exists(#category)', { '#category': 'category' });
+  }
+
   private async scanAll(
     filter: string,
     names: Record<string, string>,

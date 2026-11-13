@@ -1,43 +1,27 @@
-// Endpoints internos REST (127.0.0.1) consumidos por agentes internos (ej. el
-// agente de sugerencias Python M3). Viven FUERA del GraphQL, montados en el mismo
-// server HTTP junto a /graphql. Autenticados con X-Internal-Token (y X-User-Id
-// cuando aplica, con check de membresia). Solo responden a loopback.
-//
-// Rutas:
-//   GET  /internal/trip-context/:tripId   (X-Internal-Token + X-User-Id)
-//   POST /internal/search-places          (X-Internal-Token) {q, tripId, userId}
-//   POST /internal/place-details          (X-Internal-Token) {placeId}
-//   GET  /internal/places-cache/:tripId   (X-Internal-Token + X-User-Id)
-//   POST /internal/save-chat              (X-Internal-Token) {tripId, userId, day, messages}
+// Internal REST endpoints (loopback only) consumed by the agent service.
 
 import { createHash, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { searchLocations, extractPlaceDetail, webResultsToSocialLinks, distanceKm } from './hasdata/search.ts';
-import { HasDataClient, type HasDataResponse } from './hasdata/client.ts';
-import { upsertSuggestionChat, isValidMessages } from './chats.ts';
-import { isTripMember } from './attachments.ts';
-import { favoriteIdsForUser } from './favorites.ts';
-import { listUserInterests } from './interests.ts';
-import type { Db, LocationRow } from './schema-types.ts';
+import { extractPlaceDetail, webResultsToSocialLinks, distanceKm } from './hasdata/search.ts';
+import type { HasDataClient, HasDataResponse } from './hasdata/client.ts';
+import { upsertSuggestionChat } from './pg/chats.ts';
+import { isValidMessages } from './chats.ts';
+import { isTripMember } from './pg/trips.ts';
+import { favoriteIdsForUser } from './pg/favorites.ts';
+import { listUserInterests } from './pg/interests.ts';
+import { searchLocationsWithCatalogue } from './catalogue/search.ts';
+import type { LocationCatalogue } from './catalogue/types.ts';
+import type { AsyncDb } from './pg/db.ts';
+import type { LocationRow, TripRow } from './schema-types.ts';
 
 const SEARCH_RADIUS_KM = 75;
-
 const LOOPBACK = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
 
 export interface InternalDeps {
-  db: Db;
+  db: AsyncDb;
+  catalogue: LocationCatalogue;
   hasdata: HasDataClient | null;
   internalToken: string;
-}
-
-interface TripRowInternal {
-  id: string;
-  name: string;
-  destination_id: string | null;
-  destination_name: string | null;
-  start_date: string | null;
-  end_date: string | null;
-  total_budget: number | null;
 }
 
 interface ItemRowInternal {
@@ -94,22 +78,18 @@ function headerUserEmail(req: IncomingMessage): string | null {
   return typeof v === 'string' && v.trim() ? v.trim() : null;
 }
 
-// Resuelve la identidad del caller interno: SIEMPRE prefiere el email (la
-// identidad real de la app es el email normalizado — el uid de Firebase NO
-// coincide con users.id), y cae a X-User-Id (modo demo, donde el frontend
-// solo conoce el id local).
-function resolveUserId(deps: InternalDeps, req: IncomingMessage): string | null {
+// Identity prefers the normalized email (the app's real identity); falls back
+// to X-User-Id for demo mode.
+async function resolveUserId(deps: InternalDeps, req: IncomingMessage): Promise<string | null> {
   const email = headerUserEmail(req);
   if (email) {
-    const row = deps.db
+    const row = await deps.db
       .prepare('SELECT id FROM users WHERE LOWER(email) = LOWER(?)')
-      .get(email.trim()) as { id: string } | undefined;
+      .get<{ id: string }>(email.trim());
     if (row) return row.id;
   }
   return headerUserId(req);
 }
-
-// ---- helpers defensivos para el JSON reducido de place-details ----
 
 function pick(obj: Record<string, unknown> | null | undefined, keys: readonly string[]): unknown {
   for (const k of keys) {
@@ -162,7 +142,7 @@ function socialLinksFrom(data: HasDataResponse | null | undefined, detail: Recor
       const v = JSON.parse(wrJson) as unknown;
       if (Array.isArray(v)) return v;
     } catch {
-      // ignorar
+      // ignore
     }
   }
   const sl = pick(detail, ['socialLinks', 'social_links', 'socialLinksJson']);
@@ -172,36 +152,35 @@ function socialLinksFrom(data: HasDataResponse | null | undefined, detail: Recor
       const v = JSON.parse(sl) as unknown;
       if (Array.isArray(v)) return v;
     } catch {
-      // ignorar
+      // ignore
     }
   }
   return null;
 }
 
-// ---- handlers ----
+async function destinationCoords(deps: InternalDeps, destinationId: string | null): Promise<{ lat: number | null; lng: number | null }> {
+  if (!destinationId) return { lat: null, lng: null };
+  const dest = await deps.catalogue.getById(destinationId);
+  return { lat: dest?.lat ?? null, lng: dest?.lng ?? null };
+}
 
-function handleTripContext(deps: InternalDeps, req: IncomingMessage, res: ServerResponse, rawTripId: string): void {
+async function handleTripContext(deps: InternalDeps, req: IncomingMessage, res: ServerResponse, rawTripId: string): Promise<void> {
   const tripId = decodeURIComponent(rawTripId);
-  const userId = resolveUserId(deps, req);
-  const trip = deps.db.prepare('SELECT * FROM trips WHERE id = ?').get(tripId) as TripRowInternal | undefined;
+  const userId = await resolveUserId(deps, req);
+  const trip = await deps.db.prepare('SELECT * FROM trips WHERE id = ?').get<TripRow>(tripId);
   if (!trip) {
     json(res, 404, { error: 'TRIP_NOT_FOUND', message: 'Trip not found' });
     return;
   }
-  if (!userId || !isTripMember(deps.db, tripId, userId)) {
+  if (!userId || !(await isTripMember(deps.db, tripId, userId))) {
     json(res, 403, { error: 'NOT_TRIP_MEMBER', message: 'X-User-Id no es miembro del viaje.' });
     return;
   }
 
-  const dest = trip.destination_id
-    ? (deps.db.prepare('SELECT lat, lng FROM locations WHERE id = ?').get(trip.destination_id) as
-        | { lat: number | null; lng: number | null }
-        | undefined)
-    : undefined;
-
-  const items = deps.db
+  const dest = await destinationCoords(deps, trip.destination_id);
+  const items = await deps.db
     .prepare('SELECT * FROM trip_items WHERE trip_id = ? ORDER BY day ASC, start_time ASC NULLS LAST, "order" ASC')
-    .all(tripId) as unknown as ItemRowInternal[];
+    .all<ItemRowInternal>(tripId);
   const spent = items.reduce((s, i) => s + (Number(i.cost) || 0), 0);
 
   const byDay = new Map<string, ItemRowInternal[]>();
@@ -224,19 +203,15 @@ function handleTripContext(deps: InternalDeps, req: IncomingMessage, res: Server
     })),
   }));
 
-  const members = (deps.db
-    .prepare(
-      'SELECT m.user_id, m.role, u.display_name FROM trip_members m JOIN users u ON u.id = m.user_id WHERE m.trip_id = ? ORDER BY m.joined_at ASC',
-    )
-    .all(tripId) as unknown as { user_id: string; role: string; display_name: string | null }[]).map((m) => ({
-    userId: m.user_id,
-    displayName: m.display_name,
-    role: m.role,
-  }));
+  const members = (
+    await deps.db
+      .prepare(
+        'SELECT m.user_id, m.role, u.display_name FROM trip_members m JOIN users u ON u.id = m.user_id WHERE m.trip_id = ? ORDER BY m.joined_at ASC',
+      )
+      .all<{ user_id: string; role: string; display_name: string | null }>(tripId)
+  ).map((m) => ({ userId: m.user_id, displayName: m.display_name, role: m.role }));
 
-  const langRow = deps.db.prepare('SELECT language FROM users WHERE id = ?').get(userId) as
-    | { language: string | null }
-    | undefined;
+  const langRow = await deps.db.prepare('SELECT language FROM users WHERE id = ?').get<{ language: string | null }>(userId);
   const userLanguage = langRow?.language || 'es';
 
   json(res, 200, {
@@ -246,8 +221,8 @@ function handleTripContext(deps: InternalDeps, req: IncomingMessage, res: Server
       name: trip.name,
       destinationId: trip.destination_id ?? null,
       destinationName: trip.destination_name ?? null,
-      lat: dest?.lat ?? null,
-      lng: dest?.lng ?? null,
+      lat: dest.lat,
+      lng: dest.lng,
       startDate: trip.start_date,
       endDate: trip.end_date,
       totalBudget: Number(trip.total_budget) || 0,
@@ -256,7 +231,7 @@ function handleTripContext(deps: InternalDeps, req: IncomingMessage, res: Server
     days,
     members,
     userLanguage,
-    interests: listUserInterests(deps.db, userId),
+    interests: await listUserInterests(deps.db, userId),
   });
 }
 
@@ -272,20 +247,14 @@ async function handleSearchPlaces(deps: InternalDeps, res: ServerResponse, body:
   let lat: number | null = null;
   let lng: number | null = null;
   if (tripId) {
-    const trip = deps.db.prepare('SELECT destination_id FROM trips WHERE id = ?').get(tripId) as
-      | { destination_id: string | null }
-      | undefined;
-    if (trip?.destination_id) {
-      const dest = deps.db.prepare('SELECT lat, lng FROM locations WHERE id = ?').get(trip.destination_id) as
-        | { lat: number | null; lng: number | null }
-        | undefined;
-      lat = dest?.lat ?? null;
-      lng = dest?.lng ?? null;
-    }
+    const trip = await deps.db.prepare('SELECT destination_id FROM trips WHERE id = ?').get<{ destination_id: string | null }>(tripId);
+    const coords = await destinationCoords(deps, trip?.destination_id ?? null);
+    lat = coords.lat;
+    lng = coords.lng;
   }
 
-  const rows = await searchLocations({ db: deps.db, client: deps.hasdata, q, lat, lng, userId });
-  const favIds = userId ? favoriteIdsForUser(deps.db, userId) : new Set<string>();
+  const rows = await searchLocationsWithCatalogue({ catalogue: deps.catalogue, db: deps.db, client: deps.hasdata, q, lat, lng, userId });
+  const favIds = userId ? await favoriteIdsForUser(deps.db, userId) : new Set<string>();
   json(
     res,
     200,
@@ -336,33 +305,25 @@ async function handlePlaceDetails(deps: InternalDeps, res: ServerResponse, body:
   json(res, 200, base);
 }
 
-function handlePlacesCache(deps: InternalDeps, req: IncomingMessage, res: ServerResponse, rawTripId: string): void {
+async function handlePlacesCache(deps: InternalDeps, req: IncomingMessage, res: ServerResponse, rawTripId: string): Promise<void> {
   const tripId = decodeURIComponent(rawTripId);
-  const userId = resolveUserId(deps, req);
-  const trip = deps.db.prepare('SELECT * FROM trips WHERE id = ?').get(tripId) as TripRowInternal | undefined;
+  const userId = await resolveUserId(deps, req);
+  const trip = await deps.db.prepare('SELECT * FROM trips WHERE id = ?').get<TripRow>(tripId);
   if (!trip) {
     json(res, 404, { error: 'TRIP_NOT_FOUND', message: 'Trip not found' });
     return;
   }
-  if (!userId || !isTripMember(deps.db, tripId, userId)) {
+  if (!userId || !(await isTripMember(deps.db, tripId, userId))) {
     json(res, 403, { error: 'NOT_TRIP_MEMBER', message: 'X-User-Id no es miembro del viaje.' });
     return;
   }
 
   const destId = trip.destination_id;
-  let destLat: number | null = null;
-  let destLng: number | null = null;
-  if (destId) {
-    const dest = deps.db.prepare('SELECT lat, lng FROM locations WHERE id = ?').get(destId) as
-      | { lat: number | null; lng: number | null }
-      | undefined;
-    destLat = dest?.lat ?? null;
-    destLng = dest?.lng ?? null;
-  }
+  const { lat: destLat, lng: destLng } = await destinationCoords(deps, destId);
+  const rows = await deps.catalogue.listPlaces();
 
-  const rows = deps.db.prepare('SELECT * FROM locations WHERE category IS NOT NULL').all() as unknown as LocationRow[];
   const places = rows
-    .filter((r) => {
+    .filter((r: LocationRow) => {
       if (destId && r.parent_id === destId) return true;
       if (destLat != null && destLng != null && r.lat != null && r.lng != null) {
         return distanceKm(destLat, destLng, r.lat, r.lng) <= SEARCH_RADIUS_KM;
@@ -384,7 +345,7 @@ function handlePlacesCache(deps: InternalDeps, req: IncomingMessage, res: Server
   json(res, 200, { places, contentHash });
 }
 
-function handleSaveChat(deps: InternalDeps, res: ServerResponse, body: Record<string, unknown>): void {
+async function handleSaveChat(deps: InternalDeps, res: ServerResponse, body: Record<string, unknown>): Promise<void> {
   const tripId = typeof body.tripId === 'string' ? body.tripId.trim() : '';
   const userId = typeof body.userId === 'string' ? body.userId.trim() : '';
   const day = typeof body.day === 'string' ? body.day.trim() : '';
@@ -397,12 +358,10 @@ function handleSaveChat(deps: InternalDeps, res: ServerResponse, body: Record<st
     json(res, 400, { error: 'INVALID_MESSAGES', message: 'messages debe ser un array de {role, content}' });
     return;
   }
-  const chat = upsertSuggestionChat(deps.db, { tripId, userId, day, messages });
+  const chat = await upsertSuggestionChat(deps.db, { tripId, userId, day, messages });
   json(res, 200, chat);
 }
 
-// Despacha una request /internal/* (ya validada la ruta). Async porque los POST
-// leen el body; se invoca con `void` desde el router sincrono.
 async function dispatch(deps: InternalDeps, req: IncomingMessage, res: ServerResponse, method: string, pathname: string): Promise<void> {
   const remote = req.socket?.remoteAddress ?? '';
   if (!LOOPBACK.has(remote)) {
@@ -418,11 +377,11 @@ async function dispatch(deps: InternalDeps, req: IncomingMessage, res: ServerRes
 
   try {
     if (method === 'GET' && pathname.startsWith('/internal/trip-context/')) {
-      handleTripContext(deps, req, res, pathname.slice('/internal/trip-context/'.length));
+      await handleTripContext(deps, req, res, pathname.slice('/internal/trip-context/'.length));
       return;
     }
     if (method === 'GET' && pathname.startsWith('/internal/places-cache/')) {
-      handlePlacesCache(deps, req, res, pathname.slice('/internal/places-cache/'.length));
+      await handlePlacesCache(deps, req, res, pathname.slice('/internal/places-cache/'.length));
       return;
     }
     if (method === 'POST' && pathname === '/internal/search-places') {
@@ -434,7 +393,7 @@ async function dispatch(deps: InternalDeps, req: IncomingMessage, res: ServerRes
       return;
     }
     if (method === 'POST' && pathname === '/internal/save-chat') {
-      handleSaveChat(deps, res, await readBody(req));
+      await handleSaveChat(deps, res, await readBody(req));
       return;
     }
     json(res, 404, { error: 'NOT_FOUND', message: 'Ruta interna no encontrada.' });
@@ -446,7 +405,6 @@ async function dispatch(deps: InternalDeps, req: IncomingMessage, res: ServerRes
   }
 }
 
-// Router interno: devuelve true (sincrono) si la request pertenece a /internal/*.
 export function createInternalRouter(deps: InternalDeps): (req: IncomingMessage, res: ServerResponse) => boolean {
   return (req, res) => {
     const url = new URL(req.url ?? '/', 'http://localhost');

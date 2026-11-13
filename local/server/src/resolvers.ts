@@ -1,24 +1,17 @@
-// Resolvers GraphQL del servidor local: mismas operaciones que AppSync sobre SQLite.
+﻿// GraphQL resolvers on Postgres + DynamoDB catalogue + Storage.
 
 import { randomUUID } from 'node:crypto';
 import { GraphQLError } from 'graphql';
-import { toProfile } from './auth.ts';
+import type { HasDataClient } from './hasdata/client.ts';
+import type { LocationCatalogue } from './catalogue/types.ts';
+import type { Storage } from './storage.ts';
+import type { AsyncDb } from './pg/db.ts';
+import { toProfile } from './pg/auth.ts';
+import { upsertUserByEmail, markWelcomeSent } from './pg/users.ts';
 import { listPresence, touchPresence } from './presence.ts';
-import { upsertLocation } from './db.ts';
-import { buildSuggestions } from './recommend.ts';
-import { normalizeHasDataPlace } from './hasdata/normalize.ts';
-import { HasDataClient } from './hasdata/client.ts';
-import {
-  createInvitation,
-  findInvitationByCode,
-  acceptInvitation,
-  isEmailMatch,
-  isInviteCodeValid,
-} from './invitations.ts';
 import { sendInviteEmail, sendWelcomeEmail, sendVerificationEmail, buildJoinUrl } from './email.ts';
-import { updateMyProfile, isValidLanguage, decodeAvatarDataUrl } from './profile.ts';
+import { updateMyProfile, isValidLanguage } from './pg/profile.ts';
 import { verifyFirebaseIdToken, AuthTokenError, type TokenVerifier } from './auth/verify.ts';
-import { upsertUserByEmail, markWelcomeSent } from './auth/users.ts';
 import { generateVerificationLink, OobError, type OobLinkResult } from './auth/oob.ts';
 import { setEmailVerified, isUserNotFoundError } from './auth/admin.ts';
 import { getServiceAccountPrivateKey } from './auth/service-account.ts';
@@ -36,44 +29,51 @@ import {
   findAttachmentItemTrip,
   findAttachment,
   findItemTrip,
-  isTripMember,
   invalidAttachmentViewers,
   replaceAttachmentViewers,
   getAttachmentForUser,
   removeAttachmentsByTrip,
-} from './attachments.ts';
-import { setFavorite, favoriteIdsForUser, isFavorite } from './favorites.ts';
+} from './pg/attachments.ts';
+import { setFavorite, favoriteIdsForUser, isFavorite } from './pg/favorites.ts';
+import { listUserInterests, replaceUserInterests } from './pg/interests.ts';
+import { syncInterestsToAgent, type InterestsSync } from './interests.ts';
+import { listSuggestionChats, upsertSuggestionChat } from './pg/chats.ts';
+import { isValidMessages } from './chats.ts';
+import { recomputeItemReminder } from './pg/reminders.ts';
+import { isValidCoverPreset, writeCoverPhoto, removeTripCoverFiles } from './pg/covers.ts';
+import { locationRowToGraphQL, extractPlaceDetail, webResultsToSocialLinks } from './hasdata/search.ts';
+import { normalizeHasDataPlace } from './hasdata/normalize.ts';
+import { searchLocationsWithCatalogue } from './catalogue/search.ts';
+import { buildSuggestions } from './pg/recommend.ts';
+import { createInvitation, findInvitationByCode, acceptInvitation } from './pg/invitations.ts';
+import { isEmailMatch, isInviteCodeValid } from './invitations.ts';
+import { decodeAvatarDataUrl } from './pg/profile.ts';
 import {
-  listUserInterests,
-  replaceUserInterests,
-  syncInterestsToAgent,
-  type InterestsSync,
-} from './interests.ts';
-import { listSuggestionChats, upsertSuggestionChat, isValidMessages } from './chats.ts';
-import { recomputeItemReminder } from './reminders.ts';
-import {
-  isValidCoverPreset,
-  writeCoverPhoto,
-  removeTripCoverFiles,
-} from './covers.ts';
-import {
-  locationRowToGraphQL,
-  searchLocations,
-  extractPlaceDetail,
-  webResultsToSocialLinks,
-} from './hasdata/search.ts';
-import type {
-  Db,
-  LocationRow,
-  Profile,
-  Trip,
-  TripItem,
-  TripMember,
-  TripRow,
-  UserRow,
-} from './schema-types.ts';
-
-// ---- Tipos internos de resolvers ----
+  addItem as addItemRow,
+  computeTripStats,
+  createTrip as createTripRow,
+  deleteTripCascade,
+  getItem,
+  getMemberRole,
+  getTrip,
+  inviteMember as inviteMemberRow,
+  isTripMember,
+  listItems,
+  listMembers,
+  listTripsForUser,
+  moveItem as moveItemRow,
+  removeItem as removeItemRow,
+  removeMember as removeMemberRow,
+  setBudget as setBudgetRow,
+  setItemCost as setItemCostRow,
+  transferOwnershipAndLeave,
+  updateItemFields,
+  updateMemberRole as updateMemberRoleRow,
+  updateTripSettings as updateTripSettingsRow,
+  type TripItemRow,
+  type TripRowFull,
+} from './pg/trips.ts';
+import type { LocationRow, Profile, TripRow, UserRow } from './schema-types.ts';
 
 export interface PubSub {
   publish(topic: string, payload: Record<string, unknown>): void;
@@ -81,17 +81,17 @@ export interface PubSub {
 }
 
 export interface Ctx {
-  db: Db;
+  db: AsyncDb;
+  catalogue: LocationCatalogue;
+  storage: Storage;
   currentUserId: string;
   hasdata: HasDataClient | null;
   pubsub: PubSub;
-  // Inyecciones de auth (solo tests; en produccion se usan los singletons reales).
   verifyToken?: TokenVerifier;
   sendWelcome?: (email: string, name: string) => Promise<unknown>;
   sendVerification?: (email: string, link: string, name?: string) => Promise<unknown>;
   generateVerification?: (idToken: string) => Promise<OobLinkResult>;
-  confirmVerification?: (uid: string) => Promise<void>;
-  // Sync best-effort de intereses al agente (inyectable en tests).
+  confirmVerification?: (uid: string) => Promise<unknown>;
   syncInterests?: InterestsSync;
 }
 
@@ -99,45 +99,9 @@ export type Resolver = (parent: unknown, args: Record<string, unknown>, ctx: Ctx
 
 type Args<T> = T;
 
-interface TripFullRow {
-  id: string;
-  name: string;
-  description: string | null;
-  destination_id: string | null;
-  destination_name: string | null;
-  start_date: string | null;
-  end_date: string | null;
-  cover_image_url: string | null;
-  cover_preset: string | null;
-  cover_photo_url: string | null;
-  total_budget: number | null;
-  owner_id: string;
-  invite_code: string | null;
-  status: string | null;
-  currency: string | null;
-  timezone: string | null;
-  created_at: string;
-  updated_at: string;
-}
+interface TripFullRow extends TripRowFull {}
 
-interface ItemRow {
-  id: string;
-  trip_id: string;
-  day: string | null;
-  order: number | null;
-  location_id: string | null;
-  location_text: string | null;
-  title: string;
-  category: string | null;
-  cost: number | null;
-  start_time: string | null;
-  notes: string | null;
-  image_url: string | null;
-  created_by: string | null;
-  reminder_enabled: number;
-  reminder_sent: number;
-  reminder_due_at: string | null;
-}
+interface ItemRow extends TripItemRow {}
 
 interface MemberRow {
   user_id: string;
@@ -197,14 +161,32 @@ interface ItemGql {
   addedBy: string;
   reminderEnabled: number;
   locationText: string | null;
+  lat: number | null;
+  lng: number | null;
 }
 
-interface MemberGql {
-  userId: string;
-  displayName: string | null;
-  email: string | null;
-  role: string;
-  joinedAt: string | null;
+interface TripGql {
+  id: string;
+  name: string;
+  destinationId: string;
+  destinationName: string;
+  destinationLat: number | null;
+  destinationLng: number | null;
+  timezone: string;
+  startDate: string | null;
+  endDate: string | null;
+  totalBudget: number;
+  coverPreset: string | null;
+  coverPhotoUrl: string | null;
+  spent: number;
+  spentByCategory: { category: string; amount: number }[];
+  ownerId: string;
+  inviteCode: string | null;
+  members: MemberGql[];
+  items: ItemGql[];
+  myRole: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 interface RegisterUserInput {
@@ -213,12 +195,11 @@ interface RegisterUserInput {
 
 interface CreateTripInput {
   name: string;
-  destinationId?: string | null;
-  destinationName?: string | null;
-  startDate?: string | null;
-  endDate?: string | null;
-  totalBudget?: number | null;
-  timezone?: string | null;
+  destinationId: string;
+  destinationName: string;
+  startDate: string;
+  endDate: string;
+  totalBudget: number;
 }
 
 interface UpdateTripSettingsInput {
@@ -251,11 +232,8 @@ interface UpdateItemInput {
   locationText?: string | null;
 }
 
-// ---- mappers fila -> GraphQL ----
-
 const MAX_LOCATION_TEXT = 200;
 
-// Ubicacion escrita a mano: trim, vacio -> null y recorte silencioso a 200.
 const normalizeLocationText = (v: string | null | undefined): string | null => {
   if (v == null) return null;
   const trimmed = v.trim();
@@ -310,6 +288,8 @@ const toTripItem = (row: ItemRow): ItemGql => ({
   addedBy: row.created_by ?? '',
   reminderEnabled: row.reminder_enabled ?? 1,
   locationText: row.location_text ?? null,
+  lat: row.lat ?? null,
+  lng: row.lng ?? null,
 });
 
 const toMember = (row: MemberRow): MemberGql => ({
@@ -322,58 +302,92 @@ const toMember = (row: MemberRow): MemberGql => ({
   avatarUrl: row.avatar_url,
 });
 
-interface TripGql {
-  id: string;
-  name: string;
-  destinationId: string;
-  destinationName: string;
-  timezone: string;
-  startDate: string | null;
-  endDate: string | null;
-  totalBudget: number;
-  coverPreset: string | null;
-  coverPhotoUrl: string | null;
-  spent: number;
-  spentByCategory: { category: string; amount: number }[];
-  ownerId: string;
-  inviteCode: string | null;
-  members: MemberGql[];
-  items: ItemGql[];
-  myRole: string;
-  createdAt: string;
-  updatedAt: string;
+function slugEmail(displayName: string | null | undefined): string {
+  const slug =
+    (displayName ?? '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '') || 'user';
+  return `${slug}@demo.local`;
 }
 
-function buildTrip(db: Db, tripRow: TripFullRow, currentUserId: string): TripGql {
-  const members = (db.prepare(`
-    SELECT m.user_id, m.role, m.joined_at, u.display_name, u.email, u.color, u.avatar_url
-    FROM trip_members m
-    JOIN users u ON u.id = m.user_id
-    WHERE m.trip_id = ?
-    ORDER BY m.joined_at ASC
-  `).all(tripRow.id) as unknown as MemberRow[]).map(toMember);
+function gqlError(code: string, message: string): GraphQLError {
+  return new GraphQLError(message, { extensions: { code } });
+}
 
-  const items = (db.prepare(`
-    SELECT * FROM trip_items WHERE trip_id = ? ORDER BY day ASC, "order" ASC
-  `).all(tripRow.id) as unknown as ItemRow[]).map(toTripItem);
+const nowIso = (): string => new Date().toISOString();
 
-  const spent = items.reduce((s, i) => s + (i.cost ?? 0), 0);
-  const byCat = new Map<string, number>();
-  for (const i of items) {
-    const c = i.category ?? 'activity';
-    byCat.set(c, (byCat.get(c) ?? 0) + (i.cost ?? 0));
+function normalizeTimeZone(value: string | null | undefined): string {
+  const tz = value?.trim();
+  if (!tz) return 'UTC';
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: tz });
+    return tz;
+  } catch {
+    return 'UTC';
   }
-  const spentByCategory = [...byCat.entries()].map(([category, amount]) => ({ category, amount }));
+}
 
-  const myRoleRow = db.prepare(
-    'SELECT role FROM trip_members WHERE trip_id = ? AND user_id = ?'
-  ).get(tripRow.id, currentUserId) as { role: string } | undefined;
+async function ensureUser(
+  db: AsyncDb,
+  { userId, email, displayName }: { userId?: string | null; email?: string | null; displayName?: string | null },
+): Promise<UserRow> {
+  let user = userId ? await db.prepare('SELECT * FROM users WHERE id = ?').get<UserRow>(userId) : undefined;
+  if (!user && email) user = (await db.prepare('SELECT * FROM users WHERE email = ?').get<UserRow>(email)) ?? undefined;
+  if (user) return user;
+  const id = userId ?? randomUUID();
+  const em = email ?? slugEmail(displayName ?? 'member');
+  const dn = displayName ?? 'Member';
+  await db
+    .prepare('INSERT INTO users (id, email, display_name, color) VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING')
+    .run(id, em, dn, '#64748b');
+  const created = await db.prepare('SELECT * FROM users WHERE id = ?').get<UserRow>(id);
+  if (!created) throw gqlError('USER_CREATE_FAILED', 'No se pudo crear el usuario.');
+  return created;
+}
+
+async function requireCurrentUser(db: AsyncDb, userId: string): Promise<string> {
+  if (!userId) throw gqlError('AUTH_REQUIRED', 'Necesitas iniciar sesiÃ³n.');
+  const row = await db.prepare('SELECT 1 AS ok FROM users WHERE id = ?').get(userId);
+  if (!row) throw gqlError('AUTH_REQUIRED', 'Necesitas iniciar sesiÃ³n.');
+  return userId;
+}
+
+async function assertTripMember(db: AsyncDb, tripId: string, userId: string): Promise<void> {
+  if (!(await isTripMember(db, tripId, userId))) {
+    throw gqlError('NOT_TRIP_MEMBER', 'No eres miembro de este viaje.');
+  }
+}
+
+async function assertCanEditTrip(db: AsyncDb, tripId: string, userId: string): Promise<void> {
+  await assertTripMember(db, tripId, userId);
+  const role = await getMemberRole(db, tripId, userId);
+  if (role !== 'owner' && role !== 'editor') {
+    throw gqlError('FORBIDDEN_EDIT', 'Solo el propietario o un editor puede modificar el itinerario.');
+  }
+}
+
+function publishTrip(ctx: Ctx, tripId: string, mutationType: string, entity: unknown, actorId: string): void {
+  ctx.pubsub.publish(`trip:${tripId}`, {
+    onTripChanged: { tripId, mutationType, entity: JSON.stringify(entity), actorId },
+  });
+}
+
+async function buildTrip(db: AsyncDb, tripRow: TripFullRow, currentUserId: string): Promise<TripGql> {
+  const members = (await listMembersWithUser(db, tripRow.id)).map(toMember);
+  const items = (await listItems(db, tripRow.id)).map(toTripItem);
+  const { spent, spentByCategory } = computeTripStats(items);
+  const myRole = await getMemberRole(db, tripRow.id, currentUserId);
 
   return {
     id: tripRow.id,
     name: tripRow.name,
     destinationId: tripRow.destination_id ?? '',
     destinationName: tripRow.destination_name ?? '',
+    destinationLat: tripRow.destination_lat ?? null,
+    destinationLng: tripRow.destination_lng ?? null,
     timezone: tripRow.timezone ?? 'UTC',
     startDate: tripRow.start_date,
     endDate: tripRow.end_date,
@@ -386,109 +400,29 @@ function buildTrip(db: Db, tripRow: TripFullRow, currentUserId: string): TripGql
     inviteCode: tripRow.invite_code,
     members,
     items,
-    myRole: myRoleRow?.role ?? 'viewer',
+    myRole: myRole ?? 'viewer',
     createdAt: tripRow.created_at,
     updatedAt: tripRow.updated_at,
   };
 }
 
-// ---- helpers ----
-
-function slugEmail(displayName: string | null | undefined): string {
-  const slug = (displayName ?? '')
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '') || 'user';
-  return `${slug}@demo.local`;
+async function listMembersWithUser(db: AsyncDb, tripId: string): Promise<MemberRow[]> {
+  return db
+    .prepare(
+      `SELECT m.user_id, m.role, m.joined_at, u.display_name, u.email, u.color, u.avatar_url
+       FROM trip_members m
+       JOIN users u ON u.id = m.user_id
+       WHERE m.trip_id = ?
+       ORDER BY m.joined_at ASC`,
+    )
+    .all<MemberRow>(tripId);
 }
 
-interface EnsureUserInput {
-  userId?: string | null;
-  email?: string | null;
-  displayName?: string | null;
+async function tripOrThrow(db: AsyncDb, tripId: string): Promise<TripFullRow> {
+  const trip = await getTrip(db, tripId);
+  if (!trip) throw gqlError('TRIP_NOT_FOUND', 'Trip not found');
+  return trip;
 }
-
-function ensureUser(db: Db, { userId, email, displayName }: EnsureUserInput): UserRow {
-  let user = userId
-    ? (db.prepare('SELECT * FROM users WHERE id = ?').get(userId) as UserRow | undefined)
-    : undefined;
-  if (!user && email) user = db.prepare('SELECT * FROM users WHERE email = ?').get(email) as UserRow | undefined;
-  if (user) return user;
-  const id = userId ?? randomUUID();
-  const em = email ?? slugEmail(displayName ?? 'member');
-  const dn = displayName ?? 'Member';
-  db.prepare('INSERT OR IGNORE INTO users (id, email, display_name, color) VALUES (?, ?, ?, ?)')
-    .run(id, em, dn, '#64748b');
-  return db.prepare('SELECT * FROM users WHERE id = ?').get(id) as unknown as UserRow;
-}
-
-function getTripOrNull(db: Db, tripId: string): TripFullRow | null {
-  const row = db.prepare('SELECT * FROM trips WHERE id = ?').get(tripId) as TripFullRow | undefined;
-  return row ?? null;
-}
-
-function publishTrip(ctx: Ctx, tripId: string, mutationType: string, entity: unknown, actorId: string): void {
-  ctx.pubsub.publish(`trip:${tripId}`, {
-    onTripChanged: {
-      tripId,
-      mutationType,
-      entity: JSON.stringify(entity),
-      actorId,
-    },
-  });
-}
-
-const nowIso = () => new Date().toISOString();
-
-// Zona horaria IANA del viaje; vacia/invalida -> 'UTC' (nunca rompe createTrip).
-function normalizeTimeZone(value: string | null | undefined): string {
-  const tz = value?.trim();
-  if (!tz) return 'UTC';
-  try {
-    new Intl.DateTimeFormat('en-US', { timeZone: tz });
-    return tz;
-  } catch {
-    return 'UTC';
-  }
-}
-
-// Regla del proyecto (STD): cada GraphQLError lleva un extensions.code estable y
-// unico (SCREAMING_SNAKE). El mensaje en espanol se mantiene como fallback; el
-// cliente traduce por codigo.
-function gqlError(code: string, message: string): GraphQLError {
-  return new GraphQLError(message, { extensions: { code } });
-}
-
-// Regla de seguridad (REQ a96d80be): toda lectura/escritura de datos de un
-// viaje exige membresía; las escrituras del itinerario exigen owner/editor.
-function assertTripMember(db: Db, tripId: string, userId: string): void {
-  if (!isTripMember(db, tripId, userId)) {
-    throw gqlError('NOT_TRIP_MEMBER', 'No eres miembro de este viaje.');
-  }
-}
-
-function assertCanEditTrip(db: Db, tripId: string, userId: string): void {
-  assertTripMember(db, tripId, userId);
-  const row = db
-    .prepare('SELECT role FROM trip_members WHERE trip_id = ? AND user_id = ?')
-    .get(tripId, userId) as { role: string } | undefined;
-  if (row?.role !== 'owner' && row?.role !== 'editor') {
-    throw gqlError('FORBIDDEN_EDIT', 'Solo el propietario o un editor puede modificar el itinerario.');
-  }
-}
-
-// Identidad obligatoria para datos personales (intereses): sin usuario resuelto
-// o con un id que ya no existe en users, no hay a quien atribuir la lista.
-function requireCurrentUser(db: Db, userId: string): string {
-  if (!userId) throw gqlError('AUTH_REQUIRED', 'Necesitas iniciar sesión.');
-  const row = db.prepare('SELECT 1 FROM users WHERE id = ?').get(userId);
-  if (!row) throw gqlError('AUTH_REQUIRED', 'Necesitas iniciar sesión.');
-  return userId;
-}
-
-// ---- resolvers ----
 
 export const resolvers: {
   Query: Record<string, Resolver>;
@@ -498,22 +432,9 @@ export const resolvers: {
   TripItem: Record<string, Resolver>;
 } = {
   Query: {
-    listMyTrips: (_, __, ctx) =>
-      (ctx.db.prepare(`
-        SELECT t.id, t.name, t.destination_name, t.start_date, t.end_date, m.role, m.joined_at
-        FROM trip_members m
-        JOIN trips t ON t.id = m.trip_id
-        WHERE m.user_id = ?
-        ORDER BY m.joined_at DESC
-      `).all(ctx.currentUserId) as unknown as {
-        id: string;
-        name: string;
-        destination_name: string | null;
-        start_date: string | null;
-        end_date: string | null;
-        role: string;
-        joined_at: string | null;
-      }[]).map((r) => ({
+    listMyTrips: async (_, __, ctx) => {
+      const rows = await listTripsForUser(ctx.db, ctx.currentUserId);
+      return rows.map((r) => ({
         tripId: r.id,
         tripName: r.name,
         destinationName: r.destination_name ?? '',
@@ -521,33 +442,33 @@ export const resolvers: {
         endDate: r.end_date,
         role: r.role,
         joinedAt: r.joined_at,
-      })),
+      }));
+    },
 
-    getTrip: (_, args, ctx) => {
+    getTrip: async (_, args, ctx) => {
       const { id } = args as Args<{ id: string }>;
-      assertTripMember(ctx.db, id, ctx.currentUserId);
-      const row = ctx.db.prepare('SELECT * FROM trips WHERE id = ?').get(id) as TripFullRow | undefined;
+      await assertTripMember(ctx.db, id, ctx.currentUserId);
+      const row = await getTrip(ctx.db, id);
       return row ? buildTrip(ctx.db, row, ctx.currentUserId) : null;
     },
 
-    listDestinations: (_, __, ctx) =>
-      (ctx.db.prepare('SELECT * FROM locations WHERE slug IS NOT NULL ORDER BY name ASC')
-        .all() as unknown as LocationRow[]).map(toDestination),
+    listDestinations: async (_, __, ctx) => {
+      const rows = await ctx.catalogue.listDestinations();
+      return rows.map(toDestination);
+    },
 
-    listActivities: (_, args, ctx) => {
+    listActivities: async (_, args, ctx) => {
       const { destSlug, category } = args as Args<{ destSlug: string; category?: string | null }>;
-      const params: (string | null)[] = [ctx.currentUserId, destSlug];
-      let sql = `SELECT l.* FROM locations l
-        LEFT JOIN user_favorites fav ON fav.location_id = l.id AND fav.user_id = ?
-        WHERE l.parent_id = ? AND l.category IS NOT NULL`;
-      if (category) {
-        sql += ' AND l.category = ?';
-        params.push(category);
-      }
-      sql +=
-        ' ORDER BY CASE WHEN fav.user_id IS NULL THEN 1 ELSE 0 END, l.rating DESC NULLS LAST, l.rating_count DESC NULLS LAST, l.name ASC LIMIT 10';
-      const favIds = favoriteIdsForUser(ctx.db, ctx.currentUserId);
-      const rows = ctx.db.prepare(sql).all(...params) as unknown as LocationRow[];
+      const rows = (await ctx.catalogue.listByParent(destSlug))
+        .filter((r) => r.category != null && (!category || r.category === category))
+        .sort(
+          (a, b) =>
+            (b.rating ?? 0) - (a.rating ?? 0) ||
+            (b.rating_count ?? 0) - (a.rating_count ?? 0) ||
+            a.name.localeCompare(b.name),
+        )
+        .slice(0, 10);
+      const favIds = await favoriteIdsForUser(ctx.db, ctx.currentUserId);
       return rows.map((r) => ({ ...toActivity(r), isFavorite: favIds.has(r.id) }));
     },
 
@@ -556,15 +477,16 @@ export const resolvers: {
       return listPresence(tripId);
     },
 
-    findUserByEmail: (_, args, ctx) => {
+    findUserByEmail: async (_, args, ctx) => {
       const { email } = args as Args<{ email: string }>;
-      const row = ctx.db.prepare('SELECT * FROM users WHERE email = ?').get(email) as UserRow | undefined;
+      const row = await ctx.db.prepare('SELECT * FROM users WHERE email = ?').get<UserRow>(email);
       return row ? toProfile(row) : null;
     },
 
     searchLocations: async (_, args, ctx) => {
       const { q, lat, lng } = args as Args<{ q: string; lat?: number | null; lng?: number | null }>;
-      const rows = await searchLocations({
+      const rows = await searchLocationsWithCatalogue({
+        catalogue: ctx.catalogue,
         db: ctx.db,
         client: ctx.hasdata,
         q,
@@ -572,27 +494,26 @@ export const resolvers: {
         lng,
         userId: ctx.currentUserId,
       });
-      const favIds = favoriteIdsForUser(ctx.db, ctx.currentUserId);
+      const favIds = await favoriteIdsForUser(ctx.db, ctx.currentUserId);
       return rows.map((r) => locationRowToGraphQL(r, favIds));
     },
 
-    locationById: (_, args, ctx) => {
+    locationById: async (_, args, ctx) => {
       const { id } = args as Args<{ id: string }>;
-      const row = ctx.db.prepare('SELECT * FROM locations WHERE id = ?').get(id) as LocationRow | undefined;
-      const favIds = favoriteIdsForUser(ctx.db, ctx.currentUserId);
-      return locationRowToGraphQL(row ?? null, favIds);
+      const row = await ctx.catalogue.getById(id);
+      const favIds = await favoriteIdsForUser(ctx.db, ctx.currentUserId);
+      return locationRowToGraphQL(row, favIds);
     },
 
     locationDetails: async (_, args, ctx) => {
       const { placeId } = args as Args<{ placeId: string }>;
-      // Cache-first: si ya tenemos detalle (horarios/web/redes) devolvemos de DB
-      const favIds = favoriteIdsForUser(ctx.db, ctx.currentUserId);
-      const existing = ctx.db.prepare('SELECT * FROM locations WHERE place_id = ?').get(placeId) as
-        | LocationRow
-        | undefined;
-      const hasDetails = existing && (existing.hours_json || existing.website_url || existing.social_links_json);
+      const favIds = await favoriteIdsForUser(ctx.db, ctx.currentUserId);
+      const existing = await ctx.catalogue.getByPlaceId(placeId);
+      const hasDetails =
+        existing && (existing.hours_json || existing.website_url || existing.social_links_json);
       if (hasDetails) return locationRowToGraphQL(existing, favIds);
       if (!ctx.hasdata) return existing ? locationRowToGraphQL(existing, favIds) : null;
+
       const data = await ctx.hasdata.place(placeId, { fetchWebResults: true });
       const raw = extractPlaceDetail(data) as Record<string, unknown> & {
         gpsCoordinates?: { latitude?: unknown; longitude?: unknown };
@@ -600,33 +521,29 @@ export const resolvers: {
       const loc = normalizeHasDataPlace(raw);
       loc.place_id = placeId;
       loc.social_links_json = webResultsToSocialLinks(data) ?? loc.social_links_json;
-      // Mantener el id existente (el upsert por place_id ya lo resuelve, pero
-      // evitamos crear un id nuevo que rompa items que lo referencian)
       if (existing) loc.id = existing.id;
-      // Lugar sin coordenadas (HasData no devolvio gps): no se puede guardar en
-      // locations (lat NOT NULL). Devolvemos lo que haya sin romper.
       if (loc.lat == null || loc.lng == null) {
         return existing ? locationRowToGraphQL(existing, favIds) : null;
       }
-      const row = upsertLocation(ctx.db, loc);
-      return locationRowToGraphQL(row ?? null, favIds);
+      const row = await ctx.catalogue.upsert(loc);
+      return locationRowToGraphQL(row, favIds);
     },
 
-    getTripByCode: (_, args, ctx) => {
+    getTripByCode: async (_, args, ctx) => {
       const { code } = args as Args<{ code: string }>;
       if (!isInviteCodeValid(code)) return null;
-      const row = ctx.db.prepare(`
-        SELECT t.id, t.name, t.destination_name, u.display_name AS owner_name, i.email AS invited_email
-        FROM invitations i
-        JOIN trips t ON t.id = i.trip_id
-        JOIN users u ON u.id = t.owner_id
-        WHERE i.code = ?
-      `).get(code) as
-        | { id: string; name: string; destination_name: string | null; owner_name: string | null; invited_email: string }
-        | undefined;
+      const row = await ctx.db
+        .prepare(
+          `SELECT t.id, t.name, t.destination_name, u.display_name AS owner_name, i.email AS invited_email
+           FROM invitations i
+           JOIN trips t ON t.id = i.trip_id
+           JOIN users u ON u.id = t.owner_id
+           WHERE i.code = ?`,
+        )
+        .get<{ id: string; name: string; destination_name: string | null; owner_name: string | null; invited_email: string }>(
+          code,
+        );
       if (!row) return null;
-      // Preview publico: sin items, miembros ni presupuesto. El email invitado
-      // ya viene normalizado (lowercase) desde createInvitation.
       return {
         id: row.id,
         name: row.name,
@@ -636,10 +553,8 @@ export const resolvers: {
       };
     },
 
-    getMyProfile: (_, __, ctx) => {
-      const row = ctx.db.prepare('SELECT * FROM users WHERE id = ?').get(ctx.currentUserId) as
-        | UserRow
-        | undefined;
+    getMyProfile: async (_, __, ctx) => {
+      const row = await ctx.db.prepare('SELECT * FROM users WHERE id = ?').get<UserRow>(ctx.currentUserId);
       return row ? toProfile(row) : null;
     },
 
@@ -648,72 +563,64 @@ export const resolvers: {
       return listSuggestionChats(ctx.db, tripId, ctx.currentUserId, day ?? null);
     },
 
-    getMyInterests: (_, __, ctx) => {
-      const userId = requireCurrentUser(ctx.db, ctx.currentUserId);
+    getMyInterests: async (_, __, ctx) => {
+      const userId = await requireCurrentUser(ctx.db, ctx.currentUserId);
       return listUserInterests(ctx.db, userId);
     },
   },
 
   Mutation: {
-    registerUser: (_, args, ctx) => {
+    registerUser: async (_, args, ctx) => {
       const { input } = args as Args<{ input: RegisterUserInput }>;
       const displayName = input.displayName.trim();
       const email = slugEmail(displayName);
-      const existing = ctx.db.prepare('SELECT * FROM users WHERE email = ?').get(email) as UserRow | undefined;
+      const existing = await ctx.db.prepare('SELECT * FROM users WHERE email = ?').get<UserRow>(email);
       if (existing) return toProfile(existing);
       const id = randomUUID();
-      ctx.db.prepare('INSERT INTO users (id, email, display_name, color) VALUES (?, ?, ?, ?)')
+      await ctx.db
+        .prepare('INSERT INTO users (id, email, display_name, color) VALUES (?, ?, ?, ?)')
         .run(id, email, displayName, '#64748b');
       return { userId: id, email, displayName };
     },
 
-    createTrip: (_, args, ctx) => {
+    createTrip: async (_, args, ctx) => {
       const { input } = args as Args<{ input: CreateTripInput }>;
-      const id = randomUUID();
-      const inviteCode = randomUUID().slice(0, 8).toUpperCase();
-      const now = nowIso();
-      const timezone = normalizeTimeZone(input.timezone);
-      ctx.db.prepare(`
-        INSERT INTO trips
-          (id, name, destination_id, destination_name, start_date, end_date, total_budget, timezone, owner_id, invite_code, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(
-        id, input.name, input.destinationId ?? null, input.destinationName ?? null,
-        input.startDate ?? null, input.endDate ?? null, input.totalBudget ?? null,
-        timezone, ctx.currentUserId, inviteCode, now, now
-      );
-      ctx.db.prepare('INSERT INTO trip_members (trip_id, user_id, role) VALUES (?, ?, ?)')
-        .run(id, ctx.currentUserId, 'owner');
-      publishTrip(ctx, id, 'createTrip', { id, name: input.name }, ctx.currentUserId);
-      return buildTrip(ctx.db, getTripOrNull(ctx.db, id)!, ctx.currentUserId);
+      const trip = await createTripRow(ctx.db, ctx.currentUserId, {
+        name: input.name,
+        destinationId: input.destinationId,
+        destinationName: input.destinationName,
+        startDate: input.startDate,
+        endDate: input.endDate,
+        totalBudget: input.totalBudget,
+        timezone: normalizeTimeZone(null),
+      });
+      publishTrip(ctx, trip.id, 'createTrip', { id: trip.id, name: input.name }, ctx.currentUserId);
+      return buildTrip(ctx.db, trip, ctx.currentUserId);
     },
 
-    updateTripSettings: (_, args, ctx) => {
+    updateTripSettings: async (_, args, ctx) => {
       const { id, input } = args as Args<{ id: string; input: UpdateTripSettingsInput }>;
-      const trip = getTripOrNull(ctx.db, id);
-      if (!trip) throw gqlError('TRIP_NOT_FOUND', 'Trip not found');
+      const trip = await tripOrThrow(ctx.db, id);
       const name = input.name ?? trip.name;
-      const startDate = input.startDate ?? trip.start_date;
-      const endDate = input.endDate ?? trip.end_date;
-      const destinationId = input.destinationId ?? trip.destination_id;
-      const destinationName = input.destinationName ?? trip.destination_name;
-      ctx.db.prepare(`
-        UPDATE trips SET name = ?, start_date = ?, end_date = ?, destination_id = ?, destination_name = ?, updated_at = ?
-        WHERE id = ?
-      `).run(name, startDate, endDate, destinationId, destinationName, nowIso(), id);
+      await updateTripSettingsRow(ctx.db, id, {
+        name,
+        startDate: input.startDate ?? trip.start_date,
+        endDate: input.endDate ?? trip.end_date,
+        destinationId: input.destinationId ?? trip.destination_id,
+        destinationName: input.destinationName ?? trip.destination_name,
+      });
       publishTrip(ctx, id, 'updateTripSettings', { id, name }, ctx.currentUserId);
-      return buildTrip(ctx.db, getTripOrNull(ctx.db, id)!, ctx.currentUserId);
+      return buildTrip(ctx.db, await tripOrThrow(ctx.db, id), ctx.currentUserId);
     },
 
-    setBudget: (_, args, ctx) => {
+    setBudget: async (_, args, ctx) => {
       const { tripId, totalBudget } = args as Args<{ tripId: string; totalBudget: number }>;
-      ctx.db.prepare('UPDATE trips SET total_budget = ?, updated_at = ? WHERE id = ?')
-        .run(totalBudget, nowIso(), tripId);
+      await setBudgetRow(ctx.db, tripId, totalBudget);
       publishTrip(ctx, tripId, 'setBudget', { tripId, totalBudget }, ctx.currentUserId);
-      return buildTrip(ctx.db, getTripOrNull(ctx.db, tripId)!, ctx.currentUserId);
+      return buildTrip(ctx.db, await tripOrThrow(ctx.db, tripId), ctx.currentUserId);
     },
 
-    inviteMember: (_, args, ctx) => {
+    inviteMember: async (_, args, ctx) => {
       const { tripId, userId, email, displayName, role } = args as Args<{
         tripId: string;
         userId?: string | null;
@@ -721,274 +628,233 @@ export const resolvers: {
         displayName?: string | null;
         role: string;
       }>;
-      const user = ensureUser(ctx.db, { userId, email, displayName });
-      ctx.db.prepare('INSERT OR IGNORE INTO trip_members (trip_id, user_id, role) VALUES (?, ?, ?)')
-        .run(tripId, user.id, role);
+      const user = await ensureUser(ctx.db, { userId, email, displayName });
+      await inviteMemberRow(ctx.db, tripId, user.id, role);
       publishTrip(ctx, tripId, 'inviteMember', { tripId, userId: user.id, role }, ctx.currentUserId);
-      return buildTrip(ctx.db, getTripOrNull(ctx.db, tripId)!, ctx.currentUserId);
+      return buildTrip(ctx.db, await tripOrThrow(ctx.db, tripId), ctx.currentUserId);
     },
 
-    updateMemberRole: (_, args, ctx) => {
+    updateMemberRole: async (_, args, ctx) => {
       const { tripId, userId, role } = args as Args<{ tripId: string; userId: string; role: string }>;
-      assertTripMember(ctx.db, tripId, ctx.currentUserId);
-      const trip = getTripOrNull(ctx.db, tripId);
-      if (!trip) throw gqlError('TRIP_NOT_FOUND', 'Trip not found');
+      await assertTripMember(ctx.db, tripId, ctx.currentUserId);
+      const trip = await tripOrThrow(ctx.db, tripId);
       if (trip.owner_id !== ctx.currentUserId) {
         throw gqlError('NOT_TRIP_OWNER', 'Solo el propietario puede cambiar los roles.');
       }
       if (role !== 'editor' && role !== 'viewer') {
-        throw gqlError('INVALID_MEMBER_ROLE', 'Rol de miembro no válido.');
+        throw gqlError('INVALID_MEMBER_ROLE', 'Rol de miembro no vÃ¡lido.');
       }
       if (userId === trip.owner_id) {
         throw gqlError('OWNER_ROLE_PROTECTED', 'El rol del propietario no se puede cambiar.');
       }
-      const member = ctx.db
-        .prepare('SELECT 1 FROM trip_members WHERE trip_id = ? AND user_id = ?')
-        .get(tripId, userId);
-      if (!member) throw gqlError('MEMBER_NOT_FOUND', 'Miembro no encontrado.');
-      ctx.db.prepare('UPDATE trip_members SET role = ? WHERE trip_id = ? AND user_id = ?')
-        .run(role, tripId, userId);
+      if (!(await isTripMember(ctx.db, tripId, userId))) {
+        throw gqlError('MEMBER_NOT_FOUND', 'Miembro no encontrado.');
+      }
+      await updateMemberRoleRow(ctx.db, tripId, userId, role);
       publishTrip(ctx, tripId, 'updateMemberRole', { tripId, userId, role }, ctx.currentUserId);
-      return buildTrip(ctx.db, getTripOrNull(ctx.db, tripId)!, ctx.currentUserId);
+      return buildTrip(ctx.db, await tripOrThrow(ctx.db, tripId), ctx.currentUserId);
     },
 
-    removeMember: (_, args, ctx) => {
+    removeMember: async (_, args, ctx) => {
       const { tripId, userId } = args as Args<{ tripId: string; userId: string }>;
-      assertTripMember(ctx.db, tripId, ctx.currentUserId);
-      const trip = getTripOrNull(ctx.db, tripId);
-      if (!trip) throw gqlError('TRIP_NOT_FOUND', 'Trip not found');
+      await assertTripMember(ctx.db, tripId, ctx.currentUserId);
+      const trip = await tripOrThrow(ctx.db, tripId);
       if (trip.owner_id !== ctx.currentUserId) {
         throw gqlError('NOT_TRIP_OWNER', 'Solo el propietario puede eliminar miembros.');
       }
       if (userId === trip.owner_id) {
         throw gqlError('OWNER_CANNOT_BE_REMOVED', 'El propietario no se puede eliminar: transfiere la propiedad primero.');
       }
-      const member = ctx.db
-        .prepare('SELECT 1 FROM trip_members WHERE trip_id = ? AND user_id = ?')
-        .get(tripId, userId);
-      if (!member) throw gqlError('MEMBER_NOT_FOUND', 'Miembro no encontrado.');
-      ctx.db.prepare('DELETE FROM trip_members WHERE trip_id = ? AND user_id = ?').run(tripId, userId);
+      if (!(await isTripMember(ctx.db, tripId, userId))) {
+        throw gqlError('MEMBER_NOT_FOUND', 'Miembro no encontrado.');
+      }
+      await removeMemberRow(ctx.db, tripId, userId);
       publishTrip(ctx, tripId, 'removeMember', { tripId, userId }, ctx.currentUserId);
-      return buildTrip(ctx.db, getTripOrNull(ctx.db, tripId)!, ctx.currentUserId);
+      return buildTrip(ctx.db, await tripOrThrow(ctx.db, tripId), ctx.currentUserId);
     },
 
-    leaveTrip: (_, args, ctx) => {
+    leaveTrip: async (_, args, ctx) => {
       const { tripId, newOwnerId } = args as Args<{ tripId: string; newOwnerId?: string | null }>;
-      const trip = getTripOrNull(ctx.db, tripId);
-      if (!trip) throw gqlError('TRIP_NOT_FOUND', 'Trip not found');
-      const memberRow = ctx.db
-        .prepare('SELECT role FROM trip_members WHERE trip_id = ? AND user_id = ?')
-        .get(tripId, ctx.currentUserId) as { role: string } | undefined;
-      if (!memberRow) throw gqlError('NOT_TRIP_MEMBER', 'Solo los miembros pueden salir del viaje.');
+      const trip = await tripOrThrow(ctx.db, tripId);
+      const role = await getMemberRole(ctx.db, tripId, ctx.currentUserId);
+      if (!role) throw gqlError('NOT_TRIP_MEMBER', 'Solo los miembros pueden salir del viaje.');
 
-      const isOwner = trip.owner_id === ctx.currentUserId;
-      if (!isOwner) {
-        // Miembro no-owner: sale y listo.
-        ctx.db.prepare('DELETE FROM trip_members WHERE trip_id = ? AND user_id = ?').run(tripId, ctx.currentUserId);
+      if (trip.owner_id !== ctx.currentUserId) {
+        await removeMemberRow(ctx.db, tripId, ctx.currentUserId);
         publishTrip(ctx, tripId, 'leaveTrip', { tripId, userId: ctx.currentUserId }, ctx.currentUserId);
-        return buildTrip(ctx.db, getTripOrNull(ctx.db, tripId)!, ctx.currentUserId);
+        return buildTrip(ctx.db, await tripOrThrow(ctx.db, tripId), ctx.currentUserId);
       }
 
-      // Owner: la transferencia es obligatoria.
       if (!newOwnerId) throw gqlError('OWNER_MUST_TRANSFER', 'Debes transferir la propiedad antes de salir.');
-      const otherMembers = ctx.db
-        .prepare('SELECT user_id FROM trip_members WHERE trip_id = ? AND user_id != ?')
-        .all(tripId, ctx.currentUserId) as { user_id: string }[];
-      if (otherMembers.length === 0) {
-        throw gqlError('NO_MEMBERS_TO_TRANSFER', 'No hay otros miembros a quienes transferir el viaje.');
-      }
-      if (newOwnerId === ctx.currentUserId || !otherMembers.some((m) => m.user_id === newOwnerId)) {
+      if (newOwnerId === ctx.currentUserId) {
         throw gqlError('INVALID_TRANSFER_TARGET', 'El nuevo propietario debe ser otro miembro del viaje.');
       }
-
-      // Transaccion atomica: cambio de owner + salida del actual.
-      ctx.db.exec('BEGIN');
       try {
-        ctx.db.prepare('UPDATE trips SET owner_id = ?, updated_at = ? WHERE id = ?').run(
-          newOwnerId, nowIso(), tripId
-        );
-        // El nuevo propietario pasa a rol owner (consistencia con el resto del modelo).
-        ctx.db.prepare("UPDATE trip_members SET role = 'owner' WHERE trip_id = ? AND user_id = ?").run(tripId, newOwnerId);
-        ctx.db.prepare('DELETE FROM trip_members WHERE trip_id = ? AND user_id = ?').run(tripId, ctx.currentUserId);
-        ctx.db.exec('COMMIT');
+        await transferOwnershipAndLeave(ctx.db, tripId, ctx.currentUserId, newOwnerId);
       } catch (e) {
-        ctx.db.exec('ROLLBACK');
-        throw e;
+        throw gqlError('INVALID_TRANSFER_TARGET', e instanceof Error ? e.message : 'Transferencia no vÃ¡lida.');
       }
       publishTrip(ctx, tripId, 'leaveTrip', { tripId, userId: ctx.currentUserId, newOwnerId }, ctx.currentUserId);
-      return buildTrip(ctx.db, getTripOrNull(ctx.db, tripId)!, ctx.currentUserId);
+      return buildTrip(ctx.db, await tripOrThrow(ctx.db, tripId), ctx.currentUserId);
     },
 
-    deleteTrip: (_, args, ctx) => {
+    deleteTrip: async (_, args, ctx) => {
       const { tripId } = args as Args<{ tripId: string }>;
-      const trip = getTripOrNull(ctx.db, tripId);
-      if (!trip) throw gqlError('TRIP_NOT_FOUND', 'Trip not found');
-      if (!isTripMember(ctx.db, tripId, ctx.currentUserId)) {
+      const trip = await tripOrThrow(ctx.db, tripId);
+      if (!(await isTripMember(ctx.db, tripId, ctx.currentUserId))) {
         throw gqlError('NOT_TRIP_MEMBER', 'Solo los miembros del viaje pueden eliminarlo.');
       }
       if (trip.owner_id !== ctx.currentUserId) {
         throw gqlError('NOT_TRIP_OWNER', 'Solo el propietario puede eliminar el viaje.');
       }
-      // Cascada: adjuntos (filas + archivos), items, members, invitations, trip y portadas.
-      removeAttachmentsByTrip(ctx.db, tripId);
-      ctx.db.prepare('DELETE FROM trip_items WHERE trip_id = ?').run(tripId);
-      ctx.db.prepare('DELETE FROM trip_members WHERE trip_id = ?').run(tripId);
-      ctx.db.prepare('DELETE FROM invitations WHERE trip_id = ?').run(tripId);
-      removeTripCoverFiles(tripId);
-      ctx.db.prepare('DELETE FROM trips WHERE id = ?').run(tripId);
+      await removeAttachmentsByTrip(ctx.db, ctx.storage, tripId);
+      await removeTripCoverFiles(ctx.storage, tripId);
+      await deleteTripCascade(ctx.db, tripId);
       publishTrip(ctx, tripId, 'deleteTrip', { id: tripId }, ctx.currentUserId);
       return tripId;
     },
 
-    updateTripCover: (_, args, ctx) => {
+    updateTripCover: async (_, args, ctx) => {
       const { tripId, input } = args as Args<{
         tripId: string;
         input: { coverPreset?: string | null; coverPhotoDataUrl?: string | null; removePhoto?: boolean | null };
       }>;
-      const trip = getTripOrNull(ctx.db, tripId);
-      if (!trip) throw gqlError('TRIP_NOT_FOUND', 'Trip not found');
+      const trip = await tripOrThrow(ctx.db, tripId);
       if (trip.owner_id !== ctx.currentUserId) {
         throw gqlError('NOT_TRIP_OWNER', 'Solo el propietario puede cambiar la portada.');
       }
 
       if (input.coverPreset != null && input.coverPreset !== '') {
         if (!isValidCoverPreset(input.coverPreset)) {
-          throw gqlError('INVALID_COVER_PRESET', 'Preset de portada no válido.');
+          throw gqlError('INVALID_COVER_PRESET', 'Preset de portada no vÃ¡lido.');
         }
-        removeTripCoverFiles(tripId);
-        ctx.db.prepare('UPDATE trips SET cover_preset = ?, cover_photo_url = NULL, updated_at = ? WHERE id = ?')
-          .run(input.coverPreset, nowIso(), tripId);
+        await removeTripCoverFiles(ctx.storage, tripId);
+        await ctx.db
+          .prepare('UPDATE trips SET cover_preset = ?, cover_photo_url = NULL, updated_at = now() WHERE id = ?')
+          .run(input.coverPreset, tripId);
       } else if (input.coverPhotoDataUrl) {
         let decoded: { ext: string; buffer: Buffer };
         try {
           decoded = decodeAvatarDataUrl(input.coverPhotoDataUrl);
         } catch {
-          throw gqlError('INVALID_IMAGE', 'Formato de imagen no válido: usa PNG, JPG o WebP (máx 2MB).');
+          throw gqlError('INVALID_IMAGE', 'Formato de imagen no vÃ¡lido: usa PNG, JPG o WebP (mÃ¡x 2MB).');
         }
-        removeTripCoverFiles(tripId);
+        await removeTripCoverFiles(ctx.storage, tripId);
         let relPath: string;
         try {
-          relPath = writeCoverPhoto(tripId, decoded.ext, decoded.buffer);
+          relPath = await writeCoverPhoto(ctx.storage, tripId, decoded.ext, decoded.buffer);
         } catch (e) {
           throw gqlError('COVER_UPLOAD_FAILED', e instanceof Error ? e.message : 'No se pudo guardar la portada.');
         }
-        // La foto tiene prioridad visual; el preset se conserva como fallback
-        // para cuando el usuario quite la foto (STD: "quitar foto vuelve al preset").
-        ctx.db.prepare('UPDATE trips SET cover_photo_url = ?, updated_at = ? WHERE id = ?')
-          .run(relPath, nowIso(), tripId);
+        await ctx.db
+          .prepare('UPDATE trips SET cover_photo_url = ?, updated_at = now() WHERE id = ?')
+          .run(relPath, tripId);
       } else if (input.removePhoto) {
-        removeTripCoverFiles(tripId);
-        ctx.db.prepare('UPDATE trips SET cover_photo_url = NULL, updated_at = ? WHERE id = ?').run(nowIso(), tripId);
+        await removeTripCoverFiles(ctx.storage, tripId);
+        await ctx.db.prepare('UPDATE trips SET cover_photo_url = NULL, updated_at = now() WHERE id = ?').run(tripId);
       }
 
       publishTrip(ctx, tripId, 'updateTripCover', { tripId }, ctx.currentUserId);
-      return buildTrip(ctx.db, getTripOrNull(ctx.db, tripId)!, ctx.currentUserId);
+      return buildTrip(ctx.db, await tripOrThrow(ctx.db, tripId), ctx.currentUserId);
     },
 
-    addItem: (_, args, ctx) => {
+    addItem: async (_, args, ctx) => {
       const { tripId, input } = args as Args<{ tripId: string; input: AddItemInput }>;
-      assertCanEditTrip(ctx.db, tripId, ctx.currentUserId);
-      const id = randomUUID();
-      ctx.db.prepare(`
-        INSERT INTO trip_items
-          (id, trip_id, location_id, title, category, cost, day, "order", start_time, notes, image_url, created_by, location_text)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(
-        id, tripId, input.activityId ?? null, input.title, input.category, input.cost ?? 0,
-        input.day ?? null, input.order ?? null, input.startTime ?? null, input.notes ?? null,
-        input.imageUrl ?? null, ctx.currentUserId, normalizeLocationText(input.locationText)
-      );
-      recomputeItemReminder(ctx.db, id);
-      publishTrip(ctx, tripId, 'addItem', { id, tripId, title: input.title }, ctx.currentUserId);
-      return toTripItem(ctx.db.prepare('SELECT * FROM trip_items WHERE id = ?').get(id) as unknown as ItemRow);
+      await assertCanEditTrip(ctx.db, tripId, ctx.currentUserId);
+      const row = await addItemRow(ctx.db, tripId, ctx.currentUserId, {
+        locationId: input.activityId ?? null,
+        locationText: normalizeLocationText(input.locationText),
+        title: input.title,
+        category: input.category,
+        cost: input.cost ?? 0,
+        day: input.day ?? '',
+        order: input.order ?? 0,
+        startTime: input.startTime ?? null,
+        notes: input.notes ?? null,
+        imageUrl: input.imageUrl ?? null,
+      });
+      await recomputeItemReminder(ctx.db, row.id);
+      publishTrip(ctx, tripId, 'addItem', { id: row.id, tripId, title: input.title }, ctx.currentUserId);
+      return toTripItem(row);
     },
 
-    updateItem: (_, args, ctx) => {
+    updateItem: async (_, args, ctx) => {
       const { tripId, itemId, input } = args as Args<{ tripId: string; itemId: string; input: UpdateItemInput }>;
-      assertCanEditTrip(ctx.db, tripId, ctx.currentUserId);
-      const item = ctx.db.prepare('SELECT * FROM trip_items WHERE id = ? AND trip_id = ?').get(itemId, tripId) as
-        | ItemRow
-        | undefined;
+      await assertCanEditTrip(ctx.db, tripId, ctx.currentUserId);
+      const item = await getItem(ctx.db, tripId, itemId);
       if (!item) throw gqlError('ITEM_NOT_FOUND', 'Item not found');
-      // startTime null/'' limpia la hora (y con ella el recordatorio).
-      const nextStartTime =
-        input.startTime === undefined ? item.start_time : (input.startTime?.trim() || null);
-      // locationText: ausente no toca; null/'' explicito limpia.
+      const nextStartTime = input.startTime === undefined ? item.start_time : input.startTime?.trim() || null;
       const nextLocationText =
         input.locationText === undefined ? item.location_text : normalizeLocationText(input.locationText);
-      ctx.db.prepare(`
-        UPDATE trip_items SET day = ?, "order" = ?, start_time = ?, notes = ?, title = ?, location_text = ?
-        WHERE id = ?
-      `).run(
-        input.day ?? item.day, input.order ?? item.order,
-        nextStartTime, input.notes ?? item.notes,
-        input.title ?? item.title, nextLocationText, itemId
-      );
-      recomputeItemReminder(ctx.db, itemId);
+      await updateItemFields(ctx.db, itemId, {
+        day: input.day ?? item.day,
+        order: input.order ?? item.order,
+        startTime: nextStartTime,
+        notes: input.notes ?? item.notes,
+        title: input.title ?? item.title,
+        locationText: nextLocationText,
+      });
+      await recomputeItemReminder(ctx.db, itemId);
       publishTrip(ctx, tripId, 'updateItem', { itemId, tripId }, ctx.currentUserId);
-      return toTripItem(ctx.db.prepare('SELECT * FROM trip_items WHERE id = ?').get(itemId) as unknown as ItemRow);
+      const updated = await getItem(ctx.db, tripId, itemId);
+      return toTripItem(updated as ItemRow);
     },
 
-    setItemReminder: (_, args, ctx) => {
+    setItemReminder: async (_, args, ctx) => {
       const { itemId, enabled } = args as Args<{ itemId: string; enabled: boolean }>;
-      const item = ctx.db.prepare('SELECT * FROM trip_items WHERE id = ?').get(itemId) as
-        | ItemRow
-        | undefined;
+      const item = await ctx.db.prepare('SELECT * FROM trip_items WHERE id = ?').get<ItemRow>(itemId);
       if (!item) throw gqlError('ITEM_NOT_FOUND', 'Item not found');
-      assertCanEditTrip(ctx.db, item.trip_id, ctx.currentUserId);
+      await assertCanEditTrip(ctx.db, item.trip_id, ctx.currentUserId);
       if (!enabled) {
-        ctx.db.prepare('UPDATE trip_items SET reminder_enabled = 0, reminder_sent = 1, reminder_due_at = NULL WHERE id = ?')
+        await ctx.db
+          .prepare('UPDATE trip_items SET reminder_enabled = 0, reminder_sent = 1, reminder_due_at = NULL WHERE id = ?')
           .run(itemId);
       } else {
-        ctx.db.prepare('UPDATE trip_items SET reminder_enabled = 1 WHERE id = ?').run(itemId);
-        recomputeItemReminder(ctx.db, itemId);
+        await ctx.db.prepare('UPDATE trip_items SET reminder_enabled = 1 WHERE id = ?').run(itemId);
+        await recomputeItemReminder(ctx.db, itemId);
       }
       publishTrip(ctx, item.trip_id, 'setItemReminder', { itemId, tripId: item.trip_id, enabled }, ctx.currentUserId);
-      return toTripItem(ctx.db.prepare('SELECT * FROM trip_items WHERE id = ?').get(itemId) as unknown as ItemRow);
+      const updated = await ctx.db.prepare('SELECT * FROM trip_items WHERE id = ?').get<ItemRow>(itemId);
+      return toTripItem(updated as ItemRow);
     },
 
-    setItemCost: (_, args, ctx) => {
+    setItemCost: async (_, args, ctx) => {
       const { tripId, itemId, cost } = args as Args<{ tripId: string; itemId: string; cost: number }>;
-      assertCanEditTrip(ctx.db, tripId, ctx.currentUserId);
-      const item = ctx.db.prepare('SELECT id FROM trip_items WHERE id = ? AND trip_id = ?').get(itemId, tripId);
+      await assertCanEditTrip(ctx.db, tripId, ctx.currentUserId);
+      const item = await getItem(ctx.db, tripId, itemId);
       if (!item) throw gqlError('ITEM_NOT_FOUND', 'Item not found');
-      ctx.db.prepare('UPDATE trip_items SET cost = ? WHERE id = ?').run(cost, itemId);
+      await setItemCostRow(ctx.db, itemId, cost);
       publishTrip(ctx, tripId, 'setItemCost', { itemId, tripId, cost }, ctx.currentUserId);
-      return toTripItem(ctx.db.prepare('SELECT * FROM trip_items WHERE id = ?').get(itemId) as unknown as ItemRow);
+      const updated = await getItem(ctx.db, tripId, itemId);
+      return toTripItem(updated as ItemRow);
     },
 
-    moveItem: (_, args, ctx) => {
+    moveItem: async (_, args, ctx) => {
       const { tripId, itemId, day, order } = args as Args<{ tripId: string; itemId: string; day: string; order: number }>;
-      assertCanEditTrip(ctx.db, tripId, ctx.currentUserId);
-      const item = ctx.db.prepare('SELECT id FROM trip_items WHERE id = ? AND trip_id = ?').get(itemId, tripId);
+      await assertCanEditTrip(ctx.db, tripId, ctx.currentUserId);
+      const item = await getItem(ctx.db, tripId, itemId);
       if (!item) throw gqlError('ITEM_NOT_FOUND', 'Item not found');
-      ctx.db.prepare('UPDATE trip_items SET day = ?, "order" = ? WHERE id = ?').run(day, order, itemId);
+      await moveItemRow(ctx.db, itemId, day, order);
       publishTrip(ctx, tripId, 'moveItem', { itemId, tripId, day, order }, ctx.currentUserId);
-      return toTripItem(ctx.db.prepare('SELECT * FROM trip_items WHERE id = ?').get(itemId) as unknown as ItemRow);
+      const updated = await getItem(ctx.db, tripId, itemId);
+      return toTripItem(updated as ItemRow);
     },
 
-    removeItem: (_, args, ctx) => {
+    removeItem: async (_, args, ctx) => {
       const { tripId, itemId } = args as Args<{ tripId: string; itemId: string }>;
-      assertCanEditTrip(ctx.db, tripId, ctx.currentUserId);
-      const item = ctx.db.prepare('SELECT * FROM trip_items WHERE id = ? AND trip_id = ?').get(itemId, tripId) as
-        | ItemRow
-        | undefined;
+      await assertCanEditTrip(ctx.db, tripId, ctx.currentUserId);
+      const item = await getItem(ctx.db, tripId, itemId);
       if (!item) throw gqlError('ITEM_NOT_FOUND', 'Item not found');
-      ctx.db.prepare('DELETE FROM trip_items WHERE id = ?').run(itemId);
+      await removeItemRow(ctx.db, itemId);
       publishTrip(ctx, tripId, 'removeItem', { itemId, tripId }, ctx.currentUserId);
       return toTripItem(item);
     },
 
-    touchPresence: (_, args, ctx) => {
+    touchPresence: async (_, args, ctx) => {
       const { input } = args as Args<{
-        input: {
-          tripId: string;
-          displayName: string;
-          color: string | null;
-          editingItemId?: string | null;
-        };
+        input: { tripId: string; displayName: string; color: string | null; editingItemId?: string | null };
       }>;
-      assertTripMember(ctx.db, input.tripId, ctx.currentUserId);
+      await assertTripMember(ctx.db, input.tripId, ctx.currentUserId);
       const entry = touchPresence({
         userId: ctx.currentUserId,
         tripId: input.tripId,
@@ -1000,18 +866,18 @@ export const resolvers: {
       return entry;
     },
 
-    requestSuggestions: (_, args, ctx) => {
+    requestSuggestions: async (_, args, ctx) => {
       const { tripId, day } = args as Args<{ tripId: string; day?: number | null }>;
-      assertTripMember(ctx.db, tripId, ctx.currentUserId);
-      const trip = ctx.db.prepare('SELECT * FROM trips WHERE id = ?').get(tripId) as unknown as
-        | TripRow
-        | undefined;
-      const items = ctx.db.prepare('SELECT * FROM trip_items WHERE trip_id = ?').all(tripId) as unknown as {
-        activity_id?: string | null;
-        title?: string | null;
-        cost?: number | null;
-      }[];
-      const suggestions = buildSuggestions(ctx.db, trip ?? null, items);
+      await assertTripMember(ctx.db, tripId, ctx.currentUserId);
+      const trip = await getTrip(ctx.db, tripId);
+      const items = await ctx.db
+        .prepare('SELECT location_id, title, cost FROM trip_items WHERE trip_id = ?')
+        .all<{ location_id: string | null; title: string | null; cost: number | null }>(tripId);
+      const suggestions = await buildSuggestions(
+        ctx.catalogue,
+        trip as TripRow | null,
+        items.map((i) => ({ activity_id: i.location_id, title: i.title, cost: i.cost })),
+      );
       return { day, items: suggestions };
     },
 
@@ -1019,40 +885,31 @@ export const resolvers: {
       const { tripId, email, role } = args as Args<{ tripId: string; email: string; role?: string | null }>;
       const normalized = email.trim().toLowerCase();
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) {
-        throw gqlError('INVALID_EMAIL', 'Email no válido');
+        throw gqlError('INVALID_EMAIL', 'Email no vÃ¡lido');
       }
-      // Rol elegible: vacío/null -> 'viewer'; solo se admiten 'editor' y 'viewer'.
       const requestedRole = (typeof role === 'string' ? role.trim().toLowerCase() : '') || 'viewer';
       if (requestedRole !== 'editor' && requestedRole !== 'viewer') {
-        throw gqlError('INVALID_INVITE_ROLE', 'Rol de invitación no válido');
+        throw gqlError('INVALID_INVITE_ROLE', 'Rol de invitaciÃ³n no vÃ¡lido');
       }
       const inviteRole = requestedRole as 'editor' | 'viewer';
-      const trip = getTripOrNull(ctx.db, tripId);
-      if (!trip) throw gqlError('TRIP_NOT_FOUND', 'Trip not found');
-      const myRoleRow = ctx.db
-        .prepare('SELECT role FROM trip_members WHERE trip_id = ? AND user_id = ?')
-        .get(tripId, ctx.currentUserId) as { role: string } | undefined;
-      const myRole = myRoleRow?.role;
+      const trip = await tripOrThrow(ctx.db, tripId);
+      const myRole = await getMemberRole(ctx.db, tripId, ctx.currentUserId);
       if (myRole !== 'owner' && myRole !== 'editor') {
         throw gqlError('FORBIDDEN_INVITE', 'Solo el propietario o un editor puede invitar');
       }
 
-      const invitation = createInvitation(ctx.db, {
+      const invitation = await createInvitation(ctx.db, {
         tripId,
         email: normalized,
         role: inviteRole,
         createdBy: ctx.currentUserId,
       });
       const joinUrl = buildJoinUrl(tripId, invitation.code);
-      const me = ctx.db.prepare('SELECT display_name FROM users WHERE id = ?').get(ctx.currentUserId) as
-        | { display_name: string }
-        | undefined;
+      const me = await ctx.db
+        .prepare('SELECT display_name FROM users WHERE id = ?')
+        .get<{ display_name: string }>(ctx.currentUserId);
       const ownerName = me?.display_name ?? 'Un viajero';
 
-      // Si el envio falla, la invitacion queda pendiente y el error se reporta
-      // en logs: el codigo se puede compartir manualmente y la aceptacion
-      // funciona igual (diseno original; Resend en modo prueba solo envia al
-      // email del dueno, y eso no debe romper la invitacion).
       try {
         await sendInviteEmail({
           to: invitation.email,
@@ -1066,38 +923,33 @@ export const resolvers: {
         console.error('[invite] email no enviado:', e instanceof Error ? e.message : e);
       }
       publishTrip(ctx, tripId, 'inviteSent', { tripId, email: invitation.email }, ctx.currentUserId);
-      return {
-        invitationId: invitation.id,
-        status: invitation.status,
-        email: invitation.email,
-      };
+      return { invitationId: invitation.id, status: invitation.status, email: invitation.email };
     },
 
-    joinTripWithCode: (_, args, ctx) => {
+    joinTripWithCode: async (_, args, ctx) => {
       const { code, email } = args as Args<{ code: string; email: string }>;
-      if (!isInviteCodeValid(code)) throw gqlError('INVALID_INVITE_CODE', 'Código de invitación no válido');
-      const invitation = findInvitationByCode(ctx.db, code);
-      if (!invitation) throw gqlError('INVITE_CODE_NOT_FOUND', 'Código de invitación no encontrado');
-      if (invitation.status !== 'pending') throw gqlError('INVITE_ALREADY_USED', 'Esta invitación ya fue usada');
-      if (!isEmailMatch(invitation, email)) throw gqlError('INVITE_EMAIL_MISMATCH', 'El email no coincide con la invitación');
+      if (!isInviteCodeValid(code)) throw gqlError('INVALID_INVITE_CODE', 'CÃ³digo de invitaciÃ³n no vÃ¡lido');
+      const invitation = await findInvitationByCode(ctx.db, code);
+      if (!invitation) throw gqlError('INVITE_CODE_NOT_FOUND', 'CÃ³digo de invitaciÃ³n no encontrado');
+      if (invitation.status !== 'pending') throw gqlError('INVITE_ALREADY_USED', 'Esta invitaciÃ³n ya fue usada');
+      if (!isEmailMatch(invitation, email)) throw gqlError('INVITE_EMAIL_MISMATCH', 'El email no coincide con la invitaciÃ³n');
 
-      ctx.db
-        .prepare('INSERT OR IGNORE INTO trip_members (trip_id, user_id, role) VALUES (?, ?, ?)')
+      await ctx.db
+        .prepare('INSERT INTO trip_members (trip_id, user_id, role) VALUES (?, ?, ?) ON CONFLICT DO NOTHING')
         .run(invitation.trip_id, ctx.currentUserId, invitation.role);
-      // El usuario demo adopta el email de la invitacion (no hay registro real aun).
-      ctx.db.prepare('UPDATE users SET email = ? WHERE id = ?').run(invitation.email, ctx.currentUserId);
-      acceptInvitation(ctx.db, invitation.id);
+      await ctx.db.prepare('UPDATE users SET email = ? WHERE id = ?').run(invitation.email, ctx.currentUserId);
+      await acceptInvitation(ctx.db, invitation.id);
       publishTrip(
         ctx,
         invitation.trip_id,
         'joinTrip',
         { tripId: invitation.trip_id, userId: ctx.currentUserId },
-        ctx.currentUserId
+        ctx.currentUserId,
       );
-      return buildTrip(ctx.db, getTripOrNull(ctx.db, invitation.trip_id)!, ctx.currentUserId);
+      return buildTrip(ctx.db, await tripOrThrow(ctx.db, invitation.trip_id), ctx.currentUserId);
     },
 
-    updateMyProfile: (_, args, ctx) => {
+    updateMyProfile: async (_, args, ctx) => {
       const { input } = args as Args<{
         input: {
           displayName: string;
@@ -1108,10 +960,10 @@ export const resolvers: {
       }>;
       const language = input.language ?? null;
       if (language !== null && !isValidLanguage(language)) {
-        throw gqlError('INVALID_LANGUAGE', 'Idioma no válido: usa "es" o "en".');
+        throw gqlError('INVALID_LANGUAGE', 'Idioma no vÃ¡lido: usa "es" o "en".');
       }
       try {
-        const row = updateMyProfile(ctx.db, ctx.currentUserId, {
+        const row = await updateMyProfile(ctx.db, ctx.storage, ctx.currentUserId, {
           displayName: input.displayName,
           avatarDataUrl: input.avatarDataUrl ?? null,
           avatarRemove: input.avatarRemove ?? false,
@@ -1123,37 +975,34 @@ export const resolvers: {
       }
     },
 
-    addItemAttachment: (_, args, ctx) => {
-      const {
-        tripId: requestedTripId,
-        itemId,
-        input,
-        viewerIds: rawViewerIds,
-      } = args as Args<{
+    addItemAttachment: async (_, args, ctx) => {
+      const { tripId: requestedTripId, itemId, input, viewerIds: rawViewerIds } = args as Args<{
         tripId?: string | null;
         itemId: string;
         input: { fileName: string; mimeType: string; dataUrl: string };
         viewerIds?: string[] | null;
       }>;
-      const tripId = findItemTrip(ctx.db, itemId);
+      const tripId = await findItemTrip(ctx.db, itemId);
       if (!tripId || (requestedTripId && requestedTripId !== tripId)) {
         throw gqlError('ITEM_NOT_FOUND', 'Actividad no encontrada.');
       }
-      if (!isTripMember(ctx.db, tripId, ctx.currentUserId)) {
+      if (!(await isTripMember(ctx.db, tripId, ctx.currentUserId))) {
         throw gqlError('NOT_TRIP_MEMBER', 'Solo los miembros del viaje pueden subir boletos.');
       }
       const viewerIds = [...new Set(rawViewerIds ?? [])];
-      if (invalidAttachmentViewers(ctx.db, tripId, viewerIds).length > 0) {
+      if ((await invalidAttachmentViewers(ctx.db, tripId, viewerIds)).length > 0) {
         throw gqlError('INVALID_VIEWER', 'Todos los viewers deben ser miembros del viaje.');
       }
       try {
-        const created = addAttachment(ctx.db, itemId, ctx.currentUserId, {
-          fileName: input.fileName,
-          mimeType: input.mimeType,
-          dataUrl: input.dataUrl,
-        }, viewerIds);
-        // El uploader siempre ve lo suyo: la respuesta lleva URL firmada.
-        const attachment = getAttachmentForUser(ctx.db, created.id, ctx.currentUserId) ?? created;
+        const created = await addAttachment(
+          ctx.db,
+          ctx.storage,
+          itemId,
+          ctx.currentUserId,
+          { fileName: input.fileName, mimeType: input.mimeType, dataUrl: input.dataUrl },
+          viewerIds,
+        );
+        const attachment = (await getAttachmentForUser(ctx.db, ctx.storage, created.id, ctx.currentUserId)) ?? created;
         publishTrip(ctx, tripId, 'addAttachment', { itemId, attachmentId: attachment.id }, ctx.currentUserId);
         return attachment;
       } catch (e) {
@@ -1161,83 +1010,74 @@ export const resolvers: {
       }
     },
 
-    updateAttachmentViewers: (_, args, ctx) => {
+    updateAttachmentViewers: async (_, args, ctx) => {
       const { attachmentId, viewerIds: rawViewerIds } = args as Args<{
         attachmentId: string;
         viewerIds?: string[] | null;
       }>;
-      const row = findAttachment(ctx.db, attachmentId);
-      const info = findAttachmentItemTrip(ctx.db, attachmentId);
+      const row = await findAttachment(ctx.db, attachmentId);
+      const info = await findAttachmentItemTrip(ctx.db, attachmentId);
       if (!row || !info) throw gqlError('ATTACHMENT_NOT_FOUND', 'Archivo no encontrado.');
-      // Solo el uploader edita los permisos de su archivo.
       if (row.created_by !== ctx.currentUserId) {
-        throw gqlError('FORBIDDEN_ATTACHMENT', 'Solo quien subió el archivo puede editar sus permisos.');
+        throw gqlError('FORBIDDEN_ATTACHMENT', 'Solo quien subiÃ³ el archivo puede editar sus permisos.');
       }
-      // El uploader es viewer implicito: se descarta de la lista explicita.
-      const viewerIds = [...new Set(rawViewerIds ?? [])].filter(
-        (viewerId) => viewerId !== ctx.currentUserId
-      );
-      if (invalidAttachmentViewers(ctx.db, info.tripId, viewerIds).length > 0) {
+      const viewerIds = [...new Set(rawViewerIds ?? [])].filter((viewerId) => viewerId !== ctx.currentUserId);
+      if ((await invalidAttachmentViewers(ctx.db, info.tripId, viewerIds)).length > 0) {
         throw gqlError('INVALID_VIEWER', 'Todos los viewers deben ser miembros del viaje.');
       }
-      replaceAttachmentViewers(ctx.db, attachmentId, viewerIds);
-      const attachment = getAttachmentForUser(ctx.db, attachmentId, ctx.currentUserId);
+      await replaceAttachmentViewers(ctx.db, attachmentId, viewerIds);
+      const attachment = await getAttachmentForUser(ctx.db, ctx.storage, attachmentId, ctx.currentUserId);
       publishTrip(ctx, info.tripId, 'updateAttachmentViewers', { attachmentId }, ctx.currentUserId);
       return attachment;
     },
 
-    removeItemAttachment: (_, args, ctx) => {
+    removeItemAttachment: async (_, args, ctx) => {
       const { attachmentId } = args as Args<{ attachmentId: string }>;
-      const row = findAttachment(ctx.db, attachmentId);
-      const info = findAttachmentItemTrip(ctx.db, attachmentId);
+      const row = await findAttachment(ctx.db, attachmentId);
+      const info = await findAttachmentItemTrip(ctx.db, attachmentId);
       if (!row || !info) throw gqlError('ATTACHMENT_NOT_FOUND', 'Archivo no encontrado.');
-      if (!isTripMember(ctx.db, info.tripId, ctx.currentUserId)) {
+      if (!(await isTripMember(ctx.db, info.tripId, ctx.currentUserId))) {
         throw gqlError('NOT_TRIP_MEMBER', 'Solo los miembros del viaje pueden quitar boletos.');
       }
-      // Solo el uploader elimina lo suyo (ni siquiera el owner del viaje).
       if (row.created_by !== ctx.currentUserId) {
-        throw gqlError('FORBIDDEN_ATTACHMENT', 'Solo quien subió el archivo puede eliminarlo.');
+        throw gqlError('FORBIDDEN_ATTACHMENT', 'Solo quien subiÃ³ el archivo puede eliminarlo.');
       }
-      const attachment = getAttachmentForUser(ctx.db, attachmentId, ctx.currentUserId);
-      removeAttachment(ctx.db, attachmentId);
+      const attachment = await getAttachmentForUser(ctx.db, ctx.storage, attachmentId, ctx.currentUserId);
+      await removeAttachment(ctx.db, ctx.storage, attachmentId);
       publishTrip(ctx, info.tripId, 'removeAttachment', { attachmentId }, ctx.currentUserId);
       return attachment;
     },
 
-    setMyInterests: (_, args, ctx) => {
+    setMyInterests: async (_, args, ctx) => {
       const { terms } = args as Args<{ terms: string[] }>;
-      const userId = requireCurrentUser(ctx.db, ctx.currentUserId);
-      return replaceUserInterests(
-        ctx.db,
-        userId,
-        terms,
-        ctx.syncInterests ?? syncInterestsToAgent,
-      );
+      const userId = await requireCurrentUser(ctx.db, ctx.currentUserId);
+      return replaceUserInterests(ctx.db, userId, terms, ctx.syncInterests ?? syncInterestsToAgent);
     },
 
-    favoriteLocation: (_, args, ctx) => {
+    favoriteLocation: async (_, args, ctx) => {
       const { locationId, favorite } = args as Args<{ locationId: string; favorite: boolean }>;
       try {
-        const state = setFavorite(ctx.db, ctx.currentUserId, locationId, favorite);
+        const state = await setFavorite(ctx.db, ctx.currentUserId, locationId, favorite, async (id) =>
+          Boolean(await ctx.catalogue.getById(id)),
+        );
         return { locationId, favorite: state };
       } catch (e) {
         throw gqlError('FAVORITE_SAVE_FAILED', e instanceof Error ? e.message : 'No se pudo actualizar el favorito.');
       }
     },
 
-    saveSuggestionChat: (_, args, ctx) => {
+    saveSuggestionChat: async (_, args, ctx) => {
       const { tripId, day, messages } = args as Args<{
         tripId: string;
         day: string;
         messages: { role: string; content: string }[];
       }>;
-      const trip = getTripOrNull(ctx.db, tripId);
-      if (!trip) throw gqlError('TRIP_NOT_FOUND', 'Trip not found');
-      if (!isTripMember(ctx.db, tripId, ctx.currentUserId)) {
+      await tripOrThrow(ctx.db, tripId);
+      if (!(await isTripMember(ctx.db, tripId, ctx.currentUserId))) {
         throw gqlError('NOT_TRIP_MEMBER', 'Solo los miembros del viaje pueden guardar el chat.');
       }
       if (!isValidMessages(messages)) {
-        throw gqlError('INVALID_MESSAGES', 'messages debe ser un array no vacío de {role, content}.');
+        throw gqlError('INVALID_MESSAGES', 'messages debe ser un array no vacÃ­o de {role, content}.');
       }
       return upsertSuggestionChat(ctx.db, { tripId, userId: ctx.currentUserId, day, messages });
     },
@@ -1252,27 +1092,25 @@ export const resolvers: {
         if (e instanceof AuthTokenError) throw gqlError('AUTH_TOKEN_INVALID', e.message);
         throw e;
       }
-      // Bloqueo duro: proveedores no-Google exigen email verificado (spec M2).
       const provider = claims.firebase?.sign_in_provider;
       if (provider !== 'google.com' && !claims.email_verified) {
-        throw gqlError('AUTH_EMAIL_NOT_VERIFIED', 'Verifica tu email para iniciar sesión.');
+        throw gqlError('AUTH_EMAIL_NOT_VERIFIED', 'Verifica tu email para iniciar sesiÃ³n.');
       }
-      const { user } = upsertUserByEmail(ctx.db, claims);
+      const { user } = await upsertUserByEmail(ctx.db, claims);
 
       let welcomeSent = false;
       if (claims.email_verified && !user.welcome_sent_at) {
         const send = ctx.sendWelcome ?? sendWelcomeEmail;
         try {
           await send(user.email, user.display_name);
-          markWelcomeSent(ctx.db, user.id);
+          await markWelcomeSent(ctx.db, user.id);
           welcomeSent = true;
         } catch (e) {
-          // Un fallo de Resend NO debe romper el login: solo se omite la bienvenida.
           console.error('[auth] email de bienvenida no enviado:', e instanceof Error ? e.message : e);
         }
       }
-      const fresh = ctx.db.prepare('SELECT * FROM users WHERE id = ?').get(user.id) as unknown as UserRow;
-      return { user: toProfile(fresh), welcomeSent };
+      const fresh = await ctx.db.prepare('SELECT * FROM users WHERE id = ?').get<UserRow>(user.id);
+      return { user: toProfile(fresh as UserRow), welcomeSent };
     },
 
     authSendVerification: async (_, args, ctx) => {
@@ -1286,7 +1124,7 @@ export const resolvers: {
         throw e;
       }
       if (!tryReserveVerification(claims.uid)) {
-        throw gqlError('VERIFICATION_RATE_LIMITED', 'Espera un minuto antes de pedir otro email de verificación.');
+        throw gqlError('VERIFICATION_RATE_LIMITED', 'Espera un minuto antes de pedir otro email de verificaciÃ³n.');
       }
       const generate = ctx.generateVerification ?? generateVerificationLink;
       const send = ctx.sendVerification ?? sendVerificationEmail;
@@ -1302,23 +1140,15 @@ export const resolvers: {
 
     authConfirmEmail: async (_, args, ctx) => {
       const { token } = args as Args<{ token: string }>;
-      if (!token) {
-        throw gqlError('AUTH_TOKEN_INVALID', 'Token de verificación no válido.');
-      }
+      if (!token) throw gqlError('AUTH_TOKEN_INVALID', 'Token de verificaciÃ³n no vÃ¡lido.');
 
       let payload: VerifiedVerificationToken;
       try {
         payload = await verifyVerificationToken(token, getServiceAccountPrivateKey());
       } catch (e) {
-        throw gqlError(
-          'AUTH_TOKEN_INVALID',
-          e instanceof Error ? e.message : 'Token de verificación inválido.',
-        );
+        throw gqlError('AUTH_TOKEN_INVALID', e instanceof Error ? e.message : 'Token de verificaciÃ³n invÃ¡lido.');
       }
 
-      // jti de un solo uso: marcar como usado ANTES de cualquier efecto.
-      // Replay del MISMO uid = idempotente (StrictMode en dev dobla la llamada;
-      // la primera ya verificó): se salta el updateUser y se re-sincroniza.
       let jtiStatus: 'fresh' | 'replay' = 'fresh';
       try {
         jtiStatus = consumeVerificationJti(payload.jti, payload.uid);
@@ -1326,17 +1156,16 @@ export const resolvers: {
         if (e instanceof VerificationTokenError && e.code === 'VERIFICATION_TOKEN_USED') {
           throw gqlError('VERIFICATION_TOKEN_USED', e.message);
         }
-        throw gqlError('VERIFICATION_TOKEN_USED', 'El enlace de verificación ya fue usado.');
+        throw gqlError('VERIFICATION_TOKEN_USED', 'El enlace de verificaciÃ³n ya fue usado.');
       }
 
-      // Marca emailVerified en Firebase (Admin SDK) solo en el primer uso.
       if (jtiStatus === 'fresh') {
         const confirm = ctx.confirmVerification ?? setEmailVerified;
         try {
           await confirm(payload.uid);
         } catch (e) {
           if (isUserNotFoundError(e)) {
-            throw gqlError('AUTH_TOKEN_INVALID', 'La cuenta no existe o el enlace no es válido.');
+            throw gqlError('AUTH_TOKEN_INVALID', 'La cuenta no existe o el enlace no es vÃ¡lido.');
           }
           throw gqlError(
             'VERIFICATION_CONFIRM_FAILED',
@@ -1345,8 +1174,7 @@ export const resolvers: {
         }
       }
 
-      // Sincroniza la fila local con email_verified = true.
-      const { user } = upsertUserByEmail(ctx.db, {
+      const { user } = await upsertUserByEmail(ctx.db, {
         uid: payload.uid,
         email: payload.email,
         email_verified: true,
@@ -1357,79 +1185,62 @@ export const resolvers: {
         const send = ctx.sendWelcome ?? sendWelcomeEmail;
         try {
           await send(user.email, user.display_name);
-          markWelcomeSent(ctx.db, user.id);
+          await markWelcomeSent(ctx.db, user.id);
           welcomeSent = true;
         } catch (e) {
-          // Un fallo de Resend NO debe romper la confirmacion: solo se omite la bienvenida.
           console.error('[auth] email de bienvenida no enviado:', e instanceof Error ? e.message : e);
         }
       }
-      const fresh = ctx.db.prepare('SELECT * FROM users WHERE id = ?').get(user.id) as unknown as UserRow;
-      return { user: toProfile(fresh), welcomeSent };
+      const fresh = await ctx.db.prepare('SELECT * FROM users WHERE id = ?').get<UserRow>(user.id);
+      return { user: toProfile(fresh as UserRow), welcomeSent };
     },
   },
 
   Subscription: {
     onTripChanged: {
-      subscribe: (_, args, ctx) => {
+      subscribe: async (_, args, ctx) => {
         const { tripId } = args as Args<{ tripId: string }>;
-        assertTripMember(ctx.db, tripId, ctx.currentUserId);
+        await assertTripMember(ctx.db, tripId, ctx.currentUserId);
         return ctx.pubsub.subscribe(`trip:${tripId}`);
       },
     },
     onPresenceChanged: {
-      subscribe: (_, args, ctx) => {
+      subscribe: async (_, args, ctx) => {
         const { tripId } = args as Args<{ tripId: string }>;
-        assertTripMember(ctx.db, tripId, ctx.currentUserId);
+        await assertTripMember(ctx.db, tripId, ctx.currentUserId);
         return ctx.pubsub.subscribe(`presence:${tripId}`);
       },
     },
   },
 
   Trip: {
-    destinationLat: (parent, __, ctx) => {
-      const { destinationId } = parent as { destinationId?: string | null };
+    destinationLat: async (parent, __, ctx) => {
+      const { destinationLat, destinationId } = parent as { destinationLat?: number | null; destinationId?: string | null };
+      if (destinationLat != null) return destinationLat;
       if (!destinationId) return null;
-      const row = ctx.db.prepare('SELECT lat FROM locations WHERE id = ?').get(destinationId) as
-        | { lat: number | null }
-        | undefined;
-      return row?.lat ?? null;
+      return (await ctx.catalogue.getById(destinationId))?.lat ?? null;
     },
-    destinationLng: (parent, __, ctx) => {
-      const { destinationId } = parent as { destinationId?: string | null };
+    destinationLng: async (parent, __, ctx) => {
+      const { destinationLng, destinationId } = parent as { destinationLng?: number | null; destinationId?: string | null };
+      if (destinationLng != null) return destinationLng;
       if (!destinationId) return null;
-      const row = ctx.db.prepare('SELECT lng FROM locations WHERE id = ?').get(destinationId) as
-        | { lng: number | null }
-        | undefined;
-      return row?.lng ?? null;
+      return (await ctx.catalogue.getById(destinationId))?.lng ?? null;
     },
+    items: (parent) => (parent as TripGql).items,
+    members: (parent) => (parent as TripGql).members,
   },
 
   TripItem: {
     attachments: (parent, __, ctx) => {
       const { id } = parent as { id: string };
-      return listAttachmentsByItem(ctx.db, id, ctx.currentUserId);
+      return listAttachmentsByItem(ctx.db, ctx.storage, id, ctx.currentUserId);
     },
     isFavorite: (parent, __, ctx) => {
       const { activityId } = parent as { activityId?: string | null };
       if (!activityId) return false;
       return isFavorite(ctx.db, ctx.currentUserId, activityId);
     },
-    lat: (parent, __, ctx) => {
-      const { activityId } = parent as { activityId?: string | null };
-      if (!activityId) return null;
-      const row = ctx.db.prepare('SELECT lat FROM locations WHERE id = ?').get(activityId) as
-        | { lat: number | null }
-        | undefined;
-      return row?.lat ?? null;
-    },
-    lng: (parent, __, ctx) => {
-      const { activityId } = parent as { activityId?: string | null };
-      if (!activityId) return null;
-      const row = ctx.db.prepare('SELECT lng FROM locations WHERE id = ?').get(activityId) as
-        | { lng: number | null }
-        | undefined;
-      return row?.lng ?? null;
-    },
+    lat: (parent) => (parent as ItemGql).lat ?? null,
+    lng: (parent) => (parent as ItemGql).lng ?? null,
   },
 };

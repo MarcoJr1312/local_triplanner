@@ -11,6 +11,8 @@ export interface TripRowFull {
   name: string;
   destination_id: string | null;
   destination_name: string | null;
+  destination_lat: number | null;
+  destination_lng: number | null;
   start_date: string | null;
   end_date: string | null;
   total_budget: number | null;

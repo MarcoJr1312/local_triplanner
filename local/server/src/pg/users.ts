@@ -2,7 +2,6 @@
 // Kept alongside the SQLite version while the port is expanded slice by slice.
 
 import { randomUUID } from 'node:crypto';
-import { defaultDisplayName, normalizeEmail } from '../auth/users.ts';
 import type { UserRow } from '../schema-types.ts';
 import type { FirebaseClaims } from '../auth/verify.ts';
 import type { AsyncDb } from './db.ts';
@@ -10,6 +9,16 @@ import type { AsyncDb } from './db.ts';
 export interface UpsertUserResult {
   user: UserRow;
   created: boolean;
+}
+
+// Default name when the token has none: the email prefix.
+export function defaultDisplayName(email: string): string {
+  const prefix = email.split('@')[0]?.trim();
+  return prefix && prefix.length > 0 ? prefix : 'Viajero';
+}
+
+export function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase();
 }
 
 export async function upsertUserByEmail(db: AsyncDb, claims: FirebaseClaims): Promise<UpsertUserResult> {

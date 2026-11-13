@@ -15,6 +15,8 @@ export interface LocationCatalogue {
   listDestinations(): Promise<LocationRow[]>;
   /** Places whose parent is this destination. */
   listByParent(parentId: string): Promise<LocationRow[]>;
+  /** Every place (category set), bounded; used by the agent places-cache. */
+  listPlaces(): Promise<LocationRow[]>;
   /** Test/seed helper. */
   clear(): Promise<void>;
 }
