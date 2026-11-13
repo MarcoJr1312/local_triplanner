@@ -1,0 +1,94 @@
+name: Build images
+
+# Builds and pushes the three service images to ECR.
+# Runs on main (the OIDC role only trusts refs/heads/main) and manually from main.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'frontend-next/**'
+      - 'local/server/**'
+      - 'local/agent-service/**'
+      - 'local/db/**'
+      - 'local/graphql/**'
+      - '.github/workflows/build-images.yml'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Extra image tag (defaults to the commit SHA)
+        required: false
+        default: ''
+
+concurrency:
+  group: build-images-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+
+jobs:
+  build:
+    name: ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: web
+            dockerfile: frontend-next/Dockerfile
+          - service: api
+            dockerfile: local/server/Dockerfile
+          - service: agent
+            dockerfile: local/agent-service/Dockerfile
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Resolve registry and check the repository exists
+        id: ecr
+        run: |
+          ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
+          REGISTRY="${ACCOUNT}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+          echo "registry=${REGISTRY}" >> "$GITHUB_OUTPUT"
+          # Fails fast if the control plane was never applied.
+          aws ecr describe-repositories --repository-names "triplanner/${{ matrix.service }}" >/dev/null
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to ECR
+        run: |
+          aws ecr get-login-password --region "$AWS_REGION" \
+            | docker login --username AWS --password-stdin "${{ steps.ecr.outputs.registry }}"
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ steps.ecr.outputs.registry }}/triplanner/${{ matrix.service }}:${{ inputs.tag || github.sha }}
+            ${{ steps.ecr.outputs.registry }}/triplanner/${{ matrix.service }}:latest
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+
+      - name: Summary
+        run: |
+          {
+            echo "### triplanner/${{ matrix.service }}"
+            echo ""
+            echo "\`${{ steps.ecr.outputs.registry }}/triplanner/${{ matrix.service }}:${{ inputs.tag || github.sha }}\`"
+            echo ""
+            echo "Update the \`${{ upper(matrix.service) }}_IMAGE\` repository variable to the \`:latest\` URI."
+          } >> "$GITHUB_STEP_SUMMARY"

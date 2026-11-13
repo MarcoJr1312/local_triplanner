@@ -86,11 +86,13 @@ The workflows in `.github/workflows/` expect:
 
 | Variable | Value |
 |---|---|
-| `WEB_IMAGE`, `API_IMAGE`, `AGENT_IMAGE` | ECR image URIs from `envs/control-plane` |
+| `WEB_IMAGE`, `API_IMAGE`, `AGENT_IMAGE` | ECR image URIs, e.g. `484826611314.dkr.ecr.us-east-1.amazonaws.com/triplanner/api:latest` |
 | `FIREBASE_PROJECT_ID` | Firebase project id |
 | `CERTIFICATE_ARN` | ACM certificate ARN, or empty for HTTP-only |
 | `APP_HOSTNAME` | Public hostname for the CNAME |
 | `CONTROL_TABLE` | `triplanner-control` |
+
+The **build-images** workflow builds `web`, `api` and `agent` from the Dockerfiles (context = repo root), pushes `<sha>` and `:latest` tags to ECR, and runs on `main` plus manual dispatch. The OIDC role only trusts `refs/heads/main`, so dispatch it from that branch. Point the three `*_IMAGE` variables at the `:latest` URIs.
 
 The **wake** workflow runs `terraform apply`, updates Cloudflare, runs `bun run db:migrate` and `bun run db:seed` as one-off ECS tasks, and marks the control table `awake`. The **sleep** workflow runs `terraform destroy` and marks it `asleep`.
 
