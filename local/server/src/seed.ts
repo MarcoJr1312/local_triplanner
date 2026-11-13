@@ -4,7 +4,7 @@
 // - creates the demo user, trip, membership and items
 // Re-running does not duplicate anything.
 
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { migrate } from './db/migrate.ts';
@@ -17,7 +17,13 @@ import type { AsyncDb } from './pg/db.ts';
 import { BOOTSTRAP_LOCAL } from './env.ts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const SEED_DATA_PATH = path.resolve(__dirname, '..', '..', 'db', 'seed-data.json');
+// Repo: local/server/src -> local/db. Container: /app/src -> /app/db.
+const SEED_DATA_PATH =
+  [
+    path.resolve(__dirname, '..', '..', 'db', 'seed-data.json'),
+    path.resolve(__dirname, '..', 'db', 'seed-data.json'),
+  ].find((candidate) => existsSync(candidate)) ??
+  path.resolve(__dirname, '..', '..', 'db', 'seed-data.json');
 
 export interface SeedActivity {
   id: string;
