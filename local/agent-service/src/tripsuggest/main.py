@@ -4,7 +4,7 @@ Exposes the real suggestions endpoint plus a health check. The endpoint:
 
 1. Verifies the Firebase Bearer token (``Authorization`` header).
 2. Loads trip context from the backend (membership is enforced server-side).
-3. Indexes/refreshes the destination's Chroma collection from the places cache
+3. Indexes/refreshes the destination's pgvector index from the places cache
    and injects the top-k matches of the user's latest query into the prompt.
 4. Runs the Agno agent (with ``search_places``/``get_place_details`` tools) over
    the conversation and returns the full answer.
@@ -27,7 +27,7 @@ from tripsuggest.agent import run_agent, run_day_plan_agent
 from tripsuggest.auth import TokenVerificationError, verify_firebase_token
 from tripsuggest.auto_suggest import NoInterestsError, auto_suggest
 from tripsuggest.backend import BackendClient, BackendError
-from tripsuggest.chroma_store import (
+from tripsuggest.vector_store import (
     embed_query,
     ensure_indexed,
     get_user_interest_terms,
@@ -142,11 +142,11 @@ def _merge_places(
 
 
 def _user_interest_terms(user_id: str, context: dict[str, Any]) -> list[str]:
-    """Interests for the prompt/boost: Chroma first, backend context fallback."""
+    """Interests for the prompt/boost: pgvector first, backend context fallback."""
     try:
         terms = get_user_interest_terms(user_id)
     except Exception:
-        logger.exception("failed to load user interests from Chroma")
+        logger.exception("failed to load user interests from pgvector")
         terms = []
     if terms:
         return terms
@@ -188,17 +188,17 @@ def _run_pipeline(
 
     destination_id = (context.get("trip") or {}).get("destinationId")
 
-    collection = None
+    index = None
     session_id = new_session_id()
     vector_places: list[dict[str, Any]] = []
     if destination_id:
-        collection = ensure_indexed(destination_id, places, content_hash)
+        index = ensure_indexed(destination_id, places, content_hash)
         query_text = _last_user_query(body.messages)
         if query_text:
-            vector_places = embed_query(collection, query_text, session_id)
+            vector_places = embed_query(index, query_text, session_id)
         if interest_terms:
             try:
-                boost = interest_boost_places(collection, interest_terms)
+                boost = interest_boost_places(index, interest_terms)
             except Exception:
                 logger.exception("interest boost failed (non-fatal)")
                 boost = []
@@ -220,9 +220,9 @@ def _run_pipeline(
         logger.exception("agent run failed")
         raise AgentError(str(exc)) from exc
     finally:
-        if collection is not None:
+        if index is not None:
             try:
-                purge_session(collection, session_id)
+                purge_session(index, session_id)
             except Exception:
                 logger.exception("failed to purge q-* documents")
 
@@ -258,15 +258,15 @@ def _run_day_plan_pipeline(
 
     destination_id = (context.get("trip") or {}).get("destinationId")
 
-    collection = None
+    index = None
     session_id = new_session_id()
     vector_places: list[dict[str, Any]] = []
     if destination_id:
-        collection = ensure_indexed(destination_id, places, content_hash)
+        index = ensure_indexed(destination_id, places, content_hash)
         # Sin query del usuario, sembramos la búsqueda vectorial con el destino.
         query_text = (context.get("trip") or {}).get("destinationName") or "lugares recomendados"
         if query_text:
-            vector_places = embed_query(collection, query_text, session_id)
+            vector_places = embed_query(index, query_text, session_id)
 
     answer = ""
     try:
@@ -282,9 +282,9 @@ def _run_day_plan_pipeline(
         logger.exception("day-plan agent run failed")
         raise AgentError(str(exc)) from exc
     finally:
-        if collection is not None:
+        if index is not None:
             try:
-                purge_session(collection, session_id)
+                purge_session(index, session_id)
             except Exception:
                 logger.exception("failed to purge q-* documents")
 

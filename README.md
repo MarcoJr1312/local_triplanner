@@ -53,7 +53,7 @@ Next.js frontend (:3000 dev, :3001 prod)
 |---|---|
 | Frontend (`frontend-next/`) | Next.js 15 App Router, React 19, TypeScript, shadcn/ui on Radix, Tailwind v4, next-themes, sonner |
 | Backend (`local/server/`) | TypeScript on Bun, graphql-yoga, Postgres (`pg`), DynamoDB (locations), `firebase-admin`, `jose` |
-| Agent (`local/agent-service/`) | Python 3.12, uv, FastAPI, Agno, ChromaDB, DeepSeek |
+| Agent (`local/agent-service/`) | Python 3.12, uv, FastAPI, Agno, pgvector (Postgres), DeepSeek |
 | Data (`local/db/`) | Postgres `pg/schema.sql` + idempotent seed; DynamoDB catalogue seeded from `seed-data.json` |
 | Infrastructure | Local only: `:3000` → `:4000` → `:4100`, no AWS, no public URL |
 

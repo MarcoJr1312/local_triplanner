@@ -6,7 +6,7 @@ inventing places:
 - ``search_places`` → ``POST /internal/search-places`` (capped to 10 results).
 - ``get_place_details`` → ``POST /internal/place-details`` (reduced dict).
 
-The vector search is intentionally NOT a tool: top-k Chroma results are injected
+The vector search is intentionally NOT a tool: top-k pgvector results are injected
 into the system prompt before the run.
 """
 
