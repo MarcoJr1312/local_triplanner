@@ -88,6 +88,23 @@ resource "aws_iam_role" "task" {
 }
 
 data "aws_iam_policy_document" "task" {
+  # Both the API and the agent read the RDS-managed credential at boot to build
+  # DATABASE_URL (the execution role only covers `secrets` injected by ECS).
+  statement {
+    actions   = ["secretsmanager:GetSecretValue"]
+    resources = [var.db_secret_arn]
+  }
+
+  statement {
+    actions   = ["kms:Decrypt"]
+    resources = ["*"]
+    condition {
+      test     = "StringEquals"
+      variable = "kms:ViaService"
+      values   = ["secretsmanager.${var.aws_region}.amazonaws.com"]
+    }
+  }
+
   statement {
     actions = [
       "s3:GetObject",
