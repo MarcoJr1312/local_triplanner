@@ -6,8 +6,6 @@ import { addItem, createTrip, deleteTripCascade, inviteMember } from '../src/pg/
 import { recomputeItemReminder, sweepOnce } from '../src/pg/reminders.ts';
 import type { ReminderEmailInput } from '../src/email.ts';
 
-const url = process.env.DATABASE_URL;
-
 let db: PgDb | null = null;
 
 before(async () => {

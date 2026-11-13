@@ -1,14 +1,39 @@
 // Shared fixtures for the Postgres integration tests.
-// Every helper returns null-safe handles so suites skip when Postgres is down.
+// Tests never touch the dev database: they run against `triplanner_test`,
+// created on demand. Every helper is null-safe so suites skip when Postgres
+// is down.
 
 import { randomUUID } from 'node:crypto';
+import { Client } from 'pg';
 import { DEFAULT_DATABASE_URL, PgDb, type AsyncDb } from '../../src/pg/db.ts';
 import { migrate } from '../../src/db/migrate.ts';
 
-export const pgUrl = process.env.DATABASE_URL ?? DEFAULT_DATABASE_URL;
+const ADMIN_URL = process.env.DATABASE_URL ?? DEFAULT_DATABASE_URL;
+const TEST_DB = 'triplanner_test';
+
+function withDatabase(url: string, database: string): string {
+  const parsed = new URL(url);
+  parsed.pathname = `/${database}`;
+  return parsed.toString();
+}
+
+export const pgUrl = process.env.TEST_DATABASE_URL ?? withDatabase(ADMIN_URL, TEST_DB);
+
+async function ensureTestDatabase(): Promise<void> {
+  if (process.env.TEST_DATABASE_URL) return;
+  const client = new Client({ connectionString: ADMIN_URL });
+  await client.connect();
+  try {
+    const { rows } = await client.query('SELECT 1 FROM pg_database WHERE datname = $1', [TEST_DB]);
+    if (rows.length === 0) await client.query(`CREATE DATABASE ${TEST_DB}`);
+  } finally {
+    await client.end();
+  }
+}
 
 export async function connectPg(): Promise<PgDb | null> {
   try {
+    await ensureTestDatabase();
     const db = await PgDb.connect(pgUrl);
     await migrate(pgUrl);
     return db;
