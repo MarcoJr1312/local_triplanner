@@ -18,6 +18,7 @@ export interface UserRow {
   firebase_uid: string | null;
   email_verified: number;
   welcome_sent_at: string | null;
+  created_at: string;
 }
 
 export interface TripRow {
