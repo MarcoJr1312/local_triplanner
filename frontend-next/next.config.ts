@@ -1,18 +1,11 @@
 import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
+  // Standalone output for the container image; `next dev` ignores it.
+  output: 'standalone',
   // Dev (next dev) y producción (next start) NO comparten .next: el dev
   // resetea los artefactos del build. El público corre con NEXT_PROD=1.
   distDir: process.env.NEXT_PROD === '1' ? '.next-prod' : '.next',
-  async rewrites() {
-    return [
-      {
-        // Avatares y archivos subidos: servidos por el backend local (mismo origen)
-        source: '/uploads/:path*',
-        destination: 'http://localhost:4000/uploads/:path*',
-      },
-    ];
-  },
   async headers() {
     return [
       {

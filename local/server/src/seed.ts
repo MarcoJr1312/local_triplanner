@@ -9,6 +9,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { migrate } from './db/migrate.ts';
 import { PgDb } from './pg/db.ts';
+import { resolveDatabaseUrl } from './pg/config.ts';
 import { DynamoLocationCatalogue } from './catalogue/dynamo.ts';
 import { ensureTable } from './catalogue/bootstrap.ts';
 import type { LocationCatalogue } from './catalogue/types.ts';
@@ -138,7 +139,7 @@ export async function seedAll(catalogue: LocationCatalogue, db: AsyncDb, data: S
 }
 
 if (import.meta.main) {
-  const url = process.env.DATABASE_URL ?? 'postgres://triplanner:triplanner@localhost:5432/triplanner';
+  const url = await resolveDatabaseUrl();
   const data = JSON.parse(readFileSync(SEED_DATA_PATH, 'utf8')) as SeedData;
 
   await ensureTable();

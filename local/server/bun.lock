@@ -6,6 +6,7 @@
       "name": "triplanner-local-server",
       "dependencies": {
         "@aws-sdk/client-dynamodb": "^3.1168.0",
+        "@aws-sdk/client-secrets-manager": "^3.1168.0",
         "@aws-sdk/lib-dynamodb": "^3.1168.0",
         "firebase-admin": "^14.5.0",
         "graphql-yoga": "^5.13.0",
@@ -21,6 +22,8 @@
   },
   "packages": {
     "@aws-sdk/client-dynamodb": ["@aws-sdk/client-dynamodb@3.1168.0", "", { "dependencies": { "@aws-sdk/core": "^3.981.0", "@aws-sdk/credential-provider-node": "^3.972.97", "@aws-sdk/dynamodb-codec": "^3.973.58", "@aws-sdk/middleware-endpoint-discovery": "^3.972.39", "@aws-sdk/types": "^3.975.1", "@smithy/core": "^3.40.0", "@smithy/fetch-http-handler": "^5.8.1", "@smithy/node-http-handler": "^4.14.2", "@smithy/types": "^4.20.0", "tslib": "^2.6.2" } }, "sha512-pIuS8zdk0RimAlCQn8xVyO78Ohyl2aeH/2ADAsqO25qFyGqq1Vfa+DuLnzpLQCUXgJr0Zaza1aCaRNXWdyfZ7g=="],
+
+    "@aws-sdk/client-secrets-manager": ["@aws-sdk/client-secrets-manager@3.1168.0", "", { "dependencies": { "@aws-sdk/core": "^3.981.0", "@aws-sdk/credential-provider-node": "^3.972.97", "@aws-sdk/types": "^3.975.1", "@smithy/core": "^3.40.0", "@smithy/fetch-http-handler": "^5.8.1", "@smithy/node-http-handler": "^4.14.2", "@smithy/types": "^4.20.0", "tslib": "^2.6.2" } }, "sha512-oVrNv5Jsfv7/k+fbyIt3Ij2Ywh7p4fpsF2f8LamyVbe4es8RWys17Y7AXIBqQZfJ7vxomApucs6FNzSxWmHoZA=="],
 
     "@aws-sdk/core": ["@aws-sdk/core@3.981.0", "", { "dependencies": { "@aws-sdk/types": "^3.975.1", "@aws-sdk/xml-builder": "^3.972.43", "@aws/lambda-invoke-store": "^0.3.0", "@smithy/core": "^3.40.0", "@smithy/signature-v4": "^5.7.5", "@smithy/types": "^4.20.0", "bowser": "^2.11.0", "tslib": "^2.6.2" } }, "sha512-Mnu7gaDrC5UCdyH8uLxLfB2eWbjE/HbjKX1U1J2VQxG3TTATUDObW2wU3I8iH3e9YH5NN2CY6w1mlAIe2XJ3jg=="],
 

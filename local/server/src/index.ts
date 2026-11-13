@@ -7,6 +7,7 @@ import { loadTypeDefs } from './schema.ts';
 import { resolvers, type Ctx, type PubSub } from './resolvers.ts';
 import { PgDb } from './pg/db.ts';
 import { migrate } from './db/migrate.ts';
+import { resolveDatabaseUrl } from './pg/config.ts';
 import { ensureDemoUser, resolveCurrentUserId } from './pg/auth.ts';
 import { createCatalogue } from './catalogue/index.ts';
 import { ensureTable } from './catalogue/bootstrap.ts';
@@ -33,12 +34,13 @@ if (LOCAL_ONLY) {
   assertFirebaseEnv();
 }
 
-const db = await PgDb.connect();
+const databaseUrl = await resolveDatabaseUrl();
+const db = await PgDb.connect(databaseUrl);
 
 // Local bootstrapping: schema + catalogue table must exist before serving.
 // In AWS both are provisioned by the wake workflow (migration/seed tasks).
 if (LOCAL_ONLY) {
-  await migrate();
+  await migrate(databaseUrl);
   await ensureTable();
 }
 await ensureDemoUser(db);

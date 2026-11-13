@@ -1,13 +1,21 @@
 // Applies local/db/pg/schema.sql to $DATABASE_URL (idempotent).
 // Used by `bun run db:migrate` locally and by the ECS migration task in wake.yml.
 
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Client } from 'pg';
+import { resolveDatabaseUrl } from '../pg/config.ts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const SCHEMA_PATH = path.resolve(__dirname, '..', '..', '..', 'db', 'pg', 'schema.sql');
+// Repo layout: local/server/src/db -> local/db/pg/schema.sql (three levels up).
+// Container layout: /app/src/db -> /app/db/pg/schema.sql (two levels up).
+const SCHEMA_PATH =
+  [
+    path.resolve(__dirname, '..', '..', '..', 'db', 'pg', 'schema.sql'),
+    path.resolve(__dirname, '..', '..', 'db', 'pg', 'schema.sql'),
+  ].find((candidate) => existsSync(candidate)) ??
+  path.resolve(__dirname, '..', '..', '..', 'db', 'pg', 'schema.sql');
 
 export const DEFAULT_DATABASE_URL = 'postgres://triplanner:triplanner@localhost:5432/triplanner';
 
@@ -32,9 +40,11 @@ export async function migrate(databaseUrl = process.env.DATABASE_URL ?? DEFAULT_
 }
 
 if (import.meta.main) {
-  migrate()
+  resolveDatabaseUrl()
+    .then((url) => migrate(url))
     .then((tables) => {
-      console.log(`schema applied to ${process.env.DATABASE_URL ?? DEFAULT_DATABASE_URL}`);
+      // Never print the connection string: it may contain RDS credentials.
+      console.log('schema applied');
       console.log(`tables: ${tables.join(', ')}`);
     })
     .catch((err) => {
