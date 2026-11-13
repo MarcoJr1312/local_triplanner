@@ -8,6 +8,17 @@ resource "aws_iam_openid_connect_provider" "github" {
   tags = var.tags
 }
 
+locals {
+  github_owner = split("/", var.github_repo)[0]
+  github_repo  = split("/", var.github_repo)[1]
+  # GitHub now emits `owner@owner_id/repo@repo_id` in the sub claim. Accept both
+  # the new and the legacy form; both are pinned to the same owner/repo/ref.
+  github_subjects = compact([
+    "repo:${var.github_repo}:ref:refs/heads/main",
+    var.github_owner_id != "" && var.github_repo_id != "" ? "repo:${local.github_owner}@${var.github_owner_id}/${local.github_repo}@${var.github_repo_id}:ref:refs/heads/main" : "",
+  ])
+}
+
 data "aws_iam_policy_document" "github_assume" {
   statement {
     effect  = "Allow"
@@ -30,7 +41,7 @@ data "aws_iam_policy_document" "github_assume" {
     condition {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:${var.github_repo}:ref:refs/heads/main"]
+      values   = local.github_subjects
     }
   }
 }

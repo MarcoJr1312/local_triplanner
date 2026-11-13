@@ -13,6 +13,18 @@ variable "github_repo" {
   type        = string
 }
 
+variable "github_owner_id" {
+  description = "Immutable numeric GitHub owner id. GitHub includes it in OIDC sub claims (`owner@id/repo@id`)."
+  type        = string
+  default     = ""
+}
+
+variable "github_repo_id" {
+  description = "Immutable numeric GitHub repository id, used with github_owner_id in OIDC sub claims."
+  type        = string
+  default     = ""
+}
+
 variable "alb_name" {
   description = "ALB name created by the app stack."
   type        = string
