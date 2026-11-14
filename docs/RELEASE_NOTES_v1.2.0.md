@@ -59,7 +59,10 @@ the app.
   - a hosted provider without a key is rejected;
   - public responses expose `hasKey` but never the token;
   - restore demo mode clears the saved key.
-- GitHub Actions and Docker Hub publishing: see the runs for this tag.
+- GitHub Actions: 8/8 runs success (4 on `main` + 4 on tag `v1.2.0`).
+- Docker Hub images published for web, api and agent with tags `latest`,
+  `1.2`, `1.2.0` and `sha-6176ac4`; `linux/amd64` + `linux/arm64`.
+- The `1.2.0` stack was pulled from Docker Hub and passed `scripts/smoke.ps1`.
 
 ## Run from Docker Hub
 

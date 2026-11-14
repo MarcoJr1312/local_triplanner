@@ -13,6 +13,9 @@ All five services should show `healthy`.
 
 Open http://localhost:3000/login and choose **Demo (owner)**.
 
+The UI starts in English. Switch to Spanish at any time in
+**Profile → Language**.
+
 You should land on the trips dashboard with the seeded trip
 **“Fin de semana en Toronto”** (Dec 4–6, 2026).
 
@@ -38,7 +41,8 @@ Use the trip search:
 - `nightlife`
 
 Results come from the local MongoDB catalogue. No HasData key is used at
-runtime. Select a place and add it to a day.
+runtime. Select a place and add it to a day. Click a result to open its detail
+modal with address, rating, phone, hours, description, links and Google Maps.
 
 ## 4. Test collaboration without email
 
@@ -70,6 +74,11 @@ Open **AI suggestions**:
 - Use **Add** to put a card on a day.
 
 To enable a real provider, see the “LLM providers” section in the root README.
+
+Configure a real provider from **Profile → AI provider**: choose the provider,
+paste the token and optionally set the model and base URL. The token is stored
+in the local agent volume and is never returned to the browser. Environment
+variables remain the fallback defaults.
 
 ## 7. Routes and Uber
 

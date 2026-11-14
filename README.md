@@ -234,7 +234,7 @@ GitHub repository secrets. Pushes to `main` publish `latest` + `sha-*`; tags
 `v*` publish semver tags. Images are multi-arch (`amd64` + `arm64`).
 
 Published images: `marcojr13/triplanner-{web,api,agent}` with tags
-`1.1.0`, `1.1`, `latest` and `sha-e335779`. Run them without building:
+`1.2.0`, `1.2`, `latest` and `sha-6176ac4`. Run them without building:
 
 ```bash
 docker compose -f docker-compose.hub.yml up -d
@@ -244,7 +244,7 @@ The file defaults to `DOCKERHUB_USERNAME=marcojr13` and `IMAGE_TAG=latest`.
 Override them for a fork or a pinned version:
 
 ```bash
-DOCKERHUB_USERNAME=youruser IMAGE_TAG=1.1.0 \
+DOCKERHUB_USERNAME=youruser IMAGE_TAG=1.2.0 \
   docker compose -f docker-compose.hub.yml up -d
 ```
 

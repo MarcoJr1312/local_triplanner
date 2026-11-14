@@ -29,9 +29,9 @@ Path filters keep each workflow scoped to its service files.
   - `marcojr13/triplanner-web`
   - `marcojr13/triplanner-api`
   - `marcojr13/triplanner-agent`
-- Published tags: `latest`, `1.1`, `1.1.0`, `sha-e335779`.
+- Published tags: `latest`, `1.2`, `1.2.0`, `sha-6176ac4`.
 - Architectures: `linux/amd64`, `linux/arm64`.
-- Verification: 8/8 GitHub Actions runs passed on `main` and tag `v1.1.0`;
+- Verification: 8/8 GitHub Actions runs passed on `main` and tag `v1.2.0`;
   the published stack was pulled and passed the smoke test.
 
 ## Docker Hub setup
@@ -77,7 +77,7 @@ The file defaults to `DOCKERHUB_USERNAME=marcojr13` and `IMAGE_TAG=latest`.
 Override them for a fork or a pinned version:
 
 ```bash
-DOCKERHUB_USERNAME=youruser IMAGE_TAG=1.1.0 \
+DOCKERHUB_USERNAME=youruser IMAGE_TAG=1.2.0 \
   docker compose -f docker-compose.hub.yml up -d
 ```
 
@@ -91,7 +91,7 @@ POSTGRES_PORT=5432
 MONGO_PORT=27017
 LLM_PROVIDER=none
 DOCKERHUB_USERNAME=marcojr13
-IMAGE_TAG=1.1.0
+IMAGE_TAG=1.2.0
 ```
 
 The API container runs migrations and the idempotent seed on every start, so a
@@ -104,8 +104,8 @@ fresh volume is ready in one command.
 
 ```bash
 # after the changes are on main
-git tag -a v1.1.0 -m "Triplanner local demo v1.1.0"
-git push origin v1.1.0
+git tag -a v1.2.0 -m "Triplanner local demo v1.2.0"
+git push origin v1.2.0
 ```
 
 The three service workflows publish the version tags; `compose-smoke` verifies
