@@ -49,6 +49,11 @@ $config = Invoke-RestMethod -Uri "$Base/api/agent/config" -Method Get
 if ($null -eq $config.demo) { Fail "agent config shape" }
 Pass "agent provider config (demo=$($config.demo), provider=$($config.provider))"
 
+$llmBody = @{ query = 'query { getLlmSettings { provider model baseUrl hasKey demo } }' } | ConvertTo-Json
+$llm = Invoke-RestMethod -Uri "$Base/api/graphql" -Method Post -Headers $HeadersUser -Body $llmBody
+if ($null -eq $llm.data.getLlmSettings.demo) { Fail "LLM settings shape" }
+Pass "LLM settings (provider=$($llm.data.getLlmSettings.provider), demo=$($llm.data.getLlmSettings.demo))"
+
 $interestsBody = @{ query = 'mutation { setMyInterests(terms: ["museums", "food", "views"]) }' } | ConvertTo-Json
 Invoke-RestMethod -Uri "$Base/api/graphql" -Method Post -Headers $HeadersUser -Body $interestsBody | Out-Null
 Pass "set demo interests"

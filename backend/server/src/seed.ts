@@ -153,8 +153,8 @@ function pickDemoActivities(activities: SeedActivity[]): SeedActivity[] {
 export async function seedDemo(db: AsyncDb, activities: SeedActivity[] = []): Promise<void> {
   await db
     .prepare(
-      `INSERT INTO users (id, email, display_name, color)
-       VALUES ('demo-user', 'demo@triplanner.local', 'Demo', '#6366f1')
+      `INSERT INTO users (id, email, display_name, color, language)
+       VALUES ('demo-user', 'demo@triplanner.local', 'Demo', '#6366f1', 'en')
        ON CONFLICT DO NOTHING`,
     )
     .run();
@@ -163,8 +163,8 @@ export async function seedDemo(db: AsyncDb, activities: SeedActivity[] = []): Pr
   // until the owner invites it.
   await db
     .prepare(
-      `INSERT INTO users (id, email, display_name, color)
-       VALUES ('demo-friend', 'friend@triplanner.local', 'Demo Friend', '#10b981')
+      `INSERT INTO users (id, email, display_name, color, language)
+       VALUES ('demo-friend', 'friend@triplanner.local', 'Demo Friend', '#10b981', 'en')
        ON CONFLICT DO NOTHING`,
     )
     .run();

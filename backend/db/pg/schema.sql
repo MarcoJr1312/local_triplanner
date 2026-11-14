@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS users (
   display_name    text NOT NULL,
   color           text,
   avatar_url      text,
-  language        text NOT NULL DEFAULT 'es',
+  language        text NOT NULL DEFAULT 'en',
   created_at      timestamptz NOT NULL DEFAULT now()
 );
 

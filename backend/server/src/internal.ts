@@ -169,7 +169,7 @@ async function handleTripContext(deps: InternalDeps, req: IncomingMessage, res: 
   ).map((m) => ({ userId: m.user_id, displayName: m.display_name, role: m.role }));
 
   const langRow = await deps.db.prepare('SELECT language FROM users WHERE id = ?').get<{ language: string | null }>(userId);
-  const userLanguage = langRow?.language || 'es';
+  const userLanguage = langRow?.language || 'en';
 
   json(res, 200, {
     userId,

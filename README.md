@@ -5,9 +5,10 @@ day-by-day itinerary, organize activities and budgets, invite collaborators,
 attach tickets with per-file visibility, get AI suggestions, and jump straight
 to Google Maps routes or an Uber deep link.
 
-The product UI is **Spanish by default**, with an **es/en** switch.
+The product UI is **English by default**, with an **es/en** switch in the
+profile settings.
 
-> **Status:** **v1.1.0** — one-command Docker Compose demo plus per-service
+> **Status:** **v1.2.0** - one-command Docker Compose demo plus per-service
 > CI/CD and multi-arch Docker Hub publishing. The cloud dependencies (Firebase,
 > HasData, Resend, AWS) are removed from the runtime; place search reads a local
 > MongoDB catalogue seeded with 186 real Toronto places.
@@ -177,8 +178,15 @@ identity joins the trip. The invite form is prefilled with
 ### LLM providers (Docker demo)
 
 The default `LLM_PROVIDER=none` uses deterministic answers from the local
-catalogue and shows an **AI demo mode** badge. To enable a real provider,
-create a root `.env` from `.env.example` and set:
+catalogue and shows an **AI demo mode** badge. A recruiter can configure a
+provider from the app: open **Profile / Settings** (gear icon) → **AI provider**,
+choose DeepSeek, OpenAI, Anthropic or a local Ollama, and paste the API token.
+The token is stored only in the agent volume (`/app/.data/llm.json`), is never
+returned to the browser, and new AI requests use the saved provider without a
+restart.
+
+Environment variables remain the fallback defaults. An in-app override takes
+precedence. To set the defaults, create a root `.env` from `.env.example`:
 
 ```bash
 cp .env.example .env
@@ -218,7 +226,7 @@ Each service has its own GitHub Actions workflow and test suite:
 |---|---|---|
 | `web.yml` | `frontend-next/lib/*.test.ts` | `triplanner-web` |
 | `api.yml` | `backend/server/test/*.test.ts` | `triplanner-api` |
-| `agent.yml` | `backend/agent-service/tests/test_m2.py` | `triplanner-agent` |
+| `agent.yml` | `backend/agent-service/tests/test_m2.py` + `tests/test_settings.py` | `triplanner-agent` |
 | `compose-smoke.yml` | full Compose + `scripts/smoke.sh` | no push |
 
 Add `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` (Read & Write token) to the
@@ -266,6 +274,7 @@ cd backend/server && bunx tsc --noEmit
 
 # Agent: deterministic tests
 cd backend/agent-service && uv run python tests/test_m2.py
+cd backend/agent-service && uv run python tests/test_settings.py
 
 # Frontend helpers
 cd frontend-next && bun test

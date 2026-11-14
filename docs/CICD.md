@@ -8,7 +8,7 @@ Each service has its own workflow and test command.
 |---|---|---|---|
 | `web.yml` | Next.js frontend | `frontend-next/lib/geolocation.test.ts`, `frontend-next/lib/uberLink.test.ts` (`bun test`) | `triplanner-web` |
 | `api.yml` | Bun GraphQL API | all `backend/server/test/*.test.ts` (Postgres + MongoDB) | `triplanner-api` |
-| `agent.yml` | FastAPI agent | `backend/agent-service/tests/test_m2.py` (Postgres + pgvector) | `triplanner-agent` |
+| `agent.yml` | FastAPI agent | `backend/agent-service/tests/test_m2.py` + `tests/test_settings.py` (Postgres + pgvector) | `triplanner-agent` |
 | `compose-smoke.yml` | Full stack | builds all images, boots Compose, runs `scripts/smoke.sh` | no push |
 
 Triggers:

@@ -18,7 +18,7 @@ RUN uv sync --frozen --no-dev
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONDONTWRITEBYTECODE=1
 
-RUN chown -R app:app /app
+RUN mkdir -p /app/.data && chown -R app:app /app
 USER app
 EXPOSE 4100
 

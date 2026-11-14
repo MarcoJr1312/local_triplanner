@@ -53,6 +53,12 @@ config="$(curl -fsS "$BASE/api/agent/config")"
 echo "$config" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert "demo" in d and "provider" in d'
 pass "agent provider config"
 
+llm="$(curl -fsS -X POST "$BASE/api/graphql" \
+  -H 'x-user-id: demo-user' -H 'Content-Type: application/json' \
+  -d '{"query":"query { getLlmSettings { provider model baseUrl hasKey demo } }"}')"
+echo "$llm" | python3 -c 'import json,sys; d=json.load(sys.stdin)["data"]["getLlmSettings"]; assert "provider" in d and "demo" in d'
+pass "LLM settings"
+
 curl -fsS -X POST "$BASE/api/graphql" \
   -H 'x-user-id: demo-user' -H 'Content-Type: application/json' \
   -d '{"query":"mutation { setMyInterests(terms: [\"museums\", \"food\", \"views\"]) }"}' >/dev/null

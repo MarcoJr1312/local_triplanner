@@ -53,6 +53,9 @@ jobs:
       - name: Test (backend/agent-service/tests/test_m2.py)
         working-directory: backend/agent-service
         run: uv run python tests/test_m2.py
+      - name: Test runtime settings (backend/agent-service/tests/test_settings.py)
+        working-directory: backend/agent-service
+        run: uv run python tests/test_settings.py
 
   publish:
     name: Publish triplanner-agent

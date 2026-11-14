@@ -39,7 +39,7 @@ from tripsuggest.vector_store import (
 )
 from tripsuggest.interests import normalize_terms
 from tripsuggest.plan import parse_plan_block
-from tripsuggest.settings import get_settings
+from tripsuggest.settings import get_settings, update_override
 
 logger = logging.getLogger("tripsuggest")
 
@@ -56,13 +56,13 @@ class ChatMessageIn(BaseModel):
 class SuggestionsRequest(BaseModel):
     tripId: str
     messages: list[ChatMessageIn]
-    locale: str = Field(default="es", pattern="^(es|en)$")
+    locale: str = Field(default="en", pattern="^(es|en)$")
     day: str | None = None
 
 
 class DayPlanRequest(BaseModel):
     tripId: str
-    locale: str = Field(default="es", pattern="^(es|en)$")
+    locale: str = Field(default="en", pattern="^(es|en)$")
 
 
 class AutoSuggestRequest(BaseModel):
@@ -74,6 +74,14 @@ class AutoSuggestRequest(BaseModel):
 class InterestsSyncRequest(BaseModel):
     userId: str
     terms: list[str] = Field(default_factory=list)
+
+
+class LlmConfigRequest(BaseModel):
+    provider: str
+    apiKey: str | None = None
+    model: str | None = None
+    baseUrl: str | None = None
+    clearKey: bool = False
 
 
 class AgentError(Exception):
@@ -268,16 +276,43 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
-@app.get("/api/agent/config")
-def agent_config() -> dict[str, Any]:
-    """Provider status for the AI badge. Public and read-only."""
+def _public_llm_config() -> dict[str, Any]:
     settings = get_settings()
     demo = is_demo_provider()
     return {
         "provider": "none" if demo else settings.llm_provider,
         "model": effective_model_name(),
+        "baseUrl": settings.llm_base_url,
+        "hasKey": bool(settings.llm_api_key) and not demo,
         "demo": demo,
     }
+
+
+@app.get("/api/agent/config")
+def agent_config() -> dict[str, Any]:
+    """Provider status for the AI badge. Public; never returns the key."""
+    return _public_llm_config()
+
+
+@app.post("/api/agent/config")
+def update_agent_config(
+    body: LlmConfigRequest,
+    x_internal_token: str | None = Header(default=None, alias="X-Internal-Token"),
+) -> JSONResponse:
+    """Persist provider settings from the app. Internal-token protected."""
+    if not _internal_token_ok(x_internal_token):
+        return _error(401, "AUTH_INVALID", "token interno inválido")
+    try:
+        update_override(
+            provider=body.provider,
+            api_key=body.apiKey or "",
+            model=body.model or "",
+            base_url=body.baseUrl or "",
+            clear_key=body.clearKey,
+        )
+    except ValueError as exc:
+        return _error(400, "LLM_CONFIG_INVALID", str(exc))
+    return JSONResponse(status_code=200, content=_public_llm_config())
 
 
 @app.post("/api/agent/suggestions")

@@ -34,6 +34,7 @@ import { buildSuggestions } from './pg/recommend.ts';
 import { createInvitation, findInvitationByCode, acceptInvitation } from './pg/invitations.ts';
 import { isEmailMatch, isInviteCodeValid } from './invitations.ts';
 import { decodeAvatarDataUrl } from './pg/profile.ts';
+import { AGENT_BASE_URL, INTERNAL_TOKEN } from './env.ts';
 import {
   addItem as addItemRow,
   computeTripStats,
@@ -329,10 +330,58 @@ async function ensureUser(
 }
 
 async function requireCurrentUser(db: AsyncDb, userId: string): Promise<string> {
-  if (!userId) throw gqlError('AUTH_REQUIRED', 'Necesitas iniciar sesiÃ³n.');
+  if (!userId) throw gqlError('AUTH_REQUIRED', 'Necesitas iniciar sesión.');
   const row = await db.prepare('SELECT 1 AS ok FROM users WHERE id = ?').get(userId);
-  if (!row) throw gqlError('AUTH_REQUIRED', 'Necesitas iniciar sesiÃ³n.');
+  if (!row) throw gqlError('AUTH_REQUIRED', 'Necesitas iniciar sesión.');
   return userId;
+}
+
+interface LlmSettingsGql {
+  provider: string;
+  model: string;
+  baseUrl: string;
+  hasKey: boolean;
+  demo: boolean;
+}
+
+const LLM_DEMO_SETTINGS: LlmSettingsGql = {
+  provider: 'none',
+  model: '',
+  baseUrl: '',
+  hasKey: false,
+  demo: true,
+};
+
+// The agent owns the provider runtime. GET is public; writes are protected by
+// the shared internal token. The API key never travels back to the browser.
+async function agentLlmConfig(
+  body?: Record<string, unknown>,
+): Promise<LlmSettingsGql> {
+  const res = await fetch(`${AGENT_BASE_URL}/api/agent/config`, {
+    method: body ? 'POST' : 'GET',
+    headers: body
+      ? { 'content-type': 'application/json', 'x-internal-token': INTERNAL_TOKEN }
+      : undefined,
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok) {
+    let message = `HTTP ${res.status}`;
+    try {
+      const payload = (await res.json()) as { error?: { message?: string } };
+      if (payload?.error?.message) message = payload.error.message;
+    } catch {
+      // keep the HTTP status as the message
+    }
+    throw new Error(message);
+  }
+  const payload = (await res.json()) as Partial<LlmSettingsGql>;
+  return {
+    provider: typeof payload.provider === 'string' ? payload.provider : 'none',
+    model: typeof payload.model === 'string' ? payload.model : '',
+    baseUrl: typeof payload.baseUrl === 'string' ? payload.baseUrl : '',
+    hasKey: Boolean(payload.hasKey),
+    demo: Boolean(payload.demo),
+  };
 }
 
 async function assertTripMember(db: AsyncDb, tripId: string, userId: string): Promise<void> {
@@ -529,6 +578,14 @@ export const resolvers: {
     getMyInterests: async (_, __, ctx) => {
       const userId = await requireCurrentUser(ctx.db, ctx.currentUserId);
       return listUserInterests(ctx.db, userId);
+    },
+
+    getLlmSettings: async () => {
+      try {
+        return await agentLlmConfig();
+      } catch {
+        return LLM_DEMO_SETTINGS;
+      }
     },
   },
 
@@ -1004,6 +1061,33 @@ export const resolvers: {
       const { terms } = args as Args<{ terms: string[] }>;
       const userId = await requireCurrentUser(ctx.db, ctx.currentUserId);
       return replaceUserInterests(ctx.db, userId, terms, ctx.syncInterests ?? syncInterestsToAgent);
+    },
+
+    updateLlmSettings: async (_, args, ctx) => {
+      const { input } = args as Args<{
+        input: {
+          provider: string;
+          apiKey?: string | null;
+          model?: string | null;
+          baseUrl?: string | null;
+          clearKey?: boolean | null;
+        };
+      }>;
+      await requireCurrentUser(ctx.db, ctx.currentUserId);
+      try {
+        return await agentLlmConfig({
+          provider: input.provider,
+          apiKey: input.apiKey ?? '',
+          model: input.model ?? '',
+          baseUrl: input.baseUrl ?? '',
+          clearKey: Boolean(input.clearKey),
+        });
+      } catch (e) {
+        throw gqlError(
+          'LLM_SETTINGS_FAILED',
+          e instanceof Error ? e.message : 'No se pudo guardar la configuración del proveedor.',
+        );
+      }
     },
 
     favoriteLocation: async (_, args, ctx) => {

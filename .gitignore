@@ -16,6 +16,7 @@ build/
 
 # Uploads locales (avatares)
 backend/server/uploads/
+backend/agent-service/.data/
 
 # OS
 .DS_Store

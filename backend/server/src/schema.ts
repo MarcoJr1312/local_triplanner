@@ -23,6 +23,7 @@ extend type Query {
   getTripByCode(code: String!): TripPreview
   suggestionChats(tripId: ID!, day: String): [SuggestionChat!]!
   getMyInterests: [String!]!
+  getLlmSettings: LlmSettings!
 }
 
 type TripPreview {
@@ -44,6 +45,7 @@ extend type Mutation {
   saveSuggestionChat(tripId: ID!, day: String!, messages: [ChatMessageInput!]!): SuggestionChat!
   setItemReminder(itemId: ID!, enabled: Boolean!): TripItem!
   setMyInterests(terms: [String!]!): [String!]!
+  updateLlmSettings(input: UpdateLlmSettingsInput!): LlmSettings!
 }
 
 extend input CreateTripInput {
@@ -151,6 +153,22 @@ type InviteResult {
   email: String!
   code: String!
   joinUrl: String!
+}
+
+type LlmSettings {
+  provider: String!
+  model: String!
+  baseUrl: String!
+  hasKey: Boolean!
+  demo: Boolean!
+}
+
+input UpdateLlmSettingsInput {
+  provider: String!
+  apiKey: String
+  model: String
+  baseUrl: String
+  clearKey: Boolean
 }
 
 type Location {

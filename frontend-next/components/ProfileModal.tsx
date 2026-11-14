@@ -3,10 +3,11 @@
 // Modal de edicion de perfil: nombre + foto (subir/cambiar/quitar).
 
 import { useEffect, useRef, useState } from 'react';
-import { Camera, ChevronDown, LoaderCircle, Plus, Trash2 } from 'lucide-react';
+import { Bot, Camera, ChevronDown, LoaderCircle, Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, localizeApiError } from '@/lib/api';
 import { useI18n, type Locale } from '@/lib/i18n';
+import type { LlmSettings } from '@/lib/types';
 import { useAuth } from '@/hooks/useAuth';
 import Avatar from './Avatar';
 import Modal from './Modal';
@@ -40,6 +41,14 @@ export default function ProfileModal({ open, onClose }: ProfileModalProps) {
   const [interests, setInterests] = useState<string[] | null>(null);
   const [interestsOpen, setInterestsOpen] = useState(false);
   const [editingInterests, setEditingInterests] = useState(false);
+  const [llm, setLlm] = useState<LlmSettings | null>(null);
+  const [llmProvider, setLlmProvider] = useState('none');
+  const [llmKey, setLlmKey] = useState('');
+  const [llmModel, setLlmModel] = useState('');
+  const [llmBaseUrl, setLlmBaseUrl] = useState('');
+  const [llmOpen, setLlmOpen] = useState(true);
+  const [llmSaving, setLlmSaving] = useState(false);
+  const [llmError, setLlmError] = useState<string | null>(null);
 
   // Cargar intereses cada vez que se abre el modal (el picker se monta cuando
   // ya hay datos, así su estado inicial siempre está prellenado).
@@ -60,6 +69,32 @@ export default function ProfileModal({ open, onClose }: ProfileModalProps) {
     };
   }, [open]);
 
+  // Cargar el estado del proveedor LLM. La clave nunca vuelve del servidor.
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    setLlm(null);
+    setLlmKey('');
+    setLlmError(null);
+    api
+      .getLlmSettings()
+      .then((settings) => {
+        if (cancelled) return;
+        setLlm(settings);
+        setLlmProvider(settings.provider);
+        setLlmModel(settings.model);
+        setLlmBaseUrl(settings.baseUrl);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setLlm({ provider: 'none', model: '', baseUrl: '', hasKey: false, demo: true });
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+
   // Sincronizar estado al abrir.
   const [wasOpen, setWasOpen] = useState(false);
   if (open && !wasOpen) {
@@ -71,6 +106,12 @@ export default function ProfileModal({ open, onClose }: ProfileModalProps) {
     setRemoveAvatar(false);
     setError(null);
     setInterests(null);
+    setEditingInterests(false);
+    setLlmProvider('none');
+    setLlmKey('');
+    setLlmModel('');
+    setLlmBaseUrl('');
+    setLlmError(null);
   } else if (!open && wasOpen) {
     setWasOpen(false);
   }
@@ -135,6 +176,37 @@ export default function ProfileModal({ open, onClose }: ProfileModalProps) {
     setEditingInterests(false);
   };
 
+  const llmNeedsKey = ['deepseek', 'openai', 'anthropic'].includes(llmProvider);
+  const llmHasSavedKey = Boolean(llm?.hasKey && llm.provider === llmProvider);
+  const llmCanSave = !llmSaving && (!llmNeedsKey || llmKey.trim().length > 0 || llmHasSavedKey);
+
+  const handleSaveLlm = async () => {
+    setLlmError(null);
+    if (llmNeedsKey && !llmKey.trim() && !llmHasSavedKey) {
+      setLlmError(t('settings.llm.keyRequired'));
+      return;
+    }
+    setLlmSaving(true);
+    try {
+      const saved = await api.updateLlmSettings({
+        provider: llmProvider,
+        apiKey: llmKey.trim() || null,
+        model: llmModel.trim(),
+        baseUrl: llmBaseUrl.trim(),
+      });
+      setLlm(saved);
+      setLlmProvider(saved.provider);
+      setLlmModel(saved.model);
+      setLlmBaseUrl(saved.baseUrl);
+      setLlmKey('');
+      toast.success(t('settings.llm.saved'));
+    } catch (err) {
+      setLlmError(localizeApiError(err, t));
+    } finally {
+      setLlmSaving(false);
+    }
+  };
+
   const displayUser = { displayName: name || '?', avatarUrl: previewUrl, color: user?.color ?? null };
 
   return (
@@ -142,7 +214,7 @@ export default function ProfileModal({ open, onClose }: ProfileModalProps) {
       open={open}
       onClose={onClose}
       title={t('profile.title')}
-      size="sm"
+      size="md"
       footer={
         <div className="flex justify-end gap-2">
           <button
@@ -277,12 +349,155 @@ export default function ProfileModal({ open, onClose }: ProfileModalProps) {
                   {interests.map((term) => (
                     <span
                       key={term}
-                      className="rounded-full border border-border bg-muted/60 px-3 py-1 text-sm text-foreground"
+                      className="rounded-full border border-brand-500/25 bg-brand-600/10 px-3 py-1 text-sm font-medium text-brand-700 dark:text-brand-300"
                     >
                       {term}
                     </span>
                   ))}
                 </div>
+              )}
+            </div>
+          )}
+        </section>
+
+        <section className="border-t border-border pt-4">
+          <button
+            type="button"
+            onClick={() => setLlmOpen((v) => !v)}
+            aria-expanded={llmOpen}
+            aria-controls="profile-llm-body"
+            className="flex w-full items-center gap-2 py-1 text-left"
+          >
+            <Bot className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <h3 className="text-sm font-semibold tracking-tight text-foreground">
+              {t('settings.llm.section')}
+            </h3>
+            {llm && (
+              <span
+                className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                  llm.demo
+                    ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300'
+                    : 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+                }`}
+              >
+                {llm.demo
+                  ? t('settings.llm.demoBadge')
+                  : t('settings.llm.activeBadge', { provider: llm.provider })}
+              </span>
+            )}
+            <ChevronDown
+              className={`ml-auto h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 ${llmOpen ? 'rotate-180' : ''}`}
+            />
+          </button>
+
+          {llmOpen && (
+            <div id="profile-llm-body" className="mt-3 space-y-3">
+              <p className="text-xs text-muted-foreground">{t('settings.llm.hint')}</p>
+              {llm === null ? (
+                <div className="flex items-center justify-center py-4">
+                  <LoaderCircle className="h-5 w-5 animate-spin text-muted-foreground" />
+                </div>
+              ) : (
+                <>
+                  <div className="field">
+                    <label htmlFor="llm-provider">{t('settings.llm.provider')}</label>
+                    <Select
+                      value={llmProvider}
+                      onValueChange={(value) => {
+                        if (value !== llmProvider) {
+                          setLlmKey('');
+                          setLlmModel('');
+                          setLlmBaseUrl('');
+                        }
+                        setLlmProvider(value);
+                        setLlmError(null);
+                      }}
+                    >
+                      <SelectTrigger id="llm-provider" className="input">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">{t('settings.llm.providerNone')}</SelectItem>
+                        <SelectItem value="deepseek">DeepSeek</SelectItem>
+                        <SelectItem value="openai">OpenAI</SelectItem>
+                        <SelectItem value="anthropic">Anthropic</SelectItem>
+                        <SelectItem value="ollama">{t('settings.llm.providerOllama')}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {llmNeedsKey && (
+                    <div className="field">
+                      <label htmlFor="llm-key">{t('settings.llm.key')}</label>
+                      <input
+                        id="llm-key"
+                        type="password"
+                        value={llmKey}
+                        onChange={(e) => setLlmKey(e.target.value)}
+                        placeholder={
+                          llmHasSavedKey
+                            ? t('settings.llm.keySavedPlaceholder')
+                            : t('settings.llm.keyPlaceholder')
+                        }
+                        autoComplete="off"
+                        spellCheck={false}
+                        className="input"
+                      />
+                      <p className="text-xs text-muted">
+                        {llmHasSavedKey ? t('settings.llm.keySaved') : t('settings.llm.keyHint')}
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div className="field">
+                      <label htmlFor="llm-model">{t('settings.llm.model')}</label>
+                      <input
+                        id="llm-model"
+                        value={llmModel}
+                        onChange={(e) => setLlmModel(e.target.value)}
+                        placeholder={t('settings.llm.modelPlaceholder')}
+                        className="input"
+                      />
+                    </div>
+                    <div className="field">
+                      <label htmlFor="llm-base-url">{t('settings.llm.baseUrl')}</label>
+                      <input
+                        id="llm-base-url"
+                        value={llmBaseUrl}
+                        onChange={(e) => setLlmBaseUrl(e.target.value)}
+                        placeholder={t('settings.llm.baseUrlPlaceholder')}
+                        className="input"
+                      />
+                    </div>
+                  </div>
+
+                  {llmProvider === 'ollama' && (
+                    <p className="text-xs text-muted-foreground">{t('settings.llm.ollamaHint')}</p>
+                  )}
+                  {llmError && (
+                    <p className="text-sm text-rose-600 dark:text-rose-400">{llmError}</p>
+                  )}
+
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-xs text-muted-foreground">
+                      {llm.demo ? t('settings.llm.demoStatus') : t('settings.llm.activeStatus')}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleSaveLlm}
+                      disabled={!llmCanSave}
+                      className="btn btn-primary btn-sm"
+                    >
+                      {llmSaving ? (
+                        <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Bot className="h-3.5 w-3.5" />
+                      )}
+                      {llmSaving ? t('common.saving') : t('settings.llm.save')}
+                    </button>
+                  </div>
+                </>
               )}
             </div>
           )}

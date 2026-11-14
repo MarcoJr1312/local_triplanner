@@ -70,6 +70,8 @@ services:
       LLM_MODEL: ${LLM_MODEL:-}
       LLM_BASE_URL: ${LLM_BASE_URL:-}
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+    volumes:
+      - agentdata:/app/.data
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
@@ -98,3 +100,4 @@ volumes:
   pgdata:
   mongodata:
   uploads:
+  agentdata:

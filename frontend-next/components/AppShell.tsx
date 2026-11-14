@@ -18,6 +18,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [showProfile, setShowProfile] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
 
   const handleLogout = async () => {
     await signOut();
@@ -79,7 +80,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
           <button
             type="button"
             className="icon-btn"
-            onClick={() => setShowLogoutConfirm(true)}
+            onClick={() => setShowNotifications(true)}
             aria-label={t('premium.nav.notifications')}
           >
             <Bell className="icon-sm" />
@@ -129,6 +130,23 @@ export default function AppShell({ children }: { children: ReactNode }) {
       </div>
 
       <ProfileModal open={showProfile} onClose={() => setShowProfile(false)} />
+      <Modal
+        open={showNotifications}
+        onClose={() => setShowNotifications(false)}
+        title={t('notifications.title')}
+        size="sm"
+      >
+        <p className="text-sm text-muted-foreground">{t('notifications.empty')}</p>
+        <div className="mt-5 flex justify-end">
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            onClick={() => setShowNotifications(false)}
+          >
+            {t('common.close')}
+          </button>
+        </div>
+      </Modal>
       <Modal
         open={showLogoutConfirm}
         onClose={() => setShowLogoutConfirm(false)}

@@ -35,13 +35,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
       setUser(stored);
-      setLocale(stored.language ?? 'es');
+      setLocale(stored.language ?? 'en');
       try {
         const fresh = await api.getMyProfile();
         if (alive && fresh) {
           await api.setSessionProfile(fresh);
           setUser(fresh);
-          setLocale(fresh.language ?? 'es');
+          setLocale(fresh.language ?? 'en');
         }
       } catch {
         // Keep the stored profile; the login screen remains reachable.
@@ -58,7 +58,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async (userId: string = DEMO_USER_ID) => {
       const profile = await api.loginDemo(userId);
       setUser(profile);
-      setLocale(profile.language ?? 'es');
+      setLocale(profile.language ?? 'en');
     },
     [setLocale],
   );
@@ -73,7 +73,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!fresh) return false;
     await api.setSessionProfile(fresh);
     setUser(fresh);
-    setLocale(fresh.language ?? 'es');
+    setLocale(fresh.language ?? 'en');
     return true;
   }, [setLocale]);
 
@@ -81,7 +81,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async (profile: UserProfile) => {
       await api.setSessionProfile(profile);
       setUser(profile);
-      setLocale(profile.language ?? 'es');
+      setLocale(profile.language ?? 'en');
     },
     [setLocale],
   );

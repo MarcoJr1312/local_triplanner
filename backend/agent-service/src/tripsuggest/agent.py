@@ -99,7 +99,7 @@ def build_system_prompt(
     locale: str,
     interests: list[str] | None = None,
 ) -> str:
-    lang = locale if locale in ("es", "en") else "es"
+    lang = locale if locale in ("es", "en") else "en"
     interests_block = ""
     if interests:
         interests_block = (
@@ -135,7 +135,7 @@ def build_system_prompt(
 
 
 def build_day_plan_prompt(context: dict[str, Any], vector_places: list[dict[str, Any]], locale: str) -> str:
-    lang = locale if locale in ("es", "en") else "es"
+    lang = locale if locale in ("es", "en") else "en"
     return (
         _common_header(context, vector_places)
         + "TAREA:\n"
@@ -229,7 +229,7 @@ def _demo_suggestions_answer(
     locale: str,
     interests: list[str] | None,
 ) -> str:
-    lang = locale if locale in ("es", "en") else "es"
+    lang = locale if locale in ("es", "en") else "en"
     destination = (context.get("trip") or {}).get("destinationName") or (
         "el destino" if lang == "es" else "the destination"
     )
@@ -283,7 +283,7 @@ def _demo_day_plan_answer(
     vector_places: list[dict[str, Any]],
     locale: str,
 ) -> str:
-    lang = locale if locale in ("es", "en") else "es"
+    lang = locale if locale in ("es", "en") else "en"
     destination = (context.get("trip") or {}).get("destinationName") or (
         "el destino" if lang == "es" else "the destination"
     )

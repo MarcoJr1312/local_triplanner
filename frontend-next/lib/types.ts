@@ -313,6 +313,8 @@ export interface TriplannerApi {
   getSuggestionChats(tripId: ID, day?: string): Promise<SuggestionChat[]>;
   getMyInterests(): Promise<string[]>;
   setMyInterests(terms: string[]): Promise<string[]>;
+  getLlmSettings(): Promise<LlmSettings>;
+  updateLlmSettings(input: UpdateLlmSettingsInput): Promise<LlmSettings>;
   autoSuggest(tripId: ID, offset?: number, limit?: number): Promise<AutoSuggestResult>;
   touchPresence(input: PresenceInput): Promise<Presence>;
 
@@ -334,6 +336,22 @@ export interface UpdateMyProfileInput {
   avatarDataUrl?: string | null;
   avatarRemove?: boolean | null;
   language?: 'es' | 'en' | null;
+}
+
+export interface LlmSettings {
+  provider: string;
+  model: string;
+  baseUrl: string;
+  hasKey: boolean;
+  demo: boolean;
+}
+
+export interface UpdateLlmSettingsInput {
+  provider: string;
+  apiKey?: string | null;
+  model?: string | null;
+  baseUrl?: string | null;
+  clearKey?: boolean | null;
 }
 
 export interface AddItemAttachmentInput {

@@ -19,21 +19,22 @@ export interface I18nContextValue {
 // como parámetro a helpers fuera de componentes.
 export type Translate = I18nContextValue['t'];
 
-const STORAGE_KEY = 'triplanner.locale';
-
 const DICTIONARIES: Record<Locale, typeof es> = { es, en };
 
 export function isLocale(value: unknown): value is Locale {
   return value === 'es' || value === 'en';
 }
 
+const STORAGE_KEY = 'triplanner.locale.v2';
+
+// The demo defaults to English; Spanish remains available in settings.
 function readStoredLocale(): Locale {
-  if (typeof window === 'undefined') return 'es';
+  if (typeof window === 'undefined') return 'en';
   try {
     const stored = window.localStorage.getItem(STORAGE_KEY);
-    return isLocale(stored) ? stored : 'es';
+    return isLocale(stored) ? stored : 'en';
   } catch {
-    return 'es';
+    return 'en';
   }
 }
 
@@ -47,11 +48,11 @@ function interpolate(template: string, params?: Record<string, string | number>)
 }
 
 function createTranslator(locale: Locale) {
-  const dictionary = DICTIONARIES[locale] ?? es;
+  const dictionary = DICTIONARIES[locale] ?? en;
   return <K extends TranslationKey>(
     key: K,
     params?: Record<string, string | number>
-  ): string => interpolate(dictionary[key] ?? es[key], params);
+  ): string => interpolate(dictionary[key] ?? en[key], params);
 }
 
 const I18nContext = createContext<I18nContextValue | null>(null);

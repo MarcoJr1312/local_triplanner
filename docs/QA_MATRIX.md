@@ -9,8 +9,12 @@
 | Frontend typecheck | `cd frontend-next && bunx tsc --noEmit` | pass |
 | Frontend tests | `cd frontend-next && bun test` | 16/16 |
 | Agent tests | `cd backend/agent-service && uv run python tests/test_m2.py` | 11/11 |
-| Compose smoke (PowerShell) | `powershell -File scripts/smoke.ps1` | pass |
-| Compose smoke (bash) | `bash scripts/smoke.sh` | pass |
+| Agent runtime settings tests | `cd backend/agent-service && uv run python tests/test_settings.py` | 6/6 |
+| Compose smoke (PowerShell) | `powershell -File scripts/smoke.ps1` | pass (includes `getLlmSettings`) |
+| Compose smoke (bash) | `bash scripts/smoke.sh` | syntax pass; CI run on v1.2.0 |
+| In-app LLM settings | save Ollama, restart agent, public config, restore demo | pass |
+| Search detail data | `searchLocations` returns description, address, rating, phone, website and image | pass |
+| Default language | demo profiles `language=en`; i18n storage default `en` | pass |
 | Restart persistence | `docker compose down && docker compose up -d` | pass |
 | Clean reset | `docker compose down -v && docker compose up -d` | pass |
 | Clean clone, Windows 11 + Docker Desktop | clone → `docker compose up -d --build` → smoke | pass, 63.4s warm build+start |

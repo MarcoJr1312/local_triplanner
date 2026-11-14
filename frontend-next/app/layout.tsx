@@ -18,7 +18,7 @@ const themeScript = `(function(){try{var t=localStorage.getItem('theme');if(!t||
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="es" translate="no" suppressHydrationWarning>
+    <html lang="en" translate="no" suppressHydrationWarning>
       <head>
         {/* Evita que el auto-traductor del navegador reescriba el DOM y rompa la hidratacion */}
         <meta name="google" content="notranslate" />

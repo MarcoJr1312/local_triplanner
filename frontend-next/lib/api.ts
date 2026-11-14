@@ -22,6 +22,8 @@ import type {
   Attachment,
   SuggestionChat,
   AutoSuggestResult,
+  LlmSettings,
+  UpdateLlmSettingsInput,
 } from './types';
 import type { TriplannerApi } from './types';
 import { es } from './i18n/es';
@@ -378,6 +380,9 @@ const REQUEST_SUGGESTIONS = `mutation($tripId: ID!, $day: AWSDate!) { requestSug
 const SUGGESTION_CHATS = `query($tripId: ID!, $day: String) { suggestionChats(tripId: $tripId, day: $day) { id tripId userId day messages { role content } } }`;
 const GET_MY_INTERESTS = `query { getMyInterests }`;
 const SET_MY_INTERESTS = `mutation($terms: [String!]!) { setMyInterests(terms: $terms) }`;
+const LLM_SETTINGS_FIELDS = `provider model baseUrl hasKey demo`;
+const GET_LLM_SETTINGS = `query { getLlmSettings { ${LLM_SETTINGS_FIELDS} } }`;
+const UPDATE_LLM_SETTINGS = `mutation($input: UpdateLlmSettingsInput!) { updateLlmSettings(input: $input) { ${LLM_SETTINGS_FIELDS} } }`;
 
 // Endpoint determinista del agente (sin LLM): puntúa los lugares del destino
 // contra los intereses del usuario. Va por el proxy /api/agent/* igual que el
@@ -441,6 +446,7 @@ export const api: TriplannerApi = {
       userId,
       email: identity.email,
       displayName: identity.displayName,
+      language: 'en',
     };
     let profile: UserProfile | null = null;
     try {
@@ -701,6 +707,16 @@ export const api: TriplannerApi = {
   async setMyInterests(terms: string[]): Promise<string[]> {
     const data = await gql<{ setMyInterests: string[] }>(SET_MY_INTERESTS, { terms });
     return data.setMyInterests;
+  },
+
+  async getLlmSettings(): Promise<LlmSettings> {
+    const data = await gql<{ getLlmSettings: LlmSettings }>(GET_LLM_SETTINGS);
+    return data.getLlmSettings;
+  },
+
+  async updateLlmSettings(input: UpdateLlmSettingsInput): Promise<LlmSettings> {
+    const data = await gql<{ updateLlmSettings: LlmSettings }>(UPDATE_LLM_SETTINGS, { input });
+    return data.updateLlmSettings;
   },
 
   async autoSuggest(tripId: string, offset = 0, limit = 10): Promise<AutoSuggestResult> {

@@ -46,6 +46,6 @@ export function toProfile(row: UserRow): Profile {
     displayName: row.display_name,
     color: row.color,
     avatarUrl: row.avatar_url ?? null,
-    language: row.language ?? 'es',
+    language: row.language ?? 'en',
   };
 }
