@@ -108,6 +108,16 @@ export async function seedDemo(db: AsyncDb): Promise<void> {
     )
     .run();
 
+  // Second identity for invite/collaboration flows. It is not a trip member
+  // until the owner invites it.
+  await db
+    .prepare(
+      `INSERT INTO users (id, email, display_name, color)
+       VALUES ('demo-friend', 'friend@triplanner.local', 'Demo Friend', '#10b981')
+       ON CONFLICT DO NOTHING`,
+    )
+    .run();
+
   await db
     .prepare(
       `INSERT INTO trips (id, name, destination_id, destination_name, start_date, end_date, total_budget, owner_id, invite_code)

@@ -14,9 +14,6 @@ export interface UserRow {
   color: string | null;
   avatar_url: string | null;
   language: string;
-  firebase_uid: string | null;
-  email_verified: number;
-  welcome_sent_at: string | null;
   created_at: string;
 }
 

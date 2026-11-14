@@ -7,21 +7,9 @@ import type { LocationCatalogue } from './catalogue/types.ts';
 import type { Storage } from './storage.ts';
 import type { AsyncDb } from './pg/db.ts';
 import { toProfile } from './pg/auth.ts';
-import { upsertUserByEmail, markWelcomeSent } from './pg/users.ts';
 import { listPresence, touchPresence } from './presence.ts';
-import { sendInviteEmail, sendWelcomeEmail, sendVerificationEmail, buildJoinUrl } from './email.ts';
+import { sendInviteEmail, buildJoinUrl } from './email.ts';
 import { updateMyProfile, isValidLanguage } from './pg/profile.ts';
-import { verifyFirebaseIdToken, AuthTokenError, type TokenVerifier } from './auth/verify.ts';
-import { generateVerificationLink, OobError, type OobLinkResult } from './auth/oob.ts';
-import { setEmailVerified, isUserNotFoundError } from './auth/admin.ts';
-import { getServiceAccountPrivateKey } from './auth/service-account.ts';
-import {
-  verifyVerificationToken,
-  consumeVerificationJti,
-  VerificationTokenError,
-  type VerifiedVerificationToken,
-} from './auth/verify-token.ts';
-import { tryReserveVerification } from './auth/rate-limit.ts';
 import {
   addAttachment,
   removeAttachment,
@@ -87,11 +75,6 @@ export interface Ctx {
   currentUserId: string;
   hasdata: HasDataClient | null;
   pubsub: PubSub;
-  verifyToken?: TokenVerifier;
-  sendWelcome?: (email: string, name: string) => Promise<unknown>;
-  sendVerification?: (email: string, link: string, name?: string) => Promise<unknown>;
-  generateVerification?: (idToken: string) => Promise<OobLinkResult>;
-  confirmVerification?: (uid: string) => Promise<unknown>;
   syncInterests?: InterestsSync;
 }
 
@@ -1082,118 +1065,6 @@ export const resolvers: {
       return upsertSuggestionChat(ctx.db, { tripId, userId: ctx.currentUserId, day, messages });
     },
 
-    authLogin: async (_, args, ctx) => {
-      const { idToken } = args as Args<{ idToken: string }>;
-      const verify = ctx.verifyToken ?? verifyFirebaseIdToken;
-      let claims;
-      try {
-        claims = await verify(idToken);
-      } catch (e) {
-        if (e instanceof AuthTokenError) throw gqlError('AUTH_TOKEN_INVALID', e.message);
-        throw e;
-      }
-      const provider = claims.firebase?.sign_in_provider;
-      if (provider !== 'google.com' && !claims.email_verified) {
-        throw gqlError('AUTH_EMAIL_NOT_VERIFIED', 'Verifica tu email para iniciar sesiÃ³n.');
-      }
-      const { user } = await upsertUserByEmail(ctx.db, claims);
-
-      let welcomeSent = false;
-      if (claims.email_verified && !user.welcome_sent_at) {
-        const send = ctx.sendWelcome ?? sendWelcomeEmail;
-        try {
-          await send(user.email, user.display_name);
-          await markWelcomeSent(ctx.db, user.id);
-          welcomeSent = true;
-        } catch (e) {
-          console.error('[auth] email de bienvenida no enviado:', e instanceof Error ? e.message : e);
-        }
-      }
-      const fresh = await ctx.db.prepare('SELECT * FROM users WHERE id = ?').get<UserRow>(user.id);
-      return { user: toProfile(fresh as UserRow), welcomeSent };
-    },
-
-    authSendVerification: async (_, args, ctx) => {
-      const { idToken } = args as Args<{ idToken: string }>;
-      const verify = ctx.verifyToken ?? verifyFirebaseIdToken;
-      let claims;
-      try {
-        claims = await verify(idToken);
-      } catch (e) {
-        if (e instanceof AuthTokenError) throw gqlError('AUTH_TOKEN_INVALID', e.message);
-        throw e;
-      }
-      if (!tryReserveVerification(claims.uid)) {
-        throw gqlError('VERIFICATION_RATE_LIMITED', 'Espera un minuto antes de pedir otro email de verificaciÃ³n.');
-      }
-      const generate = ctx.generateVerification ?? generateVerificationLink;
-      const send = ctx.sendVerification ?? sendVerificationEmail;
-      try {
-        const oob = await generate(idToken);
-        await send(oob.email || claims.email, oob.link, claims.name?.trim() || undefined);
-      } catch (e) {
-        if (e instanceof OobError) throw gqlError(e.code, e.message);
-        throw gqlError('VERIFICATION_SEND_FAILED', e instanceof Error ? e.message : 'No se pudo enviar el email.');
-      }
-      return true;
-    },
-
-    authConfirmEmail: async (_, args, ctx) => {
-      const { token } = args as Args<{ token: string }>;
-      if (!token) throw gqlError('AUTH_TOKEN_INVALID', 'Token de verificaciÃ³n no vÃ¡lido.');
-
-      let payload: VerifiedVerificationToken;
-      try {
-        payload = await verifyVerificationToken(token, getServiceAccountPrivateKey());
-      } catch (e) {
-        throw gqlError('AUTH_TOKEN_INVALID', e instanceof Error ? e.message : 'Token de verificaciÃ³n invÃ¡lido.');
-      }
-
-      let jtiStatus: 'fresh' | 'replay' = 'fresh';
-      try {
-        jtiStatus = consumeVerificationJti(payload.jti, payload.uid);
-      } catch (e) {
-        if (e instanceof VerificationTokenError && e.code === 'VERIFICATION_TOKEN_USED') {
-          throw gqlError('VERIFICATION_TOKEN_USED', e.message);
-        }
-        throw gqlError('VERIFICATION_TOKEN_USED', 'El enlace de verificaciÃ³n ya fue usado.');
-      }
-
-      if (jtiStatus === 'fresh') {
-        const confirm = ctx.confirmVerification ?? setEmailVerified;
-        try {
-          await confirm(payload.uid);
-        } catch (e) {
-          if (isUserNotFoundError(e)) {
-            throw gqlError('AUTH_TOKEN_INVALID', 'La cuenta no existe o el enlace no es vÃ¡lido.');
-          }
-          throw gqlError(
-            'VERIFICATION_CONFIRM_FAILED',
-            e instanceof Error ? e.message : 'No se pudo confirmar el email.',
-          );
-        }
-      }
-
-      const { user } = await upsertUserByEmail(ctx.db, {
-        uid: payload.uid,
-        email: payload.email,
-        email_verified: true,
-      });
-
-      let welcomeSent = false;
-      if (!user.welcome_sent_at) {
-        const send = ctx.sendWelcome ?? sendWelcomeEmail;
-        try {
-          await send(user.email, user.display_name);
-          await markWelcomeSent(ctx.db, user.id);
-          welcomeSent = true;
-        } catch (e) {
-          console.error('[auth] email de bienvenida no enviado:', e instanceof Error ? e.message : e);
-        }
-      }
-      const fresh = await ctx.db.prepare('SELECT * FROM users WHERE id = ?').get<UserRow>(user.id);
-      return { user: toProfile(fresh as UserRow), welcomeSent };
-    },
   },
 
   Subscription: {

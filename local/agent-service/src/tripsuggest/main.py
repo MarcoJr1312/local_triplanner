@@ -2,7 +2,7 @@
 
 Exposes the real suggestions endpoint plus a health check. The endpoint:
 
-1. Verifies the Firebase Bearer token (``Authorization`` header).
+1. Resolves the demo identity from ``X-User-Id``.
 2. Loads trip context from the backend (membership is enforced server-side).
 3. Indexes/refreshes the destination's pgvector index from the places cache
    and injects the top-k matches of the user's latest query into the prompt.
@@ -24,7 +24,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from tripsuggest.agent import run_agent, run_day_plan_agent
-from tripsuggest.auth import TokenVerificationError, verify_firebase_token
+from tripsuggest.auth import resolve_demo_user
 from tripsuggest.auto_suggest import NoInterestsError, auto_suggest
 from tripsuggest.backend import BackendClient, BackendError
 from tripsuggest.vector_store import (
@@ -83,39 +83,9 @@ def _error(status: int, code: str, message: str) -> JSONResponse:
     return JSONResponse(status_code=status, content={"error": {"code": code, "message": message}})
 
 
-def _bearer_token(authorization: str | None) -> str:
-    if authorization and authorization.startswith("Bearer "):
-        return authorization[len("Bearer ") :].strip()
-    return ""
-
-
-def _authenticate(
-    authorization: str | None,
-    x_user_id: str | None,
-) -> tuple[str, str | None] | JSONResponse:
-    """Resolve the caller identity (Firebase token or demo-mode header).
-
-    Shared by suggestions and day-plan. Returns ``(user_id, user_email)`` on
-    success or an error response otherwise.
-    """
-    settings = get_settings()
-    user_id: str | None = None
-    user_email: str | None = None
-    try:
-        claims = verify_firebase_token(_bearer_token(authorization))
-        user_id = claims["uid"]
-        user_email = claims.get("email") or None
-    except TokenVerificationError:
-        # Modo demo (igual que el backend): sin token Firebase válido, se acepta
-        # la identidad del header X-User-Id (el gate real es AGENT_DEMO_MODE;
-        # en producción se desactiva por env).
-        if settings.demo_mode and x_user_id:
-            user_id = x_user_id
-        else:
-            return _error(401, "AUTH_INVALID", "token inválido")
-    if not user_id:
-        return _error(401, "AUTH_INVALID", "token inválido")
-    return user_id, user_email
+def _authenticate(x_user_id: str | None) -> tuple[str, str | None]:
+    """Resolve the caller identity from the demo ``X-User-Id`` header."""
+    return resolve_demo_user(x_user_id), None
 
 
 def _last_user_query(messages: list[ChatMessageIn]) -> str:
@@ -300,10 +270,9 @@ def health() -> dict[str, str]:
 @app.post("/api/agent/suggestions")
 async def suggestions(
     body: SuggestionsRequest,
-    authorization: str | None = Header(default=None),
     x_user_id: str | None = Header(default=None, alias="X-User-Id"),
 ) -> JSONResponse:
-    identity = _authenticate(authorization, x_user_id)
+    identity = _authenticate(x_user_id)
     if isinstance(identity, JSONResponse):
         return identity
     user_id, user_email = identity
@@ -335,10 +304,9 @@ async def suggestions(
 @app.post("/api/agent/auto-suggest")
 async def auto_suggest_endpoint(
     body: AutoSuggestRequest,
-    authorization: str | None = Header(default=None),
     x_user_id: str | None = Header(default=None, alias="X-User-Id"),
 ) -> JSONResponse:
-    identity = _authenticate(authorization, x_user_id)
+    identity = _authenticate(x_user_id)
     if isinstance(identity, JSONResponse):
         return identity
     user_id, user_email = identity
@@ -398,10 +366,9 @@ async def interests_sync(
 @app.post("/api/agent/day-plan")
 async def day_plan(
     body: DayPlanRequest,
-    authorization: str | None = Header(default=None),
     x_user_id: str | None = Header(default=None, alias="X-User-Id"),
 ) -> JSONResponse:
-    identity = _authenticate(authorization, x_user_id)
+    identity = _authenticate(x_user_id)
     if isinstance(identity, JSONResponse):
         return identity
     user_id, user_email = identity

@@ -1,49 +1,42 @@
-// Postgres port of src/auth.ts: demo user bootstrap and request identity.
-// Kept alongside the SQLite version until the adapter is flipped.
+// Demo authentication for the local runner.
+// No Firebase: the request identity comes from `x-user-id`, defaulting to the
+// seeded demo user. Two identities support collaboration/invite flows.
 
 import type { Profile, UserRow } from '../schema-types.ts';
-import { verifyFirebaseIdToken, type FirebaseClaims } from '../auth/verify.ts';
 import type { AsyncDb } from './db.ts';
-import { upsertUserByEmail } from './users.ts';
 
 export const DEMO_USER_ID = 'demo-user';
+export const DEMO_FRIEND_ID = 'demo-friend';
 
-export type TokenVerifier = (idToken: string) => Promise<FirebaseClaims>;
+const DEMO_USERS = [
+  { id: DEMO_USER_ID, email: 'demo@triplanner.local', name: 'Demo', color: '#6366f1' },
+  { id: DEMO_FRIEND_ID, email: 'friend@triplanner.local', name: 'Demo Friend', color: '#10b981' },
+] as const;
 
-// Idempotent: the demo row survives restarts and repeated boots.
-export async function ensureDemoUser(db: AsyncDb): Promise<void> {
-  await db
-    .prepare(
-      `INSERT INTO users (id, email, display_name, color)
-       VALUES (?, ?, ?, ?)
-       ON CONFLICT DO NOTHING`,
-    )
-    .run(DEMO_USER_ID, 'demo@triplanner.local', 'Demo', '#6366f1');
+// Idempotent: both demo rows survive restarts and repeated boots.
+export async function ensureDemoUsers(db: AsyncDb): Promise<void> {
+  for (const user of DEMO_USERS) {
+    await db
+      .prepare(
+        `INSERT INTO users (id, email, display_name, color)
+         VALUES (?, ?, ?, ?)
+         ON CONFLICT DO NOTHING`,
+      )
+      .run(user.id, user.email, user.name, user.color);
+  }
 }
 
-export function getCurrentUserId(request: Request | { headers: Headers | Record<string, string> } | undefined): string {
+// Kept for callers/tests that only need the owner identity.
+export async function ensureDemoUser(db: AsyncDb): Promise<void> {
+  await ensureDemoUsers(db);
+}
+
+export function getCurrentUserId(
+  request: Request | { headers: Headers | Record<string, string> } | undefined,
+): string {
   const headers = request?.headers;
   const value = headers instanceof Headers ? headers.get('x-user-id') : headers?.['x-user-id'];
-  const id = typeof value === 'string' && value.trim() ? value.trim() : DEMO_USER_ID;
-  return id;
-}
-
-// With `Authorization: Bearer <firebaseIdToken>` the identity comes from the
-// VERIFIED token, resolved by email. Without it, the local x-user-id session
-// (demo mode) is kept. The verifier is injectable so tests never hit Firebase.
-export async function resolveCurrentUserId(
-  db: AsyncDb,
-  request: Request | { headers: Headers | Record<string, string> } | undefined,
-  verify: TokenVerifier = verifyFirebaseIdToken,
-): Promise<string> {
-  const headers = request?.headers;
-  const authHeader = headers instanceof Headers ? headers.get('authorization') : headers?.['authorization'];
-  if (typeof authHeader === 'string' && authHeader.startsWith('Bearer ')) {
-    const claims = await verify(authHeader.slice('Bearer '.length).trim());
-    const { user } = await upsertUserByEmail(db, claims);
-    return user.id;
-  }
-  return getCurrentUserId(request);
+  return typeof value === 'string' && value.trim() ? value.trim() : DEMO_USER_ID;
 }
 
 export function toProfile(row: UserRow): Profile {

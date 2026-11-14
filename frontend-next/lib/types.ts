@@ -11,15 +11,6 @@ export interface UserProfile {
   color?: string | null;
   avatarUrl?: string | null;
   language?: 'es' | 'en' | null;
-  // Solo los rellena el frontend (no vienen del backend): estado de verificacion
-  // del IdP y proveedor, derivados del usuario de Firebase.
-  emailVerified?: boolean | null;
-  authProvider?: string | null;
-}
-
-export interface AuthResult {
-  user: UserProfile;
-  welcomeSent: boolean;
 }
 
 export interface Member {
@@ -278,7 +269,7 @@ export interface InviteMemberArgs {
 }
 
 export interface TriplannerApi {
-  loginDemo(): Promise<UserProfile>;
+  loginDemo(userId?: string): Promise<UserProfile>;
   logout(): Promise<void>;
   restoreSession(): Promise<UserProfile | null>;
   getCurrentUser(): UserProfile | null;
@@ -306,9 +297,6 @@ export interface TriplannerApi {
   joinTripWithCode(code: string, email: string): Promise<Trip>;
   getMyProfile(): Promise<UserProfile | null>;
   updateMyProfile(input: UpdateMyProfileInput): Promise<UserProfile>;
-  authLogin(idToken: string): Promise<AuthResult>;
-  authSendVerification(idToken: string): Promise<boolean>;
-  authConfirmEmail(token: string): Promise<AuthResult>;
   addItemAttachment(tripId: ID, itemId: ID, input: AddItemAttachmentInput, viewerIds: ID[]): Promise<Attachment>;
   updateAttachmentViewers(attachmentId: ID, viewerIds: ID[]): Promise<Attachment>;
   removeItemAttachment(attachmentId: ID): Promise<void>;

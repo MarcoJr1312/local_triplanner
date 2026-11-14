@@ -21,10 +21,7 @@ export async function POST(request: NextRequest) {
   }
 
   const xUserId = request.headers.get('x-user-id')?.trim() || DEMO_USER_ID;
-  // Reenvia el ID token de Firebase (si lo hay) para que el backend pueda
-  // resolver/verificar el usuario autenticado. En modo demo no llega.
-  const authorization = request.headers.get('authorization');
-
+  // Demo auth: the browser selects a seeded identity; no Firebase tokens travel.
   let upstream: Response;
   try {
     upstream = await fetch(backend, {
@@ -32,7 +29,6 @@ export async function POST(request: NextRequest) {
       headers: {
         'Content-Type': 'application/json',
         'x-user-id': xUserId,
-        ...(authorization ? { authorization } : {}),
       },
       body,
       cache: 'no-store',

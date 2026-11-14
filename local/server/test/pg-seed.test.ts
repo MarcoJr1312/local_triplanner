@@ -33,6 +33,7 @@ async function cleanDemo(conn: PgDb) {
   await conn.prepare("DELETE FROM trip_members WHERE trip_id = 'demo-trip'").run();
   await conn.prepare("DELETE FROM trips WHERE id = 'demo-trip'").run();
   await conn.prepare("DELETE FROM users WHERE id = 'demo-user'").run();
+  await conn.prepare("DELETE FROM users WHERE id = 'demo-friend'").run();
 }
 
 before(async () => {
@@ -72,7 +73,7 @@ describe('seed on Postgres + DynamoDB', () => {
       db!
         .prepare(
           `SELECT
-             (SELECT count(*)::int FROM users WHERE id = 'demo-user') AS users,
+             (SELECT count(*)::int FROM users WHERE id IN ('demo-user','demo-friend')) AS users,
              (SELECT count(*)::int FROM trips WHERE id = 'demo-trip') AS trips,
              (SELECT count(*)::int FROM trip_members WHERE trip_id = 'demo-trip') AS members,
              (SELECT count(*)::int FROM trip_items WHERE trip_id = 'demo-trip') AS items`,
@@ -80,7 +81,7 @@ describe('seed on Postgres + DynamoDB', () => {
         .get<Record<string, number>>();
 
     const before = await counts();
-    assert.deepEqual(before, { users: 1, trips: 1, members: 1, items: 2 });
+    assert.deepEqual(before, { users: 2, trips: 1, members: 1, items: 2 });
 
     await seedAll(catalogue, db, data);
     assert.deepEqual(await counts(), before);

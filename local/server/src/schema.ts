@@ -41,9 +41,6 @@ extend type Mutation {
   updateAttachmentViewers(attachmentId: ID!, viewerIds: [String!]): Attachment!
   removeItemAttachment(attachmentId: ID!): Attachment
   favoriteLocation(locationId: ID!, favorite: Boolean!): FavoriteResult!
-  authLogin(idToken: String!): AuthResult!
-  authSendVerification(idToken: String!): Boolean!
-  authConfirmEmail(token: String!): AuthResult!
   saveSuggestionChat(tripId: ID!, day: String!, messages: [ChatMessageInput!]!): SuggestionChat!
   setItemReminder(itemId: ID!, enabled: Boolean!): TripItem!
   setMyInterests(terms: [String!]!): [String!]!
@@ -69,11 +66,6 @@ type SuggestionChat {
   userId: ID!
   day: String!
   messages: [ChatMessage!]!
-}
-
-type AuthResult {
-  user: UserProfile!
-  welcomeSent: Boolean!
 }
 
 type FavoriteResult {

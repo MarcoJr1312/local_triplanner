@@ -20,7 +20,6 @@ import type {
   TripPreview,
   InviteResult,
   Attachment,
-  AuthResult,
   SuggestionChat,
   AutoSuggestResult,
 } from './types';
@@ -75,28 +74,14 @@ export const mode: DataMode = 'local';
 const ENDPOINT = '/api/graphql';
 
 export const DEMO_USER_ID = 'demo-user';
-const DEMO_EMAIL = 'demo@triplanner.local';
-const DEMO_DISPLAY_NAME = 'Demo';
+export const DEMO_FRIEND_ID = 'demo-friend';
+
+const DEMO_IDENTITIES: Record<string, { email: string; displayName: string }> = {
+  [DEMO_USER_ID]: { email: 'demo@triplanner.local', displayName: 'Demo' },
+  [DEMO_FRIEND_ID]: { email: 'friend@triplanner.local', displayName: 'Demo Friend' },
+};
 
 const SESSION_KEY = 'triplanner.local.session';
-
-// Puerta del modo demo. Si NEXT_PUBLIC_DEMO_AUTH_ENABLED no existe, el default
-// es 'true' (la demo sigue funcionando en paralelo a Firebase Auth).
-export const demoAuthEnabled = (process.env.NEXT_PUBLIC_DEMO_AUTH_ENABLED ?? 'true').toLowerCase() !== 'false';
-
-// Proveedor de cabeceras de auth para el modo Firebase: se inyecta desde
-// useAuth para no crear un ciclo api.ts ↔ auth-firebase.ts. En modo demo queda
-// en null y no se adjunta nada (el proxy usa el x-user-id por defecto).
-export interface AuthHeaderProvider {
-  getToken: () => Promise<string | null>;
-  getUserId: () => string | null;
-}
-
-let authHeaderProvider: AuthHeaderProvider | null = null;
-
-export function setAuthHeaderProvider(provider: AuthHeaderProvider | null): void {
-  authHeaderProvider = provider;
-}
 
 let currentUser: UserProfile | null = null;
 let version = 0;
@@ -121,14 +106,7 @@ interface GqlResponse<T> {
 // exponen para que clientes de fetch directo (p. ej. el agente de sugerencias)
 // usen EXACTAMENTE el mismo token que la fachada GraphQL.
 export async function getAuthHeaders(): Promise<Record<string, string>> {
-  const headers: Record<string, string> = {};
-  if (authHeaderProvider) {
-    const token = await authHeaderProvider.getToken();
-    if (token) headers.Authorization = `Bearer ${token}`;
-    const userId = authHeaderProvider.getUserId();
-    if (userId) headers['x-user-id'] = userId;
-  }
-  return headers;
+  return { 'x-user-id': currentUser?.userId ?? DEMO_USER_ID };
 }
 
 async function gql<T>(query: string, variables?: Record<string, unknown>): Promise<T> {
@@ -236,7 +214,7 @@ async function readEventStream<T>(
 }
 
 // Bucle de conexion + reconexion. Reutiliza getAuthHeaders() en CADA intento
-// para recoger un token Firebase potencialmente refrescado.
+// para recoger la identidad demo seleccionada.
 async function runSse<T>(sub: SseSubscription<T>, controller: AbortController): Promise<void> {
   const { query, tripId, field, onEvent } = sub;
   const { signal } = controller;
@@ -371,9 +349,6 @@ const GET_TRIP_BY_CODE = `query($code: String!) { getTripByCode(code: $code) { i
 const SEND_TRIP_INVITE = `mutation($tripId: ID!, $email: String!, $role: String!) { sendTripInvite(tripId: $tripId, email: $email, role: $role) { invitationId status email } }`;
 const JOIN_TRIP_WITH_CODE = `mutation($code: String!, $email: String!) { joinTripWithCode(code: $code, email: $email) { ${TRIP_FIELDS} } }`;
 const GET_MY_PROFILE = `query { getMyProfile { userId email displayName color avatarUrl language } }`;
-const AUTH_LOGIN = `mutation($idToken: String!) { authLogin(idToken: $idToken) { user { userId email displayName color avatarUrl language } welcomeSent } }`;
-const AUTH_SEND_VERIFICATION = `mutation($idToken: String!) { authSendVerification(idToken: $idToken) }`;
-const AUTH_CONFIRM_EMAIL = `mutation($token: String!) { authConfirmEmail(token: $token) { user { userId email displayName color avatarUrl language } welcomeSent } }`;
 const UPDATE_MY_PROFILE = `mutation($input: UpdateMyProfileInput!) { updateMyProfile(input: $input) { userId email displayName color avatarUrl language } }`;
 const ADD_ITEM_ATTACHMENT = `mutation($tripId: ID, $itemId: ID!, $input: AddItemAttachmentInput!, $viewerIds: [String!]) { addItemAttachment(tripId: $tripId, itemId: $itemId, input: $input, viewerIds: $viewerIds) { id fileName mimeType sizeBytes url createdAt uploadedByName viewerIds visibility createdBy } }`;
 const UPDATE_ATTACHMENT_VIEWERS = `mutation($attachmentId: ID!, $viewerIds: [String!]) { updateAttachmentViewers(attachmentId: $attachmentId, viewerIds: $viewerIds) { id fileName mimeType sizeBytes url createdAt uploadedByName viewerIds visibility createdBy } }`;
@@ -459,16 +434,17 @@ export const api: TriplannerApi = {
     notify();
   },
 
-  async loginDemo(): Promise<UserProfile> {
+  async loginDemo(userId: string = DEMO_USER_ID): Promise<UserProfile> {
+    const identity = DEMO_IDENTITIES[userId] ?? DEMO_IDENTITIES[DEMO_USER_ID];
     const fallback: UserProfile = {
-      userId: DEMO_USER_ID,
-      email: DEMO_EMAIL,
-      displayName: DEMO_DISPLAY_NAME,
+      userId,
+      email: identity.email,
+      displayName: identity.displayName,
     };
     let profile: UserProfile | null = null;
     try {
       const data = await gql<{ findUserByEmail: UserProfile | null }>(FIND_USER_BY_EMAIL, {
-        email: DEMO_EMAIL,
+        email: identity.email,
       });
       profile = data.findUserByEmail;
     } catch {
@@ -595,21 +571,6 @@ export const api: TriplannerApi = {
   async getMyProfile(): Promise<UserProfile | null> {
     const data = await gql<{ getMyProfile: UserProfile | null }>(GET_MY_PROFILE);
     return data.getMyProfile;
-  },
-
-  async authLogin(idToken: string): Promise<AuthResult> {
-    const data = await gql<{ authLogin: AuthResult }>(AUTH_LOGIN, { idToken });
-    return data.authLogin;
-  },
-
-  async authSendVerification(idToken: string): Promise<boolean> {
-    const data = await gql<{ authSendVerification: boolean }>(AUTH_SEND_VERIFICATION, { idToken });
-    return data.authSendVerification;
-  },
-
-  async authConfirmEmail(token: string): Promise<AuthResult> {
-    const data = await gql<{ authConfirmEmail: AuthResult }>(AUTH_CONFIRM_EMAIL, { token });
-    return data.authConfirmEmail;
   },
 
   async updateMyProfile(input: { displayName: string; avatarDataUrl?: string | null; avatarRemove?: boolean | null; language?: 'es' | 'en' | null }): Promise<UserProfile> {

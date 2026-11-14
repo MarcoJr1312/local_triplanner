@@ -28,24 +28,8 @@ const MAX_BYTES = 5 * 1024 * 1024;
 
 export default function ProfileModal({ open, onClose }: ProfileModalProps) {
   const { t, locale, setLocale } = useI18n();
-  const { user, setProfile, resendVerification } = useAuth();
+  const { user, setProfile } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [resendingVerification, setResendingVerification] = useState(false);
-
-  const showUnverified = Boolean(user && user.emailVerified === false && user.authProvider === 'password');
-
-  const handleResendVerification = async () => {
-    setResendingVerification(true);
-    try {
-      await resendVerification();
-      toast.success(t('profile.verificationSent'));
-    } catch (err) {
-      setError(localizeApiError(err, t));
-    } finally {
-      setResendingVerification(false);
-    }
-  };
-
   const [name, setName] = useState('');
   const [language, setLanguage] = useState<Locale>(locale);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -303,27 +287,6 @@ export default function ProfileModal({ open, onClose }: ProfileModalProps) {
             </div>
           )}
         </section>
-
-        {showUnverified && (
-          <div className="flex items-start justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3 dark:border-amber-500/25 dark:bg-amber-500/10">
-            <div className="min-w-0">
-              <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
-                {t('profile.unverified')}
-              </p>
-              <p className="mt-0.5 text-xs text-amber-700 dark:text-amber-300">
-                {t('profile.unverifiedHint')}
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={handleResendVerification}
-              disabled={resendingVerification}
-              className="shrink-0 rounded-lg border border-amber-300 px-2.5 py-1.5 text-xs font-medium text-amber-800 transition duration-150 hover:bg-amber-100 disabled:opacity-60 dark:border-amber-500/30 dark:text-amber-200 dark:hover:bg-amber-500/15 max-sm:min-h-11"
-            >
-              {t('profile.resendVerification')}
-            </button>
-          </div>
-        )}
 
         <p className="text-xs text-muted-foreground">{t('profile.hint')}</p>
         {error && <p className="text-sm text-rose-600 dark:text-rose-400">{error}</p>}

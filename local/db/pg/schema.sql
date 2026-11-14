@@ -18,15 +18,8 @@ CREATE TABLE IF NOT EXISTS users (
   color           text,
   avatar_url      text,
   language        text NOT NULL DEFAULT 'es',
-  firebase_uid    text,
-  email_verified  integer NOT NULL DEFAULT 0,
-  welcome_sent_at timestamptz,
   created_at      timestamptz NOT NULL DEFAULT now()
 );
-
--- Two users never share a firebase_uid; partial so multiple NULLs are allowed.
-CREATE UNIQUE INDEX IF NOT EXISTS idx_users_firebase_uid
-  ON users(firebase_uid) WHERE firebase_uid IS NOT NULL;
 
 -- ============================= TRIPS =============================
 CREATE TABLE IF NOT EXISTS trips (
