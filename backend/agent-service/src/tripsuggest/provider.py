@@ -71,7 +71,7 @@ def make_model() -> Any | None:
         return OpenAIChat(
             id=model or "llama3.1",
             api_key=key or "ollama",
-            base_url=base_url or "http://localhost:11434/v1",
+            base_url=base_url or "http://host.docker.internal:11434/v1",
         )
 
     raise ValueError(

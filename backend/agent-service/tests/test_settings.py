@@ -83,6 +83,26 @@ def test_none_clears_key() -> None:
     assert json.loads(SETTINGS_PATH.read_text(encoding="utf-8"))["api_key"] == ""
 
 
+def test_model_update_keeps_env_key() -> None:
+    os.environ["LLM_PROVIDER"] = "deepseek"
+    os.environ["DEEPSEEK_API_KEY"] = "env-test-key"
+    try:
+        _reset()
+        assert llm_settings.get_settings().llm_api_key == "env-test-key"
+
+        llm_settings.update_override(provider="deepseek", model="deepseek-chat")
+        settings = llm_settings.get_settings()
+        assert settings.llm_provider == "deepseek"
+        assert settings.llm_model == "deepseek-chat"
+        assert settings.llm_api_key == "env-test-key"
+        saved = json.loads(SETTINGS_PATH.read_text(encoding="utf-8"))
+        assert "api_key" not in saved, "env key must not be copied to the volume"
+    finally:
+        os.environ["LLM_PROVIDER"] = "none"
+        os.environ.pop("DEEPSEEK_API_KEY", None)
+        _reset()
+
+
 def test_invalid_provider_rejected() -> None:
     _reset()
     try:
@@ -98,6 +118,7 @@ def main() -> int:
         test_ollama_persists_without_key,
         test_requires_key_for_hosted_providers,
         test_keeps_existing_key,
+        test_model_update_keeps_env_key,
         test_none_clears_key,
         test_invalid_provider_rejected,
     ]

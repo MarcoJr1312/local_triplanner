@@ -9,10 +9,11 @@
 | Frontend typecheck | `cd frontend-next && bunx tsc --noEmit` | pass |
 | Frontend tests | `cd frontend-next && bun test` | 16/16 |
 | Agent tests | `cd backend/agent-service && uv run python tests/test_m2.py` | 11/11 |
-| Agent runtime settings tests | `cd backend/agent-service && uv run python tests/test_settings.py` | 6/6 |
+| Agent runtime settings tests | `cd backend/agent-service && uv run python tests/test_settings.py` | 7/7 |
 | Compose smoke (PowerShell) | `powershell -File scripts/smoke.ps1` | pass (includes `getLlmSettings`) |
 | Compose smoke (bash) | `bash scripts/smoke.sh` | pass on tag `v1.2.0` (CI) |
 | In-app LLM settings | save Ollama, restart agent, public config, restore demo | pass |
+| Env-configured provider edit | edit the model without re-entering the env key; key stays env-only | pass |
 | Search detail data | `searchLocations` returns description, address, rating, phone, website and image | pass |
 | Default language | demo profiles `language=en`; i18n storage default `en` | pass |
 | Restart persistence | `docker compose down && docker compose up -d` | pass |

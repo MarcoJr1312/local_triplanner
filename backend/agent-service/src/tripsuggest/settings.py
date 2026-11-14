@@ -68,7 +68,9 @@ def update_override(
     """Persist an LLM override and clear the cached settings.
 
     An existing key is kept when the provider does not change and the key field
-    is left blank. Changing provider without a new key starts with no key.
+    is left blank. That includes a key supplied by the environment: in that case
+    the override does not copy the secret to disk, and the environment fallback
+    stays in effect. Changing provider without a new key starts with no key.
     """
     global _OVERRIDE
 
@@ -78,20 +80,30 @@ def update_override(
             "LLM_PROVIDER no válido. Usa none, deepseek, openai, anthropic u ollama."
         )
 
-    previous_provider = _OVERRIDE.get("provider", "")
-    previous_key = _OVERRIDE.get("api_key", "")
+    current = get_settings()
+    previous_provider = current.llm_provider
+    previous_override_key = _OVERRIDE.get("api_key", "")
     next_key = "" if clear_key or next_provider == "none" else api_key.strip()
+    keep_override_key = False
     if not next_key and not clear_key and next_provider == previous_provider:
-        next_key = previous_key
+        if previous_override_key:
+            next_key = previous_override_key
+            keep_override_key = True
+        else:
+            next_key = current.llm_api_key
     if next_provider in {"deepseek", "openai", "anthropic"} and not next_key:
         raise ValueError(f"API key requerida para el proveedor {next_provider}.")
 
     next_data = {
         "provider": next_provider,
-        "api_key": next_key,
         "model": (model or "").strip(),
         "base_url": (base_url or "").strip(),
     }
+    if next_key and (api_key.strip() or keep_override_key):
+        next_data["api_key"] = next_key
+    elif clear_key or next_provider in {"none", "ollama"}:
+        # Explicitly clear the override so a stale env key cannot leak in.
+        next_data["api_key"] = ""
     _OVERRIDE = next_data
 
     try:
