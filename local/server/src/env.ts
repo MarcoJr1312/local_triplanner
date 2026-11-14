@@ -1,5 +1,5 @@
 // Carga de configuracion del entorno local.
-// Firebase y Resend se eliminaron del runner; HasData sigue hasta M1.5.
+// Firebase y Resend se eliminaron; el buscador usa solo el catalogo local.
 
 import { timingSafeEqual } from 'node:crypto';
 import path from 'node:path';
@@ -13,9 +13,6 @@ try {
 } catch {
   // .env opcional: la config tambien puede venir del entorno del proceso
 }
-
-export const HASDATA_API_KEY = process.env.HASDATA_API_KEY === 'unset' ? '' : (process.env.HASDATA_API_KEY ?? '');
-export const hasHasDataKey = () => HASDATA_API_KEY.length > 0;
 
 // ---- Base publica para los links de invitacion ----
 export const APP_URL = process.env.APP_URL ?? 'http://localhost:3000';

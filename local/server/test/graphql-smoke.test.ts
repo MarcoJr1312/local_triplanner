@@ -66,7 +66,6 @@ beforeEach(async () => {
         catalogue,
         storage,
         currentUserId: userId,
-        hasdata: null,
         pubsub: {
           publish: () => {},
           subscribe: async function* () {

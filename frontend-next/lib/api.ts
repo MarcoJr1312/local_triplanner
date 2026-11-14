@@ -61,8 +61,8 @@ export function localizeApiError(err: unknown, t: ApiTranslator): string {
 
 // Fachada de datos del frontend Next.js. El navegador SOLO habla con el proxy
 // /api/graphql (route handler de Next); ese proxy reenvia al backend local y
-// resuelve del lado del servidor el x-user-id y la key de HasData. Aqui nunca
-// viajan credenciales ni claves: patron inicial CSR completo.
+// resuelve del lado del servidor el x-user-id demo. Aqui nunca viajan
+// credenciales ni claves: patron inicial CSR completo.
 
 export type DataMode = 'local' | 'aws' | 'mock';
 

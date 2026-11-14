@@ -6,7 +6,6 @@ import { setFavorite } from '../src/pg/favorites.ts';
 import { DynamoLocationCatalogue, LOCAL_DYNAMO_ENDPOINT } from '../src/catalogue/dynamo.ts';
 import { ensureTable } from '../src/catalogue/bootstrap.ts';
 import { searchCatalogue, searchLocationsWithCatalogue } from '../src/catalogue/search.ts';
-import type { HasDataClient } from '../src/hasdata/client.ts';
 
 const endpoint = process.env.DYNAMODB_ENDPOINT ?? LOCAL_DYNAMO_ENDPOINT;
 const tableName = 'triplanner-locations-search-test';
@@ -70,63 +69,20 @@ describe('catalogue-backed search', () => {
     await deleteUser(db, userId);
   });
 
-  test('falls back to HasData once and then serves from the catalogue', async () => {
+  test('returns an empty list on a cache miss (no remote provider)', async () => {
     if (!db || !catalogue) return;
     const userId = await insertUser(db);
-
-    let calls = 0;
-    const fakeClient = {
-      search: async () => {
-        calls++;
-        return {
-          localResults: [
-            {
-              title: 'Museo Nuevo',
-              placeId: 'place-new',
-              type: 'museum',
-              gpsCoordinates: { latitude: 8.99, longitude: -79.52 },
-              rating: 4.2,
-              address: 'Calle 1',
-            },
-          ],
-        };
-      },
-    } as unknown as HasDataClient;
-
-    const first = await searchLocationsWithCatalogue({
-      catalogue,
-      db,
-      client: fakeClient,
-      q: 'museo nuevo',
-      lat: 8.98,
-      lng: -79.52,
-      userId,
-    });
-    assert.equal(first.length, 1);
-    assert.equal(first[0]?.name, 'Museo Nuevo');
-    assert.equal(calls, 1);
-    assert.equal((await catalogue.getByPlaceId('place-new'))?.name, 'Museo Nuevo');
-
-    const second = await searchLocationsWithCatalogue({
-      catalogue,
-      db,
-      client: fakeClient,
-      q: 'museo nuevo',
-      lat: 8.98,
-      lng: -79.52,
-      userId,
-    });
-    assert.equal(second.length, 1);
-    assert.equal(calls, 1, 'second call must hit the catalogue, not HasData');
-
+    const rows = await searchLocationsWithCatalogue({ catalogue, db, q: 'inexistente', userId });
+    assert.deepEqual(rows, []);
     await deleteUser(db, userId);
   });
 
-  test('returns nothing without a client and without cache hits', async () => {
+  test('matches multiple tokens in the name', async () => {
     if (!db || !catalogue) return;
-    const userId = await insertUser(db);
-    const rows = await searchLocationsWithCatalogue({ catalogue, db, client: null, q: 'inexistente', userId });
-    assert.deepEqual(rows, []);
-    await deleteUser(db, userId);
+    await catalogue.upsert({ id: 'cn', name: 'CN Tower', category: 'sight', rating: 4.6 });
+    await catalogue.upsert({ id: 'rom', name: 'Royal Ontario Museum', category: 'sight', rating: 4.7 });
+
+    const rows = await searchCatalogue(catalogue, db, 'royal museum', {}, 20);
+    assert.deepEqual(rows.map((r) => r.id), ['rom']);
   });
 });

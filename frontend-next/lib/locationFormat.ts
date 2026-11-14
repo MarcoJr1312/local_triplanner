@@ -1,7 +1,7 @@
 // Helpers de formato para la informacion de lugares (compartidos entre el
 // buscador y el modal de detalle del item guardado).
 
-// Horarios: HasData puede devolver varias formas. La del endpoint place es
+// Horarios: el catalogo puede devolver varias formas. La forma rica es
 // {timezone, days: [{day, time, date}]}. Mostramos defensivamente.
 export function formatHours(hours: unknown): string | null {
   if (!hours) return null;
@@ -45,7 +45,7 @@ export function formatHours(hours: unknown): string | null {
 }
 
 // Lista de dias con horario para la cortina semanal.
-// Forma de HasData: {timezone, days: [{day, time, date}]}
+// Forma del catalogo: {timezone, days: [{day, time, date}]}
 export function hoursDayList(hours: unknown): { day: string; time: string; isToday: boolean }[] | null {
   if (!hours || typeof hours !== 'object' || Array.isArray(hours)) return null;
   const o = hours as Record<string, unknown>;

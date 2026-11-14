@@ -1,6 +1,6 @@
 // Carga del schema GraphQL: el schema base (local/graphql/schema.graphql, heredado
 // del contrato original de AppSync) + extension local
-// (searchLocations / locationDetails para la integracion HasData).
+// (searchLocations / locationDetails sobre el catalogo local).
 
 import fs from 'node:fs';
 import path from 'node:path';

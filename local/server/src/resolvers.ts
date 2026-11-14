@@ -2,7 +2,6 @@
 
 import { randomUUID } from 'node:crypto';
 import { GraphQLError } from 'graphql';
-import type { HasDataClient } from './hasdata/client.ts';
 import type { LocationCatalogue } from './catalogue/types.ts';
 import type { Storage } from './storage.ts';
 import type { AsyncDb } from './pg/db.ts';
@@ -29,8 +28,7 @@ import { listSuggestionChats, upsertSuggestionChat } from './pg/chats.ts';
 import { isValidMessages } from './chats.ts';
 import { recomputeItemReminder } from './pg/reminders.ts';
 import { isValidCoverPreset, writeCoverPhoto, removeTripCoverFiles } from './pg/covers.ts';
-import { locationRowToGraphQL, extractPlaceDetail, webResultsToSocialLinks } from './hasdata/search.ts';
-import { normalizeHasDataPlace } from './hasdata/normalize.ts';
+import { locationRowToGraphQL } from './catalogue/presenter.ts';
 import { searchLocationsWithCatalogue } from './catalogue/search.ts';
 import { buildSuggestions } from './pg/recommend.ts';
 import { createInvitation, findInvitationByCode, acceptInvitation } from './pg/invitations.ts';
@@ -73,7 +71,6 @@ export interface Ctx {
   catalogue: LocationCatalogue;
   storage: Storage;
   currentUserId: string;
-  hasdata: HasDataClient | null;
   pubsub: PubSub;
   syncInterests?: InterestsSync;
 }
@@ -471,7 +468,6 @@ export const resolvers: {
       const rows = await searchLocationsWithCatalogue({
         catalogue: ctx.catalogue,
         db: ctx.db,
-        client: ctx.hasdata,
         q,
         lat,
         lng,
@@ -490,26 +486,10 @@ export const resolvers: {
 
     locationDetails: async (_, args, ctx) => {
       const { placeId } = args as Args<{ placeId: string }>;
-      const favIds = await favoriteIdsForUser(ctx.db, ctx.currentUserId);
       const existing = await ctx.catalogue.getByPlaceId(placeId);
-      const hasDetails =
-        existing && (existing.hours_json || existing.website_url || existing.social_links_json);
-      if (hasDetails) return locationRowToGraphQL(existing, favIds);
-      if (!ctx.hasdata) return existing ? locationRowToGraphQL(existing, favIds) : null;
-
-      const data = await ctx.hasdata.place(placeId, { fetchWebResults: true });
-      const raw = extractPlaceDetail(data) as Record<string, unknown> & {
-        gpsCoordinates?: { latitude?: unknown; longitude?: unknown };
-      };
-      const loc = normalizeHasDataPlace(raw);
-      loc.place_id = placeId;
-      loc.social_links_json = webResultsToSocialLinks(data) ?? loc.social_links_json;
-      if (existing) loc.id = existing.id;
-      if (loc.lat == null || loc.lng == null) {
-        return existing ? locationRowToGraphQL(existing, favIds) : null;
-      }
-      const row = await ctx.catalogue.upsert(loc);
-      return locationRowToGraphQL(row, favIds);
+      if (!existing) return null;
+      const favIds = await favoriteIdsForUser(ctx.db, ctx.currentUserId);
+      return locationRowToGraphQL(existing, favIds);
     },
 
     getTripByCode: async (_, args, ctx) => {

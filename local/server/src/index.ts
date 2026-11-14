@@ -11,10 +11,7 @@ import { ensureDemoUsers, getCurrentUserId } from './pg/auth.ts';
 import { createCatalogue } from './catalogue/index.ts';
 import { ensureTable } from './catalogue/bootstrap.ts';
 import { defaultStorage } from './storage.ts';
-import { HasDataClient } from './hasdata/client.ts';
 import {
-  HASDATA_API_KEY,
-  hasHasDataKey,
   PORT,
   INTERNAL_TOKEN,
   isUsingDefaultInternalToken,
@@ -37,9 +34,8 @@ await ensureDemoUsers(db);
 const catalogue = createCatalogue();
 const storage = defaultStorage();
 const pubsub = createPubSub() as unknown as PubSub;
-const hasdata = hasHasDataKey() ? new HasDataClient({ apiKey: HASDATA_API_KEY }) : null;
 
-const internalRouter = createInternalRouter({ db, catalogue, hasdata, internalToken: INTERNAL_TOKEN });
+const internalRouter = createInternalRouter({ db, catalogue, internalToken: INTERNAL_TOKEN });
 
 const schema = createSchema({
   typeDefs: loadTypeDefs(),
@@ -53,7 +49,6 @@ const yoga = createYoga({
     catalogue,
     storage,
     pubsub,
-    hasdata,
     currentUserId: getCurrentUserId(request),
   }),
   graphiql: true,
@@ -73,7 +68,6 @@ const server = createServer((req, res) => {
 
 server.listen(PORT, () => {
   console.log(`[triplanner-local] GraphQL en http://localhost:${PORT}/graphql`);
-  console.log(`[triplanner-local] HasData key: ${hasHasDataKey() ? 'presente' : 'ausente'}`);
   if (isUsingDefaultInternalToken()) {
     console.warn(
       '[triplanner-local] INTERNAL_TOKEN no definido: usando default de desarrollo (define INTERNAL_TOKEN en local/.env)',

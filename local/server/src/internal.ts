@@ -2,8 +2,7 @@
 
 import { createHash, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { extractPlaceDetail, webResultsToSocialLinks, distanceKm } from './hasdata/search.ts';
-import type { HasDataClient, HasDataResponse } from './hasdata/client.ts';
+import { distanceKm } from './geo.ts';
 import { upsertSuggestionChat } from './pg/chats.ts';
 import { isValidMessages } from './chats.ts';
 import { isTripMember } from './pg/trips.ts';
@@ -20,7 +19,6 @@ const LOOPBACK = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
 export interface InternalDeps {
   db: AsyncDb;
   catalogue: LocationCatalogue;
-  hasdata: HasDataClient | null;
   internalToken: string;
 }
 
@@ -91,40 +89,6 @@ async function resolveUserId(deps: InternalDeps, req: IncomingMessage): Promise<
   return headerUserId(req);
 }
 
-function pick(obj: Record<string, unknown> | null | undefined, keys: readonly string[]): unknown {
-  for (const k of keys) {
-    const v = obj?.[k];
-    if (v != null && v !== '') return v;
-  }
-  return undefined;
-}
-
-function firstString(value: unknown): string | null {
-  if (Array.isArray(value)) {
-    const s = value.find((v) => typeof v === 'string' && v !== '') as string | undefined;
-    return s ?? null;
-  }
-  return typeof value === 'string' && value !== '' ? value : null;
-}
-
-function toFloat(v: unknown): number | null {
-  if (v == null) return null;
-  const n = Number(v);
-  return Number.isFinite(n) ? n : null;
-}
-
-function toInt(v: unknown): number | null {
-  if (v == null) return null;
-  const n = parseInt(String(v), 10);
-  return Number.isFinite(n) ? n : null;
-}
-
-function toStringArray(v: unknown): string[] | null {
-  if (!Array.isArray(v)) return null;
-  const out = v.filter((x): x is string => typeof x === 'string' && x !== '');
-  return out.length ? out : null;
-}
-
 function parseTags(s: string | null | undefined): string[] {
   if (!s) return [];
   try {
@@ -133,29 +97,6 @@ function parseTags(s: string | null | undefined): string[] {
   } catch {
     return [];
   }
-}
-
-function socialLinksFrom(data: HasDataResponse | null | undefined, detail: Record<string, unknown> | null): unknown[] | null {
-  const wrJson = webResultsToSocialLinks(data);
-  if (wrJson) {
-    try {
-      const v = JSON.parse(wrJson) as unknown;
-      if (Array.isArray(v)) return v;
-    } catch {
-      // ignore
-    }
-  }
-  const sl = pick(detail, ['socialLinks', 'social_links', 'socialLinksJson']);
-  if (Array.isArray(sl)) return sl as unknown[];
-  if (typeof sl === 'string') {
-    try {
-      const v = JSON.parse(sl) as unknown;
-      if (Array.isArray(v)) return v;
-    } catch {
-      // ignore
-    }
-  }
-  return null;
 }
 
 async function destinationCoords(deps: InternalDeps, destinationId: string | null): Promise<{ lat: number | null; lng: number | null }> {
@@ -253,7 +194,7 @@ async function handleSearchPlaces(deps: InternalDeps, res: ServerResponse, body:
     lng = coords.lng;
   }
 
-  const rows = await searchLocationsWithCatalogue({ catalogue: deps.catalogue, db: deps.db, client: deps.hasdata, q, lat, lng, userId });
+  const rows = await searchLocationsWithCatalogue({ catalogue: deps.catalogue, db: deps.db, q, lat, lng, userId });
   const favIds = userId ? await favoriteIdsForUser(deps.db, userId) : new Set<string>();
   json(
     res,
@@ -279,30 +220,33 @@ async function handlePlaceDetails(deps: InternalDeps, res: ServerResponse, body:
     json(res, 400, { error: 'INVALID_ARGUMENT', message: 'placeId requerido' });
     return;
   }
-  if (!deps.hasdata) {
-    json(res, 503, { error: 'HASDATA_UNAVAILABLE', message: 'HasData no configurado.' });
+  const row = await deps.catalogue.getByPlaceId(placeId);
+  if (!row) {
+    json(res, 404, { error: 'PLACE_NOT_FOUND', message: 'Lugar no encontrado.' });
     return;
   }
-  const data = await deps.hasdata.place(placeId, { fetchWebResults: true });
-  const detail = extractPlaceDetail(data) as Record<string, unknown> | null;
 
-  const base: Record<string, unknown> = {
-    name: firstString(pick(detail, ['name', 'title', 'placeName', 'place name'])) ?? '',
-    description: firstString(pick(detail, ['description', 'summary', 'descriptionSnippet', 'snippet'])) ?? null,
-    rating: toFloat(pick(detail, ['rating', 'averageRating'])),
-    ratingCount: toInt(pick(detail, ['reviews', 'reviewsCount', 'reviewCount', 'userRatingsTotal', 'ratingCount'])),
-    phone: firstString(pick(detail, ['phone', 'phoneNumber', 'phone_number'])) ?? null,
-    websiteUrl: firstString(pick(detail, ['website', 'websiteUrl', 'website_url'])) ?? null,
-    address: firstString(pick(detail, ['address', 'formattedAddress', 'vicinity', 'fullAddress'])) ?? null,
+  const safeJson = (value: string | null): unknown => {
+    if (!value) return null;
+    try {
+      return JSON.parse(value) as unknown;
+    } catch {
+      return null;
+    }
   };
-  const hours = pick(detail, ['workingHours', 'hours', 'openingHours', 'businessHours']);
-  const photos = toStringArray(pick(detail, ['photos', 'images', 'photoUrls', 'imagesUrls']));
-  const socialLinks = socialLinksFrom(data, detail);
-  if (hours != null) base.hours = hours;
-  if (photos) base.photos = photos;
-  if (socialLinks) base.socialLinks = socialLinks;
 
-  json(res, 200, base);
+  json(res, 200, {
+    name: row.name,
+    description: row.description ?? null,
+    rating: row.rating ?? null,
+    ratingCount: row.rating_count ?? null,
+    phone: row.phone ?? null,
+    websiteUrl: row.website_url ?? null,
+    address: row.address ?? null,
+    hours: safeJson(row.hours_json) ?? undefined,
+    photos: row.image_url ? [row.image_url] : undefined,
+    socialLinks: safeJson(row.social_links_json) ?? undefined,
+  });
 }
 
 async function handlePlacesCache(deps: InternalDeps, req: IncomingMessage, res: ServerResponse, rawTripId: string): Promise<void> {

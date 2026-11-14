@@ -1,12 +1,8 @@
-// Catalogue-backed location search. Replaces the SQLite/FTS5 flow:
-//   1) token search in DynamoDB
-//   2) miss -> HasData (max 2 pages)
-//   3) normalize, upsert into the catalogue, return
-// Favorites-first ordering and the 75 km radius stay in the app layer.
+// Catalogue-backed location search. The local runner has no external place
+// provider: every result comes from the local catalogue (DynamoDB today,
+// MongoDB in M2). Favorites-first ordering and the 75 km radius stay here.
 
-import { normalizeHasDataPlace, type HasDataRaw } from '../hasdata/normalize.ts';
-import { extractResults, searchHasDataPaged, distanceKm } from '../hasdata/search.ts';
-import type { HasDataClient } from '../hasdata/client.ts';
+import { distanceKm } from '../geo.ts';
 import type { AsyncDb } from '../pg/db.ts';
 import { favoriteIdsForUser } from '../pg/favorites.ts';
 import type { LocationRow } from '../schema-types.ts';
@@ -55,51 +51,21 @@ export async function searchCatalogue(
 export interface CatalogueSearchDeps {
   catalogue: LocationCatalogue;
   db: AsyncDb;
-  client: HasDataClient | null;
   q: string;
   lat?: number | null;
   lng?: number | null;
   userId?: string | null;
 }
 
-// Full searchLocations flow: cache-first, HasData fallback, upsert on the way in.
+// GraphQL/internal search entry point. Kept async for callers that expect the
+// old cache-first signature; there is no remote fallback anymore.
 export async function searchLocationsWithCatalogue({
   catalogue,
   db,
-  client,
   q,
   lat,
   lng,
   userId,
 }: CatalogueSearchDeps): Promise<LocationRow[]> {
-  const local = await searchCatalogue(catalogue, db, q, { lat, lng }, 20, userId);
-  if (local.length > 0) return local;
-  if (!client) return [];
-
-  const rawResults = await searchHasDataPaged(client, q, { lat, lng });
-  const seen = new Set<string>();
-  const normalized = rawResults
-    .map(normalizeHasDataPlace)
-    .filter((l) => l.place_id != null || l.data_id != null)
-    .filter((l) => {
-      const key = (l.place_id ?? l.data_id) as string;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
-
-  const saved: LocationRow[] = [];
-  const seenIds = new Set<string>();
-  for (const loc of normalized) {
-    const row = await catalogue.upsert(loc);
-    if (!seenIds.has(row.id)) {
-      seenIds.add(row.id);
-      saved.push(row);
-    }
-  }
-
-  const favorites = userId ? await favoriteIdsForUser(db, userId) : new Set<string>();
-  return rank(withinRadius(saved, lat, lng), favorites);
+  return searchCatalogue(catalogue, db, q, { lat, lng }, 20, userId);
 }
-
-export type { HasDataRaw };

@@ -60,10 +60,11 @@ The repo was cloned from `dev_triplanner` and fast-forwarded to the
 auth and Dockerfiles.
 
 - M1.3 done (`d901d9b`): Firebase removed, `demo-user` + `demo-friend`.
-- M1.4 done: Resend removed; invitations return a copyable join link and the
-  reminder email sweep is disabled.
-- Remaining M1 work: HasData runtime removal (M1.5) and AWS surface removal
-  (M1.6). M2 replaces DynamoDB with MongoDB.
+- M1.4 done (`0d042e9`): Resend removed; invitations return a copyable join
+  link and the reminder email sweep is disabled.
+- M1.5 done: HasData runtime removed; place search is catalogue-only.
+- Remaining M1 work: AWS surface removal (M1.6). M2 replaces DynamoDB with
+  MongoDB.
 Do not assume the target architecture is already implemented — check the
 current tree.
 
