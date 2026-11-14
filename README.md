@@ -7,10 +7,17 @@ to Google Maps routes or an Uber deep link.
 
 The product UI is **Spanish by default**, with an **es/en** switch.
 
-> **Status:** one-command Docker Compose demo is ready. The cloud dependencies
-> (Firebase, HasData, Resend, AWS) are removed from the runtime; place search
-> reads a local MongoDB catalogue seeded with 186 real Toronto places. Demo
-> tour, smoke script and CI are the remaining milestones.
+> **Status:** **v1.0.0** — one-command Docker Compose demo is ready. The cloud
+> dependencies (Firebase, HasData, Resend, AWS) are removed from the runtime;
+> place search reads a local MongoDB catalogue seeded with 186 real Toronto
+> places. Tests, smoke scripts and CI are included.
+
+## Documentation
+
+- [10-minute demo tour](docs/DEMO_TOUR.md)
+- [Troubleshooting](docs/TROUBLESHOOTING.md)
+- [Release notes v1.0.0](docs/RELEASE_NOTES_v1.0.0.md)
+- [QA matrix](docs/QA_MATRIX.md)
 
 ## What works now
 
@@ -21,8 +28,8 @@ The product UI is **Spanish by default**, with an **es/en** switch.
   identity can join the trip. No email is sent in this demo.
 - **Places** — catalogue-only search over the seeded Toronto data in MongoDB.
 - **Uploads** — avatars, covers and attachments on local disk.
-- **AI agent** — FastAPI service with deterministic auto-suggest; the chat
-  suggestion endpoint is being wired for the local demo.
+- **AI agent** — deterministic demo mode by default, optional DeepSeek /
+  OpenAI / Anthropic / Ollama providers.
 - **Routes / Uber** — Google Maps multi-stop links and Uber deep links.
 
 ## Architecture
