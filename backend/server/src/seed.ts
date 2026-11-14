@@ -4,13 +4,14 @@
 // - creates the demo user, trip, membership and items
 // Re-running does not duplicate anything.
 
-import { existsSync, readFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { migrate } from './db/migrate.ts';
 import { PgDb } from './pg/db.ts';
 import { resolveDatabaseUrl } from './pg/config.ts';
 import { createCatalogue } from './catalogue/index.ts';
+import { uploadsRoot } from './storage.ts';
 import type { LocationCatalogue } from './catalogue/types.ts';
 import type { AsyncDb } from './pg/db.ts';
 
@@ -24,6 +25,23 @@ const TORONTO_DATA_PATH = path.join(DB_DIR, 'toronto-locations.json');
 const SEED_DATA_PATH = existsSync(TORONTO_DATA_PATH)
   ? TORONTO_DATA_PATH
   : path.join(DB_DIR, 'seed-data.json');
+const SEED_IMAGES_DIR = path.join(DB_DIR, 'seed-images');
+
+// Copies the committed seed images into the API uploads volume.
+// The dataset stores URLs as /uploads/seed/<file>.
+export function copySeedImages(): number {
+  if (!existsSync(SEED_IMAGES_DIR)) return 0;
+  const target = path.join(uploadsRoot(), 'seed');
+  mkdirSync(target, { recursive: true });
+  let count = 0;
+  for (const file of readdirSync(SEED_IMAGES_DIR)) {
+    const source = path.join(SEED_IMAGES_DIR, file);
+    if (!statSync(source).isFile()) continue;
+    copyFileSync(source, path.join(target, file));
+    count++;
+  }
+  return count;
+}
 
 export interface SeedActivity {
   id: string;
@@ -116,6 +134,22 @@ const FALLBACK_ITEMS: SeedActivity[] = [
   { id: 'tor-alo', name: 'Alo Restaurant', category: 'food', lat: 43.6486, lng: -79.3956, cost: 110 },
 ];
 
+// A 3-day demo should show variety, not the first nine sightseeing rows.
+function pickDemoActivities(activities: SeedActivity[]): SeedActivity[] {
+  const wanted: Record<string, number> = { sight: 3, food: 3, activity: 2, nightlife: 1 };
+  const picked: SeedActivity[] = [];
+  for (const [category, count] of Object.entries(wanted)) {
+    picked.push(...activities.filter((activity) => activity.category === category).slice(0, count));
+  }
+  if (picked.length < 9) {
+    for (const activity of activities) {
+      if (!picked.includes(activity)) picked.push(activity);
+      if (picked.length >= 9) break;
+    }
+  }
+  return picked.slice(0, 9);
+}
+
 export async function seedDemo(db: AsyncDb, activities: SeedActivity[] = []): Promise<void> {
   await db
     .prepare(
@@ -152,7 +186,7 @@ export async function seedDemo(db: AsyncDb, activities: SeedActivity[] = []): Pr
     .run();
 
   const days = ['2026-11-06', '2026-11-07', '2026-11-08'];
-  const picks = activities.length > 0 ? activities.slice(0, 9) : FALLBACK_ITEMS;
+  const picks = activities.length > 0 ? pickDemoActivities(activities) : FALLBACK_ITEMS;
   const items = picks.map((activity, index) => ({
     id: `demo-item-${index + 1}`,
     locationId: activity.id,
@@ -187,9 +221,12 @@ if (import.meta.main) {
   const db = await PgDb.connect(url);
   const catalogue = await createCatalogue();
   try {
+    const images = copySeedImages();
     const total = await seedAll(catalogue, db, data);
     const destinations = await catalogue.listDestinations();
-    console.log(`Seed OK — ${destinations.length} destinos, ${total - destinations.length} actividades`);
+    console.log(
+      `Seed OK — ${destinations.length} destinos, ${total - destinations.length} actividades, ${images} imágenes`,
+    );
   } finally {
     await db.close();
     await catalogue.close();

@@ -7,7 +7,7 @@
 //
 // The script is not part of the API runtime. It writes
 // backend/db/toronto-locations.json and optional local images under
-// backend/server/uploads/seed/. Run it again to refresh the dataset.
+// backend/db/seed-images/. Run it again to refresh the dataset.
 
 import { createHash } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
@@ -17,7 +17,7 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const BACKEND_DIR = path.resolve(__dirname, '..', '..');
 const DB_DIR = path.join(BACKEND_DIR, 'db');
-const UPLOADS_DIR = path.resolve(__dirname, '..', 'uploads', 'seed');
+const SEED_IMAGES_DIR = path.join(DB_DIR, 'seed-images');
 const OUT_PATH = path.join(DB_DIR, 'toronto-locations.json');
 const ATTR_PATH = path.join(DB_DIR, 'TORONTO_DATA.md');
 const ENV_FETCH = path.join(BACKEND_DIR, '.env.fetch');
@@ -229,7 +229,7 @@ async function downloadImage(url: string, id: string): Promise<string | null> {
     const file = `${safe}.${ext}`;
     const bytes = new Uint8Array(await res.arrayBuffer());
     if (bytes.byteLength > MAX_IMAGE_BYTES) return null;
-    await writeFile(path.join(UPLOADS_DIR, file), bytes);
+    await writeFile(path.join(SEED_IMAGES_DIR, file), bytes);
     return `/uploads/seed/${file}`;
   } catch {
     return null;
@@ -281,7 +281,7 @@ async function main(): Promise<void> {
     throw new Error(`Only ${places.length} places fetched; expected at least 100.`);
   }
 
-  await mkdir(UPLOADS_DIR, { recursive: true });
+  await mkdir(SEED_IMAGES_DIR, { recursive: true });
   let images = 0;
   for (const place of places) {
     if (place.imageUrl && images < MAX_IMAGES) {
@@ -335,7 +335,7 @@ async function main(): Promise<void> {
       `- Fetched: ${payload.fetchedAt}\n` +
       `- Queries: ${QUERIES.map((query) => query.q).join('; ')}\n` +
       `- Places: ${places.length} (${counts.sight} sight, ${counts.food} food, ${counts.activity} activity, ${counts.nightlife} nightlife)\n` +
-      `- Images: ${images} local files under \`backend/server/uploads/seed/\`; others use no image.\n` +
+      `- Images: ${images} local files under \`backend/db/seed-images/\`; others use no image.\n` +
       `- The HasData API key is not stored in this file or the dataset.\n`,
     'utf8',
   );

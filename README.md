@@ -163,7 +163,7 @@ cd backend/server && bun run db:seed
 ```
 
 The script writes `backend/db/toronto-locations.json`, optional local images under
-`backend/server/uploads/seed/`, and `backend/db/TORONTO_DATA.md`. The API runtime
+`backend/db/seed-images/`, and `backend/db/TORONTO_DATA.md`. The API runtime
 never reads the key.
 
 ## Testing

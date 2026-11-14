@@ -14,6 +14,8 @@ COPY backend/server/src ./src
 # db:migrate / db:seed resolve ../../db relative to src.
 COPY backend/db/pg ./db/pg
 COPY backend/db/seed-data.json ./db/seed-data.json
+COPY backend/db/toronto-locations.json ./db/toronto-locations.json
+COPY backend/db/seed-images ./db/seed-images
 # schema.graphql lives next to src in the image.
 COPY backend/graphql ./graphql
 
