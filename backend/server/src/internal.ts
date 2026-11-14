@@ -16,6 +16,22 @@ import type { LocationRow, TripRow } from './schema-types.ts';
 const SEARCH_RADIUS_KM = 75;
 const LOOPBACK = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
 
+// The API port is not published in Compose. Internal calls come from the
+// agent container on a private Docker bridge, so allow loopback + RFC1918.
+function isAllowedInternal(remote: string): boolean {
+  const address = remote.startsWith('::ffff:') ? remote.slice('::ffff:'.length) : remote;
+  if (LOOPBACK.has(address)) return true;
+  if (address.startsWith('10.') || address.startsWith('192.168.') || address.startsWith('fc') || address.startsWith('fd')) {
+    return true;
+  }
+  const match = /^172\.(\d+)\./.exec(address);
+  if (match) {
+    const octet = Number(match[1]);
+    return octet >= 16 && octet <= 31;
+  }
+  return false;
+}
+
 export interface InternalDeps {
   db: AsyncDb;
   catalogue: LocationCatalogue;
@@ -308,8 +324,8 @@ async function handleSaveChat(deps: InternalDeps, res: ServerResponse, body: Rec
 
 async function dispatch(deps: InternalDeps, req: IncomingMessage, res: ServerResponse, method: string, pathname: string): Promise<void> {
   const remote = req.socket?.remoteAddress ?? '';
-  if (!LOOPBACK.has(remote)) {
-    json(res, 403, { error: 'FORBIDDEN', message: 'Acceso solo desde localhost.' });
+  if (!isAllowedInternal(remote)) {
+    json(res, 403, { error: 'FORBIDDEN', message: 'Acceso solo desde la red interna.' });
     return;
   }
 

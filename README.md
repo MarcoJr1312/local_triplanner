@@ -7,10 +7,10 @@ to Google Maps routes or an Uber deep link.
 
 The product UI is **Spanish by default**, with an **es/en** switch.
 
-> **Status:** local-first demo in progress. The cloud dependencies (Firebase,
-> HasData, Resend, AWS) have been removed from the runtime; place search now
-> reads a local MongoDB catalogue. Docker Compose packaging and the recruiter
-> quickstart are the next milestones.
+> **Status:** one-command Docker Compose demo is ready. The cloud dependencies
+> (Firebase, HasData, Resend, AWS) are removed from the runtime; place search
+> reads a local MongoDB catalogue seeded with 186 real Toronto places. Demo
+> tour, smoke script and CI are the remaining milestones.
 
 ## What works now
 
@@ -52,7 +52,7 @@ the client.
 | Backend (`backend/server/`) | TypeScript on Bun, graphql-yoga, Postgres (`pg`), MongoDB (`mongodb`) |
 | Agent (`backend/agent-service/`) | Python 3.12, uv, FastAPI, Agno, pgvector |
 | Data (`backend/db/`) | Postgres `pg/schema.sql` + idempotent seed; MongoDB Toronto catalogue |
-| Local infra | Docker Compose: PostgreSQL 17 + pgvector, MongoDB 7 |
+| Local infra | Docker Compose: web, api, agent, PostgreSQL 17 + pgvector, MongoDB 7 |
 
 ## Repository layout
 
@@ -65,59 +65,71 @@ the client.
 │   ├── db/                 Postgres schema + seed data
 │   ├── graphql/            base schema
 │   └── .env.example        backend configuration template
-├── docker-compose.yml      local Postgres + MongoDB
+├── docker-compose.yml      web + api + agent + Postgres + MongoDB
 └── AGENTS.md               working agreement for AI agents
 ```
 
-## Prerequisites (current development)
+## Quickstart (recruiter)
 
-- [Bun](https://bun.sh/)
-- [Docker](https://www.docker.com/) for Postgres and MongoDB
-- [uv](https://docs.astral.sh/uv/) and Python 3.12+ for the agent
-
-The target recruiter flow will require **Docker Desktop only**; host installs
-are temporary until the Compose packaging milestone lands.
-
-## Run locally
-
-### 1. Data stores
+**Prerequisite:** Docker Desktop (4 GB RAM recommended).
 
 ```bash
-docker compose up -d
+git clone <repo>
+cd local_triplanner
+docker compose up --build
+```
+
+Open http://localhost:3000/login and choose **Demo (owner)** or **Demo Friend**.
+
+The first build takes a few minutes. All five services become healthy:
+
+```bash
+docker compose ps
+```
+
+| Service | Purpose |
+|---|---|
+| `web` | Next.js UI on http://localhost:3000 |
+| `api` | GraphQL API (internal) |
+| `agent` | FastAPI suggestions (internal) |
+| `postgres` | Relational data + pgvector |
+| `mongo` | Toronto location catalogue |
+
+Useful commands:
+
+```bash
+docker compose down       # stop, keep data
+docker compose down -v    # reset data, re-seed on next start
+docker compose logs -f api
+```
+
+### What to try
+
+1. Open the seeded Toronto trip (Dec 4–6, 2026).
+2. Search for **CN Tower**, **ROM** or a restaurant.
+3. Invite **Demo Friend** from the trip and open the copied link in an
+   incognito window.
+4. Upload an avatar or an activity attachment.
+5. Ask the AI agent for suggestions.
+
+## Development mode (optional)
+
+Requires Bun, uv/Python 3.12 and Docker for the data stores.
+
+```bash
+docker compose up -d postgres mongo
 cp backend/.env.example backend/.env
-```
 
-### 2. Backend
+# API :4000
+cd backend/server && bun install && bun run db:migrate && bun run db:seed && bun run dev
 
-```bash
-cd backend/server
-bun install
-bun run db:migrate
-bun run db:seed
-bun run dev
-```
+# Web :3000
+cd frontend-next && bun install && bun run dev
 
-GraphQL: http://localhost:4000/graphql (GraphiQL enabled).
-
-### 3. Frontend
-
-```bash
-cd frontend-next
-bun install
-bun run dev
-```
-
-App: http://localhost:3000/login — choose **Demo (owner)** or **Demo Friend**.
-
-### 4. Agent
-
-```bash
-cd backend/agent-service
-uv sync
+# Agent :4100
+cd backend/agent-service && uv sync
 uv run uvicorn tripsuggest.main:app --host 127.0.0.1 --port 4100
 ```
-
-Health: http://localhost:4100/health
 
 ## Invitations
 

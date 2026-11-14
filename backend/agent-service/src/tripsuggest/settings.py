@@ -20,7 +20,7 @@ def _env(name: str, default: str = "") -> str:
 
 
 def _resolve_database_url() -> str:
-    return _env("DATABASE_URL") or "postgres://triplanner:triplanner@localhost:5432/triplanner"
+    return _env("DATABASE_URL") or "postgres://triplanner:triplanner@127.0.0.1:5432/triplanner"
 
 
 @dataclass(frozen=True)

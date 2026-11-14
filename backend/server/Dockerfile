@@ -2,8 +2,9 @@
 #   docker build -f backend/server/Dockerfile -t triplanner/api .
 FROM oven/bun:1.4.3-alpine
 
-# curl is required by the container health check.
-RUN apk add --no-cache curl
+RUN apk add --no-cache curl \
+    && addgroup -S app \
+    && adduser -S app -G app
 
 WORKDIR /app
 
@@ -19,9 +20,14 @@ COPY backend/db/seed-images ./db/seed-images
 # schema.graphql lives next to src in the image.
 COPY backend/graphql ./graphql
 
+RUN mkdir -p /app/uploads && chown -R app:app /app
+
 ENV NODE_ENV=production
+USER app
 EXPOSE 4000
 
-# CMD (not ENTRYPOINT) so a compose init job can override it with
-# `bun run db:migrate` / `bun run db:seed`.
+HEALTHCHECK --interval=10s --timeout=3s --start-period=45s --retries=12 \
+  CMD curl -f http://localhost:4000/health || exit 1
+
+# CMD (not ENTRYPOINT) so Compose can run migrations/seed first.
 CMD ["bun", "src/index.ts"]

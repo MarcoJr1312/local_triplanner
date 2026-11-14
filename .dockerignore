@@ -5,7 +5,7 @@
 **/__pycache__
 **/*.sqlite
 **/*.sqlite-*
-**/uploads
+backend/server/uploads
 **/.env
 .git
 .github

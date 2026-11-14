@@ -8,7 +8,7 @@
 import { Pool, types, type PoolClient } from 'pg';
 import { rewriteQuery } from './query.ts';
 
-export const DEFAULT_DATABASE_URL = 'postgres://triplanner:triplanner@localhost:5432/triplanner';
+export const DEFAULT_DATABASE_URL = 'postgres://triplanner:triplanner@127.0.0.1:5432/triplanner';
 
 // timestamptz -> ISO-8601 string. The app has always consumed timestamps as
 // strings; returning Date objects would change every mapper at once.

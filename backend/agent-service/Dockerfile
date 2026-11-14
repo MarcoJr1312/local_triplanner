@@ -2,10 +2,10 @@
 #   docker build -f backend/agent-service/Dockerfile -t triplanner/agent .
 FROM python:3.12-slim
 
-# curl is required by the container health check.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --create-home --uid 10001 app
 
 RUN pip install --no-cache-dir uv
 
@@ -15,7 +15,14 @@ COPY backend/agent-service/pyproject.toml backend/agent-service/uv.lock backend/
 COPY backend/agent-service/src ./src
 RUN uv sync --frozen --no-dev
 
-ENV PATH="/app/.venv/bin:$PATH"
+ENV PATH="/app/.venv/bin:$PATH" \
+    PYTHONDONTWRITEBYTECODE=1
+
+RUN chown -R app:app /app
+USER app
 EXPOSE 4100
+
+HEALTHCHECK --interval=10s --timeout=3s --start-period=30s --retries=12 \
+  CMD curl -f http://localhost:4100/health || exit 1
 
 CMD ["uvicorn", "tripsuggest.main:app", "--host", "0.0.0.0", "--port", "4100"]

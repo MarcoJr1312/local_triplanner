@@ -2,7 +2,7 @@
 
 Run without pytest (not a dependency):
 
-    cd local/agent-service && uv run python tests/test_m2.py
+    cd backend/agent-service && uv run python tests/test_m2.py
 
 The suite creates/uses ``triplanner_agent_test`` and a deterministic fake
 embedder, so it never downloads the ONNX model or touches dev data.
@@ -22,12 +22,12 @@ import psycopg
 
 ADMIN_URL = os.environ.get(
     "AGENT_TEST_ADMIN_URL",
-    "postgres://triplanner:triplanner@localhost:5432/triplanner",
+    "postgres://triplanner:triplanner@127.0.0.1:5432/triplanner",
 )
 TEST_DB = "triplanner_agent_test"
 TEST_URL = os.environ.get(
     "AGENT_TEST_DATABASE_URL",
-    f"postgres://triplanner:triplanner@localhost:5432/{TEST_DB}",
+    f"postgres://triplanner:triplanner@127.0.0.1:5432/{TEST_DB}",
 )
 
 

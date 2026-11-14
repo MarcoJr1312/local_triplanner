@@ -15,8 +15,16 @@ RUN bun run build
 FROM node:22-alpine AS runner
 RUN apk add --no-cache curl
 WORKDIR /app
-ENV NODE_ENV=production PORT=3000 HOSTNAME=0.0.0.0
-COPY --from=build /app/.next/standalone ./
-COPY --from=build /app/.next/static ./.next/static
+ENV NODE_ENV=production \
+    PORT=3000 \
+    HOSTNAME=0.0.0.0 \
+    NEXT_TELEMETRY_DISABLED=1
+COPY --from=build --chown=node:node /app/.next/standalone ./
+COPY --from=build --chown=node:node /app/.next/static ./.next/static
+USER node
 EXPOSE 3000
+
+HEALTHCHECK --interval=10s --timeout=3s --start-period=45s --retries=12 \
+  CMD curl -f http://localhost:3000/login || exit 1
+
 CMD ["node", "server.js"]

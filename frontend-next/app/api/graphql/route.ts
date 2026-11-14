@@ -2,8 +2,7 @@ import type { NextRequest } from 'next/server';
 
 // Proxy seguro de GraphQL. El navegador SOLO habla con esta ruta; aqui se
 // reenvia al backend local resolviendo el x-user-id del lado del servidor.
-// La key de HasData JAMAS se usa aqui ni se expone: vive solo en el backend
-// local (localhost:4000).
+// No hay claves de servicios externos: el backend resuelve el catalogo local.
 
 const DEFAULT_BACKEND = 'http://localhost:4000/graphql';
 const DEMO_USER_ID = 'demo-user';

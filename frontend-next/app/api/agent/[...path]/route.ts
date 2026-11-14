@@ -6,7 +6,7 @@ import type { NextRequest } from 'next/server';
 // (LLM + RAG en frío). El fetch del servidor NO tiene ese límite; timeout
 // generoso de 150s (el agente propio corta a 90s).
 
-const AGENT_ORIGIN = 'http://127.0.0.1:4100';
+const AGENT_ORIGIN = (process.env.NEXT_PRIVATE_AGENT_URL ?? 'http://127.0.0.1:4100').replace(/\/+$/, '');
 
 export const dynamic = 'force-dynamic';
 

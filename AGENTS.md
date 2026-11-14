@@ -68,7 +68,10 @@ auth and Dockerfiles.
   Postgres + Mongo integration suites (59 tests).
 - M3 done (`d8211de`): 186 real Toronto places and 80 local images seeded from
   HasData; the demo trip mixes sight, food, activity and nightlife.
-- Next: M4 Docker Compose packaging (web/api/agent builds + one-command stack).
+- M4 done: full Compose stack (web, api, agent, Postgres, MongoDB) is healthy;
+  `docker compose up --build` boots and seeds the demo in one command.
+- Next: M5 demo UX + LLM providers (provider abstraction, demo-mode chat,
+  AI badge/docs).
 Do not assume the target architecture is already implemented — check the
 current tree.
 
@@ -82,7 +85,7 @@ current tree.
 - Routes use Google Maps deep links; Uber deep links never preload a pickup.
 - Package manager is **bun** for JS projects; Python uses **uv**.
 
-## Local commands (target)
+## Local commands
 
 ```bash
 docker compose up --build        # full demo

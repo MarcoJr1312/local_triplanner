@@ -1,12 +1,11 @@
 """pgvector-backed place/interest index for the suggestions agent.
 
-Replaces the ChromaDB persistence layer:
+The local runner has no Chroma server and no model download:
 
 - ``agent_embeddings`` holds one row per place, interest term or transient query.
 - ``agent_index_state`` stores the backend ``contentHash`` per destination, so
   re-indexing only happens when the places cache actually changed.
-- Embeddings are 384-dim (all-MiniLM-L6-v2 via Chroma's ONNX embedding
-  function, used standalone — no Chroma server or data directory).
+- Embeddings are 384-dim from a deterministic hashing embedder (offline).
 - Query rows use ``q-<sessionId>-<n>`` ids so :func:`purge_session` can remove
   them without touching places or interests.
 
@@ -15,7 +14,10 @@ All distances are cosine (``<=>``); ``score_from_distance`` keeps its meaning.
 
 from __future__ import annotations
 
+import hashlib
 import json
+import math
+import re
 import uuid
 from dataclasses import dataclass
 from typing import Any, Callable, Iterable, Sequence
@@ -37,14 +39,27 @@ _pool: ConnectionPool | None = None
 
 
 def _default_embedder() -> Embedder:
-    # Imported lazily: loading the ONNX model is expensive and unnecessary for
-    # code paths (and tests) that provide their own embedder.
-    from chromadb.utils.embedding_functions import DefaultEmbeddingFunction
+    """Dependency-free hashing embedder for the local demo.
 
-    function = DefaultEmbeddingFunction()
+    Hashing trick over lowercased tokens: deterministic, offline, and good
+    enough for the seeded Toronto catalogue. Tests inject their own embedder via
+    :func:`set_embedder_for_tests`.
+    """
 
     def embed(texts: Sequence[str]) -> Sequence[Sequence[float]]:
-        return function(list(texts))
+        vectors: list[list[float]] = []
+        for text in texts:
+            vector = [0.0] * EMBEDDING_DIM
+            for token in re.findall(r"[a-z0-9]+", text.lower()):
+                digest = hashlib.sha1(token.encode("utf-8")).digest()
+                index = int.from_bytes(digest[:2], "big") % EMBEDDING_DIM
+                sign = 1.0 if digest[2] % 2 == 0 else -1.0
+                vector[index] += sign
+            norm = math.sqrt(sum(value * value for value in vector))
+            if norm > 0:
+                vector = [value / norm for value in vector]
+            vectors.append(vector)
+        return vectors
 
     return embed
 
