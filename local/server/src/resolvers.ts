@@ -8,7 +8,7 @@ import type { Storage } from './storage.ts';
 import type { AsyncDb } from './pg/db.ts';
 import { toProfile } from './pg/auth.ts';
 import { listPresence, touchPresence } from './presence.ts';
-import { sendInviteEmail, buildJoinUrl } from './email.ts';
+import { buildJoinUrl } from './invite-links.ts';
 import { updateMyProfile, isValidLanguage } from './pg/profile.ts';
 import {
   addAttachment,
@@ -875,7 +875,7 @@ export const resolvers: {
         throw gqlError('INVALID_INVITE_ROLE', 'Rol de invitaciÃ³n no vÃ¡lido');
       }
       const inviteRole = requestedRole as 'editor' | 'viewer';
-      const trip = await tripOrThrow(ctx.db, tripId);
+      await tripOrThrow(ctx.db, tripId);
       const myRole = await getMemberRole(ctx.db, tripId, ctx.currentUserId);
       if (myRole !== 'owner' && myRole !== 'editor') {
         throw gqlError('FORBIDDEN_INVITE', 'Solo el propietario o un editor puede invitar');
@@ -888,25 +888,14 @@ export const resolvers: {
         createdBy: ctx.currentUserId,
       });
       const joinUrl = buildJoinUrl(tripId, invitation.code);
-      const me = await ctx.db
-        .prepare('SELECT display_name FROM users WHERE id = ?')
-        .get<{ display_name: string }>(ctx.currentUserId);
-      const ownerName = me?.display_name ?? 'Un viajero';
-
-      try {
-        await sendInviteEmail({
-          to: invitation.email,
-          tripName: trip.name,
-          ownerName,
-          code: invitation.code,
-          joinUrl,
-          role: inviteRole,
-        });
-      } catch (e) {
-        console.error('[invite] email no enviado:', e instanceof Error ? e.message : e);
-      }
       publishTrip(ctx, tripId, 'inviteSent', { tripId, email: invitation.email }, ctx.currentUserId);
-      return { invitationId: invitation.id, status: invitation.status, email: invitation.email };
+      return {
+        invitationId: invitation.id,
+        status: invitation.status,
+        email: invitation.email,
+        code: invitation.code,
+        joinUrl,
+      };
     },
 
     joinTripWithCode: async (_, args, ctx) => {

@@ -149,6 +149,8 @@ type InviteResult {
   invitationId: ID!
   status: String!
   email: String!
+  code: String!
+  joinUrl: String!
 }
 
 type Location {

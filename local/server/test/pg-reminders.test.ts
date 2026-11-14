@@ -4,7 +4,7 @@ import { connectPg, deleteUser, insertUser } from './helpers/pg.ts';
 import type { PgDb } from '../src/pg/db.ts';
 import { addItem, createTrip, deleteTripCascade, inviteMember } from '../src/pg/trips.ts';
 import { recomputeItemReminder, sweepOnce } from '../src/pg/reminders.ts';
-import type { ReminderEmailInput } from '../src/email.ts';
+import type { ReminderEmailInput } from '../src/reminders.ts';
 
 let db: PgDb | null = null;
 

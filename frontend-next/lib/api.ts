@@ -75,10 +75,11 @@ const ENDPOINT = '/api/graphql';
 
 export const DEMO_USER_ID = 'demo-user';
 export const DEMO_FRIEND_ID = 'demo-friend';
+export const DEMO_FRIEND_EMAIL = 'friend@triplanner.local';
 
 const DEMO_IDENTITIES: Record<string, { email: string; displayName: string }> = {
   [DEMO_USER_ID]: { email: 'demo@triplanner.local', displayName: 'Demo' },
-  [DEMO_FRIEND_ID]: { email: 'friend@triplanner.local', displayName: 'Demo Friend' },
+  [DEMO_FRIEND_ID]: { email: DEMO_FRIEND_EMAIL, displayName: 'Demo Friend' },
 };
 
 const SESSION_KEY = 'triplanner.local.session';
@@ -346,7 +347,7 @@ const LIST_ACTIVITIES = `query($destSlug: String!, $category: String) { listActi
 const LIST_PRESENCE = `query($tripId: ID!) { listPresence(tripId: $tripId) { userId tripId displayName color editingItemId lastSeen } }`;
 const FIND_USER_BY_EMAIL = `query($email: String!) { findUserByEmail(email: $email) { userId email displayName } }`;
 const GET_TRIP_BY_CODE = `query($code: String!) { getTripByCode(code: $code) { id name destinationName ownerName invitedEmail } }`;
-const SEND_TRIP_INVITE = `mutation($tripId: ID!, $email: String!, $role: String!) { sendTripInvite(tripId: $tripId, email: $email, role: $role) { invitationId status email } }`;
+const SEND_TRIP_INVITE = `mutation($tripId: ID!, $email: String!, $role: String!) { sendTripInvite(tripId: $tripId, email: $email, role: $role) { invitationId status email code joinUrl } }`;
 const JOIN_TRIP_WITH_CODE = `mutation($code: String!, $email: String!) { joinTripWithCode(code: $code, email: $email) { ${TRIP_FIELDS} } }`;
 const GET_MY_PROFILE = `query { getMyProfile { userId email displayName color avatarUrl language } }`;
 const UPDATE_MY_PROFILE = `mutation($input: UpdateMyProfileInput!) { updateMyProfile(input: $input) { userId email displayName color avatarUrl language } }`;
@@ -544,15 +545,15 @@ export const api: TriplannerApi = {
     return data.inviteMember;
   },
 
-  // ---- Invitaciones por email (Resend) ----
+  // ---- Invitaciones locales (link copiable, sin email) ----
 
-  async sendTripInvite(tripId: string, email: string, role: 'viewer' | 'editor' = 'viewer'): Promise<{ invitationId: string; status: string; email: string }> {
-    const data = await gql<{ sendTripInvite: { invitationId: string; status: string; email: string } | null }>(
+  async sendTripInvite(tripId: string, email: string, role: 'viewer' | 'editor' = 'viewer'): Promise<InviteResult> {
+    const data = await gql<{ sendTripInvite: InviteResult | null }>(
       SEND_TRIP_INVITE,
       { tripId, email, role }
     );
     if (!data.sendTripInvite) {
-      throw new ApiError('No se pudo enviar la invitación.', { code: 'EMAIL_SEND_FAILED' });
+      throw new ApiError('No se pudo crear la invitación.', { code: 'INVITE_CREATE_FAILED' });
     }
     return data.sendTripInvite;
   },

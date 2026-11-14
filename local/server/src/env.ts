@@ -1,6 +1,5 @@
 // Carga de configuracion del entorno local.
-// Firebase se elimino del runner: la identidad es demo via x-user-id.
-// HasData/Resend siguen presentes hasta M1.4/M1.5.
+// Firebase y Resend se eliminaron del runner; HasData sigue hasta M1.5.
 
 import { timingSafeEqual } from 'node:crypto';
 import path from 'node:path';
@@ -18,9 +17,7 @@ try {
 export const HASDATA_API_KEY = process.env.HASDATA_API_KEY === 'unset' ? '' : (process.env.HASDATA_API_KEY ?? '');
 export const hasHasDataKey = () => HASDATA_API_KEY.length > 0;
 
-// ---- Resend (emails de invitacion) ----
-export const RESEND_API_KEY = process.env.RESEND_API_KEY === 'unset' ? '' : (process.env.RESEND_API_KEY ?? '');
-export const RESEND_FROM = process.env.RESEND_FROM ?? 'Triplanner <onboarding@resend.dev>';
+// ---- Base publica para los links de invitacion ----
 export const APP_URL = process.env.APP_URL ?? 'http://localhost:3000';
 
 export const PORT = Number(process.env.LOCAL_PORT ?? 4000);

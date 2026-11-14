@@ -57,9 +57,15 @@ Runtime services: `web`, `api`, `agent`, `postgres`, `mongo`.
 
 The repo was cloned from `dev_triplanner` and fast-forwarded to the
 `aws_triplanner` main history to inherit the tested Postgres data layer, demo
-auth and Dockerfiles. M1 removes the AWS/Firebase/Resend/HasData runtime pieces;
-M2 replaces DynamoDB with MongoDB. Do not assume the target architecture is
-already implemented — check the current tree.
+auth and Dockerfiles.
+
+- M1.3 done (`d901d9b`): Firebase removed, `demo-user` + `demo-friend`.
+- M1.4 done: Resend removed; invitations return a copyable join link and the
+  reminder email sweep is disabled.
+- Remaining M1 work: HasData runtime removal (M1.5) and AWS surface removal
+  (M1.6). M2 replaces DynamoDB with MongoDB.
+Do not assume the target architecture is already implemented — check the
+current tree.
 
 ## Product conventions (do not regress)
 

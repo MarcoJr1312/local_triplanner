@@ -22,8 +22,6 @@ import {
 } from './env.ts';
 import { createInternalRouter } from './internal.ts';
 import { serveUploads } from './uploads.ts';
-import { sweepOnce } from './pg/reminders.ts';
-import { sendReminderEmail } from './email.ts';
 
 const databaseUrl = await resolveDatabaseUrl();
 const db = await PgDb.connect(databaseUrl);
@@ -83,11 +81,5 @@ server.listen(PORT, () => {
   }
 });
 
-// Reminder sweep every minute (email 1h before start).
-if (process.env.REMINDERS_DISABLED !== '1') {
-  setInterval(() => {
-    sweepOnce(db, sendReminderEmail).catch((e) => {
-      console.error('[reminders] barrido fallido:', e instanceof Error ? e.message : e);
-    });
-  }, 60_000);
-}
+// Reminder emails are intentionally disabled in the local demo: there is no
+// email provider. The recruiter tests invitations through the copyable link.

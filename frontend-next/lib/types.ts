@@ -325,6 +325,8 @@ export interface InviteResult {
   invitationId: string;
   status: string;
   email: string;
+  code: string;
+  joinUrl: string;
 }
 
 export interface UpdateMyProfileInput {

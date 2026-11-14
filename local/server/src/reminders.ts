@@ -1,7 +1,14 @@
 // Reminder time math. Persistence and the sweep live in pg/reminders.
 // The wall-clock -> UTC conversion uses Intl only (no dependencies).
 
-import type { ReminderEmailInput } from './email.ts';
+export interface ReminderEmailInput {
+  to: string;
+  language?: string | null;
+  tripName: string;
+  itemTitle: string;
+  day: string;
+  startTime: string;
+}
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
