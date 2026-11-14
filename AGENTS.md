@@ -70,8 +70,11 @@ auth and Dockerfiles.
   HasData; the demo trip mixes sight, food, activity and nightlife.
 - M4 done: full Compose stack (web, api, agent, Postgres, MongoDB) is healthy;
   `docker compose up --build` boots and seeds the demo in one command.
-- Next: M5 demo UX + LLM providers (provider abstraction, demo-mode chat,
-  AI badge/docs).
+- M5 done (`a283eff`): optional LLM providers, deterministic demo AI and the
+  AI demo-mode badge.
+- M6 done (`0a84de3`): tour, troubleshooting, smoke scripts, CI, Windows
+  clean-clone QA and the `v1.0.0` tag.
+- Known limitation: macOS clean-clone QA is pending; GitHub remote/push is TBD.
 Do not assume the target architecture is already implemented — check the
 current tree.
 
