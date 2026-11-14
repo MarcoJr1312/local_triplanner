@@ -25,4 +25,5 @@ Thumbs.db
 # Build de producción (distDir separado)
 frontend-next/.next-prod/
 
-# Project memory and agent instructions are tracked in this repo.
+# Local Orkai project config (machine-specific category id). AGENTS.md stays tracked.
+.orkai.yaml
