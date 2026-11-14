@@ -66,7 +66,9 @@ auth and Dockerfiles.
 - M1.6 done: AWS surface removed; runtime is Postgres + MongoDB + local disk.
 - M2 data layer done: `MongoLocationCatalogue`, catalogue-only search, and the
   Postgres + Mongo integration suites (59 tests).
-- Next: M3 Toronto dataset (real HasData fetch, committed JSON + images).
+- M3 done (`d8211de`): 186 real Toronto places and 80 local images seeded from
+  HasData; the demo trip mixes sight, food, activity and nightlife.
+- Next: M4 Docker Compose packaging (web/api/agent builds + one-command stack).
 Do not assume the target architecture is already implemented — check the
 current tree.
 

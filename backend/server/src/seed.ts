@@ -172,7 +172,7 @@ export async function seedDemo(db: AsyncDb, activities: SeedActivity[] = []): Pr
   await db
     .prepare(
       `INSERT INTO trips (id, name, destination_id, destination_name, start_date, end_date, total_budget, owner_id, invite_code)
-       VALUES ('demo-trip', 'Fin de semana en Toronto', 'toronto', 'Toronto', '2026-11-06', '2026-11-08', 1200, 'demo-user', 'DEMO123')
+       VALUES ('demo-trip', 'Fin de semana en Toronto', 'toronto', 'Toronto', '2026-12-04', '2026-12-06', 1200, 'demo-user', 'DEMO123')
        ON CONFLICT DO NOTHING`,
     )
     .run();
@@ -185,7 +185,7 @@ export async function seedDemo(db: AsyncDb, activities: SeedActivity[] = []): Pr
     )
     .run();
 
-  const days = ['2026-11-06', '2026-11-07', '2026-11-08'];
+  const days = ['2026-12-04', '2026-12-05', '2026-12-06'];
   const picks = activities.length > 0 ? pickDemoActivities(activities) : FALLBACK_ITEMS;
   const items = picks.map((activity, index) => ({
     id: `demo-item-${index + 1}`,
