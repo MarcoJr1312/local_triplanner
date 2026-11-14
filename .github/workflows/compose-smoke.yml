@@ -1,0 +1,69 @@
+name: Compose smoke
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+    paths:
+      - "backend/**"
+      - "frontend-next/**"
+      - "docker-compose.yml"
+      - "scripts/smoke.sh"
+      - ".dockerignore"
+      - ".env.example"
+      - ".github/workflows/compose-smoke.yml"
+  pull_request:
+    paths:
+      - "backend/**"
+      - "frontend-next/**"
+      - "docker-compose.yml"
+      - "scripts/smoke.sh"
+      - ".dockerignore"
+      - ".env.example"
+      - ".github/workflows/compose-smoke.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: compose-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: Full stack smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build images
+        run: docker compose build
+      - name: Start stack
+        run: docker compose up -d
+      - name: Wait for health
+        run: |
+          for attempt in $(seq 1 60); do
+            ok=1
+            for svc in postgres mongo api agent web; do
+              status="$(docker inspect --format '{{.State.Health.Status}}' "local_triplanner-$svc" 2>/dev/null || true)"
+              [ "$status" = "healthy" ] || ok=0
+            done
+            if [ "$ok" = "1" ]; then
+              docker compose ps
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "health check timed out after $attempt attempts"
+          docker compose ps
+          docker compose logs --tail=200
+          exit 1
+      - name: Smoke test
+        run: bash scripts/smoke.sh
+      - name: Logs on failure
+        if: failure()
+        run: docker compose logs --tail=200
+      - name: Stop stack
+        if: always()
+        run: docker compose down -v

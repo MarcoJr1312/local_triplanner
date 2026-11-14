@@ -7,17 +7,19 @@ to Google Maps routes or an Uber deep link.
 
 The product UI is **Spanish by default**, with an **es/en** switch.
 
-> **Status:** **v1.0.0** — one-command Docker Compose demo is ready. The cloud
-> dependencies (Firebase, HasData, Resend, AWS) are removed from the runtime;
-> place search reads a local MongoDB catalogue seeded with 186 real Toronto
-> places. Tests, smoke scripts and CI are included.
+> **Status:** **v1.1.0** — one-command Docker Compose demo plus per-service
+> CI/CD and multi-arch Docker Hub publishing. The cloud dependencies (Firebase,
+> HasData, Resend, AWS) are removed from the runtime; place search reads a local
+> MongoDB catalogue seeded with 186 real Toronto places.
 
 ## Documentation
 
 - [10-minute demo tour](docs/DEMO_TOUR.md)
 - [Troubleshooting](docs/TROUBLESHOOTING.md)
+- [Release notes v1.1.0](docs/RELEASE_NOTES_v1.1.0.md)
 - [Release notes v1.0.0](docs/RELEASE_NOTES_v1.0.0.md)
 - [QA matrix](docs/QA_MATRIX.md)
+- [CI/CD and Docker Hub](docs/CICD.md)
 
 ## What works now
 
@@ -207,6 +209,30 @@ Then:
 ```bash
 docker compose up -d --build agent web
 ```
+
+## CI/CD and Docker Hub
+
+Each service has its own GitHub Actions workflow and test suite:
+
+| Workflow | Tests | Docker image |
+|---|---|---|
+| `web.yml` | `frontend-next/lib/*.test.ts` | `triplanner-web` |
+| `api.yml` | `backend/server/test/*.test.ts` | `triplanner-api` |
+| `agent.yml` | `backend/agent-service/tests/test_m2.py` | `triplanner-agent` |
+| `compose-smoke.yml` | full Compose + `scripts/smoke.sh` | no push |
+
+Add `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` (Read & Write token) to the
+GitHub repository secrets. Pushes to `main` publish `latest` + `sha-*`; tags
+`v*` publish semver tags. Images are multi-arch (`amd64` + `arm64`).
+
+Run the published images without building:
+
+```bash
+DOCKERHUB_USERNAME=youruser IMAGE_TAG=latest \
+  docker compose -f docker-compose.hub.yml up -d
+```
+
+See [docs/CICD.md](docs/CICD.md) for setup, tags and release flow.
 
 ## Toronto dataset (maintainers)
 

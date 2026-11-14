@@ -1,0 +1,100 @@
+# Run the published Docker Hub images (no local build):
+#   DOCKERHUB_USERNAME=youruser IMAGE_TAG=latest docker compose -f docker-compose.hub.yml up -d
+# The source-build stack lives in docker-compose.yml.
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    container_name: local_triplanner-postgres
+    environment:
+      POSTGRES_USER: triplanner
+      POSTGRES_PASSWORD: triplanner
+      POSTGRES_DB: triplanner
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U triplanner -d triplanner"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  mongo:
+    image: mongo:7
+    container_name: local_triplanner-mongo
+    ports:
+      - "127.0.0.1:${MONGO_PORT:-27017}:27017"
+    volumes:
+      - mongodata:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.runCommand({ping:1}).ok"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  api:
+    image: ${DOCKERHUB_USERNAME:?Set DOCKERHUB_USERNAME}/triplanner-api:${IMAGE_TAG:-latest}
+    container_name: local_triplanner-api
+    pull_policy: always
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgres://triplanner:triplanner@postgres:5432/triplanner
+      MONGODB_URL: mongodb://mongo:27017/triplanner
+      APP_URL: http://localhost:${WEB_PORT:-3000}
+      LOCAL_PORT: "4000"
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:-dev-internal-token}
+      AGENT_BASE_URL: http://agent:4100
+      BOOTSTRAP_LOCAL: "1"
+    volumes:
+      - uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+    command: ["sh", "-c", "bun run db:migrate && bun run db:seed && bun src/index.ts"]
+    restart: unless-stopped
+
+  agent:
+    image: ${DOCKERHUB_USERNAME:?Set DOCKERHUB_USERNAME}/triplanner-agent:${IMAGE_TAG:-latest}
+    container_name: local_triplanner-agent
+    pull_policy: always
+    environment:
+      DATABASE_URL: postgres://triplanner:triplanner@postgres:5432/triplanner
+      BACKEND_URL: http://api:4000
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:-dev-internal-token}
+      LLM_PROVIDER: ${LLM_PROVIDER:-none}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_MODEL: ${LLM_MODEL:-}
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+  web:
+    image: ${DOCKERHUB_USERNAME:?Set DOCKERHUB_USERNAME}/triplanner-web:${IMAGE_TAG:-latest}
+    container_name: local_triplanner-web
+    pull_policy: always
+    environment:
+      NEXT_PRIVATE_BACKEND_URL: http://api:4000/graphql
+      NEXT_PRIVATE_BACKEND_ORIGIN: http://api:4000
+      NEXT_PRIVATE_AGENT_URL: http://agent:4100
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+      agent:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  mongodata:
+  uploads:

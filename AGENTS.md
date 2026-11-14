@@ -74,7 +74,10 @@ auth and Dockerfiles.
   AI demo-mode badge.
 - M6 done (`0a84de3`): tour, troubleshooting, smoke scripts, CI, Windows
   clean-clone QA and the `v1.0.0` tag.
-- Known limitation: macOS clean-clone QA is pending; GitHub remote/push is TBD.
+- CI/CD upgrade (`v1.1.0`): per-service workflows in `.github/workflows/`,
+  multi-arch Docker Hub images and `docker-compose.hub.yml`.
+- Known limitation: macOS clean-clone QA is pending; GitHub remote/push and
+  Docker Hub secrets are TBD.
 Do not assume the target architecture is already implemented — check the
 current tree.
 
