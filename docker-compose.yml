@@ -6,7 +6,7 @@
 services:
   postgres:
     image: pgvector/pgvector:pg17
-    container_name: triplanner-postgres
+    container_name: local_triplanner-postgres
     environment:
       POSTGRES_USER: triplanner
       POSTGRES_PASSWORD: triplanner
@@ -25,7 +25,7 @@ services:
   # slate (the demo accepts data loss by design).
   dynamodb:
     image: amazon/dynamodb-local:latest
-    container_name: triplanner-dynamodb
+    container_name: local_triplanner-dynamodb
     command: "-jar DynamoDBLocal.jar -inMemory -sharedDb"
     ports:
       - "8000:8000"
@@ -33,7 +33,7 @@ services:
   # S3-compatible storage for local dev and tests.
   minio:
     image: minio/minio:latest
-    container_name: triplanner-minio
+    container_name: local_triplanner-minio
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: triplanner

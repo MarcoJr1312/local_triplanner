@@ -15,6 +15,8 @@ build/
 # Env / secrets
 .env
 .env.*
+!.env.example
+!**/.env.example
 *.pem
 
 # Uploads locales (avatares)
@@ -28,6 +30,4 @@ Thumbs.db
 # Build de producción (distDir separado)
 frontend-next/.next-prod/
 
-# Configuración local de agentes
-.orkai.yaml
-AGENTS.md
+# Project memory and agent instructions are tracked in this repo.
