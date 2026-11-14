@@ -151,6 +151,21 @@ identity joins the trip. The invite form is prefilled with
 | `DEEPSEEK_API_KEY` | Optional LLM key |
 | `AGENT_LLM_MODEL`, `AGENT_LLM_BASE_URL` | Optional model/endpoint |
 
+## Toronto dataset (maintainers)
+
+The recruiter catalogue is generated once from HasData and committed:
+
+```bash
+cp local/.env.fetch.example local/.env.fetch
+# put HASDATA_API_KEY=... in local/.env.fetch (gitignored)
+bun local/server/scripts/fetch-toronto.ts
+cd local/server && bun run db:seed
+```
+
+The script writes `local/db/toronto-locations.json`, optional local images under
+`local/server/uploads/seed/`, and `local/db/TORONTO_DATA.md`. The API runtime
+never reads the key.
+
 ## Testing
 
 ```bash

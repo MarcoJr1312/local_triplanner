@@ -16,12 +16,14 @@ import type { AsyncDb } from './pg/db.ts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // Repo: local/server/src -> local/db. Container: /app/src -> /app/db.
-const SEED_DATA_PATH =
-  [
-    path.resolve(__dirname, '..', '..', 'db', 'seed-data.json'),
-    path.resolve(__dirname, '..', 'db', 'seed-data.json'),
-  ].find((candidate) => existsSync(candidate)) ??
-  path.resolve(__dirname, '..', '..', 'db', 'seed-data.json');
+const DB_DIR =
+  [path.resolve(__dirname, '..', '..', 'db'), path.resolve(__dirname, '..', 'db')].find((candidate) =>
+    existsSync(candidate),
+  ) ?? path.resolve(__dirname, '..', '..', 'db');
+const TORONTO_DATA_PATH = path.join(DB_DIR, 'toronto-locations.json');
+const SEED_DATA_PATH = existsSync(TORONTO_DATA_PATH)
+  ? TORONTO_DATA_PATH
+  : path.join(DB_DIR, 'seed-data.json');
 
 export interface SeedActivity {
   id: string;
@@ -35,6 +37,12 @@ export interface SeedActivity {
   cost?: number;
   tags?: unknown[];
   durationHours?: number;
+  address?: string | null;
+  placeId?: string | null;
+  rawType?: string | null;
+  websiteUrl?: string | null;
+  phone?: string | null;
+  priceLevel?: string | null;
 }
 
 export interface SeedDestination {
@@ -88,6 +96,12 @@ export async function seedCatalogue(catalogue: LocationCatalogue, data: SeedData
         cost: activity.cost ?? null,
         tags_json: activity.tags ? JSON.stringify(activity.tags) : null,
         duration_hours: activity.durationHours ?? null,
+        address: activity.address ?? null,
+        place_id: activity.placeId ?? null,
+        raw_type: activity.rawType ?? null,
+        website_url: activity.websiteUrl ?? null,
+        phone: activity.phone ?? null,
+        price_level: activity.priceLevel ?? null,
         parent_id: dest.slug,
         last_updated: now(),
       });
@@ -97,7 +111,12 @@ export async function seedCatalogue(catalogue: LocationCatalogue, data: SeedData
   return count;
 }
 
-export async function seedDemo(db: AsyncDb): Promise<void> {
+const FALLBACK_ITEMS: SeedActivity[] = [
+  { id: 'tor-cn-tower', name: 'CN Tower', category: 'sight', lat: 43.6426, lng: -79.3871, cost: 43 },
+  { id: 'tor-alo', name: 'Alo Restaurant', category: 'food', lat: 43.6486, lng: -79.3956, cost: 110 },
+];
+
+export async function seedDemo(db: AsyncDb, activities: SeedActivity[] = []): Promise<void> {
   await db
     .prepare(
       `INSERT INTO users (id, email, display_name, color)
@@ -132,10 +151,17 @@ export async function seedDemo(db: AsyncDb): Promise<void> {
     )
     .run();
 
-  const items = [
-    { id: 'demo-item-1', locationId: 'tor-cn-tower', title: 'CN Tower', category: 'sight', cost: 43, day: '2026-11-06', order: 0 },
-    { id: 'demo-item-2', locationId: 'tor-alo', title: 'Alo Restaurant', category: 'food', cost: 110, day: '2026-11-07', order: 0 },
-  ];
+  const days = ['2026-11-06', '2026-11-07', '2026-11-08'];
+  const picks = activities.length > 0 ? activities.slice(0, 9) : FALLBACK_ITEMS;
+  const items = picks.map((activity, index) => ({
+    id: `demo-item-${index + 1}`,
+    locationId: activity.id,
+    title: activity.name,
+    category: activity.category,
+    cost: activity.cost ?? 0,
+    day: days[Math.min(Math.floor(index / 3), days.length - 1)],
+    order: index % 3,
+  }));
   for (const item of items) {
     await db
       .prepare(
@@ -149,7 +175,7 @@ export async function seedDemo(db: AsyncDb): Promise<void> {
 
 export async function seedAll(catalogue: LocationCatalogue, db: AsyncDb, data: SeedData): Promise<number> {
   const locations = await seedCatalogue(catalogue, data);
-  await seedDemo(db);
+  await seedDemo(db, data.destinations[0]?.activities ?? []);
   return locations;
 }
 
