@@ -50,6 +50,12 @@ jobs:
       - name: Sync
         working-directory: backend/agent-service
         run: uv sync --frozen
+      - name: Audit dependencies
+        working-directory: backend/agent-service
+        run: |
+          uv export --frozen --no-dev --no-hashes --format requirements-txt -o "$RUNNER_TEMP/agent-requirements.txt"
+          sed -i '/^-e /d;/^tripsuggest-agent-service/d' "$RUNNER_TEMP/agent-requirements.txt"
+          uvx pip-audit -r "$RUNNER_TEMP/agent-requirements.txt" --progress-spinner off
       - name: Test (backend/agent-service/tests/test_m2.py)
         working-directory: backend/agent-service
         run: uv run python tests/test_m2.py

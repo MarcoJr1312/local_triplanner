@@ -41,6 +41,8 @@ Desktop.
 - `bun audit` (API): **clean**.
 - `pip-audit` (agent): **clean** after `opentelemetry-api 1.45.2` and
   `certifi 2026.10.23`.
+- The audits run in `web.yml`, `api.yml` and `agent.yml`; an advisory fails the
+  workflow before tests or publishing.
 - `uv sync --frozen` and `bun install --frozen-lockfile` are used in images.
 
 ### Static analysis

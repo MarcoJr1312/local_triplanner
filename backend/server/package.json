@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Servidor GraphQL local de Triplanner (graphql-yoga + Postgres + MongoDB)",
+  "description": "Triplanner local GraphQL API built with Bun, graphql-yoga, PostgreSQL and MongoDB.",
   "scripts": {
     "start": "bun src/index.ts",
     "dev": "bun --watch src/index.ts",

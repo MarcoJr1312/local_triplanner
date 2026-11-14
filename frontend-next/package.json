@@ -2,6 +2,12 @@
   "name": "triplanner-frontend-next",
   "version": "0.1.0",
   "private": true,
+  "description": "Triplanner web app: local-only collaborative travel planning demo built with Next.js 15, React 19 and Tailwind v4.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MarcoJr1312/local_triplanner.git"
+  },
+  "homepage": "https://github.com/MarcoJr1312/local_triplanner#readme",
   "scripts": {
     "dev": "next dev",
     "build": "next build",

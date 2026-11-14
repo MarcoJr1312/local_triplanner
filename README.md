@@ -1,5 +1,9 @@
 # Triplanner — Local Recruiter Demo
 
+> **Repository description:** A local-only collaborative travel-planning demo
+> with a one-command Docker Compose stack: Next.js 15, Bun GraphQL, FastAPI
+> agent, PostgreSQL 17 + pgvector and MongoDB 7.
+
 Collaborative travel planning web app. Plan a trip with your team: build a
 day-by-day itinerary, organize activities and budgets, invite collaborators,
 attach tickets with per-file visibility, get AI suggestions, and jump straight
@@ -17,6 +21,8 @@ profile settings.
 
 - [10-minute demo tour](docs/DEMO_TOUR.md)
 - [Troubleshooting](docs/TROUBLESHOOTING.md)
+- [Security notes](docs/SECURITY.md)
+- [Release notes v1.2.2](docs/RELEASE_NOTES_v1.2.2.md)
 - [Release notes v1.1.0](docs/RELEASE_NOTES_v1.1.0.md)
 - [Release notes v1.0.0](docs/RELEASE_NOTES_v1.0.0.md)
 - [QA matrix](docs/QA_MATRIX.md)
@@ -278,6 +284,11 @@ cd backend/agent-service && uv run python tests/test_settings.py
 
 # Frontend helpers
 cd frontend-next && bun test
+
+# Dependency audits (also enforced in the service workflows)
+cd frontend-next && bun audit
+cd backend/server && bun audit
+# Agent: see docs/CICD.md for the pip-audit lockfile command
 ```
 
 ## Roadmap

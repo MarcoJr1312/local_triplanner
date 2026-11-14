@@ -18,9 +18,9 @@
 | Search detail data | `searchLocations` returns description, address, rating, phone, website and image | pass |
 | Default language | demo profiles `language=en`; i18n storage default `en` | pass |
 | Secret scan (gitleaks) | full history at scan time (69 commits) | 1 historical Firebase web key; none in `HEAD` |
-| Frontend dependency audit | `cd frontend-next && bun audit` | clean |
-| API dependency audit | `cd backend/server && bun audit` | clean |
-| Agent dependency audit | `uvx pip-audit` on exported lockfile | clean |
+| Frontend dependency audit | `cd frontend-next && bun audit` | clean; enforced in `web.yml` |
+| API dependency audit | `cd backend/server && bun audit` | clean; enforced in `api.yml` |
+| Agent dependency audit | `uvx pip-audit` on exported lockfile | clean; enforced in `agent.yml` |
 | SAST (Semgrep) | `p/security-audit`, `p/secrets`, `p/owasp-top-ten` | 0 code findings; 26 mutable-action-tag warnings |
 | Container scan (Docker Scout) | web / API / agent after rebuild | 0 critical; 1 / 1 / 6 high base-image CVEs |
 | Restart persistence | `docker compose down && docker compose up -d` | pass |

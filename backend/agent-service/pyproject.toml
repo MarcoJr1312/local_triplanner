@@ -1,7 +1,7 @@
 [project]
 name = "tripsuggest-agent-service"
 version = "0.1.0"
-description = "Triplanner agent service: LLM travel suggestions (FastAPI + Agno + DeepSeek)"
+description = "Triplanner local agent service: AI trip suggestions with FastAPI, Agno and pgvector"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.115",

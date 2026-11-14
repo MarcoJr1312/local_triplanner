@@ -6,10 +6,18 @@ Each service has its own workflow and test command.
 
 | Workflow | Service | Tests | Docker image |
 |---|---|---|---|
-| `web.yml` | Next.js frontend | `frontend-next/lib/geolocation.test.ts`, `frontend-next/lib/uberLink.test.ts` (`bun test`) | `triplanner-web` |
-| `api.yml` | Bun GraphQL API | all `backend/server/test/*.test.ts` (Postgres + MongoDB) | `triplanner-api` |
-| `agent.yml` | FastAPI agent | `backend/agent-service/tests/test_m2.py` + `tests/test_settings.py` (Postgres + pgvector) | `triplanner-agent` |
+| `web.yml` | Next.js frontend | `bun audit` + `bun test` (`geolocation`, `uberLink`) | `triplanner-web` |
+| `api.yml` | Bun GraphQL API | `bun audit` + all `backend/server/test/*.test.ts` (Postgres + MongoDB) | `triplanner-api` |
+| `agent.yml` | FastAPI agent | `pip-audit` + `tests/test_m2.py` + `tests/test_settings.py` (Postgres + pgvector) | `triplanner-agent` |
 | `compose-smoke.yml` | Full stack | builds all images, boots Compose, runs `scripts/smoke.sh` | no push |
+
+Every test job audits its dependencies before running the tests:
+
+- **Web and API:** `bun audit` after `bun install --frozen-lockfile`.
+- **Agent:** `uv export --frozen --no-dev ...` then `uvx pip-audit` against the
+  exported lockfile.
+
+A vulnerability advisory fails the workflow before tests or image publishing.
 
 Triggers:
 
@@ -58,6 +66,20 @@ triplanner-agent
 
 The workflows fail at the login/push step if the secrets are missing, so add
 them before pushing `main` or a `v*` tag.
+
+## Repository metadata
+
+The GitHub About description and topics are applied with a one-time script:
+
+```powershell
+$env:GITHUB_TOKEN = "github_pat_..."
+powershell -File scripts/set-repo-metadata.ps1
+```
+
+The token needs repository administration permission. The script sets the
+description to the same text used in the README and adds the project topics
+(`nextjs`, `bun`, `graphql`, `fastapi`, `postgresql`, `mongodb`, `docker-compose`
+and related tags).
 
 ## Image tags
 
