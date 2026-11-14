@@ -3,22 +3,18 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Servidor GraphQL local de Triplanner (graphql-yoga + SQLite + HasData)",
+  "description": "Servidor GraphQL local de Triplanner (graphql-yoga + Postgres + MongoDB)",
   "scripts": {
     "start": "bun src/index.ts",
     "dev": "bun --watch src/index.ts",
     "db:migrate": "bun src/db/migrate.ts",
     "db:seed": "bun src/seed.ts",
-    "catalogue:bootstrap": "bun src/catalogue/bootstrap.ts",
     "test": "bun test",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@aws-sdk/client-dynamodb": "^3.1168.0",
-    "@aws-sdk/client-s3": "^3.1168.0",
-    "@aws-sdk/client-secrets-manager": "^3.1168.0",
-    "@aws-sdk/lib-dynamodb": "^3.1168.0",
     "graphql-yoga": "^5.13.0",
+    "mongodb": "^7.9.0",
     "pg": "^8.23.1"
   },
   "devDependencies": {

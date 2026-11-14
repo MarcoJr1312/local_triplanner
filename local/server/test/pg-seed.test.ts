@@ -1,13 +1,10 @@
 import { after, before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { connectPg } from './helpers/pg.ts';
+import { connectMongo } from './helpers/mongo.ts';
 import type { PgDb } from '../src/pg/db.ts';
-import { DynamoLocationCatalogue, LOCAL_DYNAMO_ENDPOINT } from '../src/catalogue/dynamo.ts';
-import { ensureTable } from '../src/catalogue/bootstrap.ts';
+import type { MongoLocationCatalogue } from '../src/catalogue/mongo.ts';
 import { seedAll, type SeedData } from '../src/seed.ts';
-
-const endpoint = process.env.DYNAMODB_ENDPOINT ?? LOCAL_DYNAMO_ENDPOINT;
-const tableName = 'triplanner-locations-seed-test';
 
 const data: SeedData = {
   destinations: [
@@ -26,7 +23,7 @@ const data: SeedData = {
 };
 
 let db: PgDb | null = null;
-let catalogue: DynamoLocationCatalogue | null = null;
+let catalogue: MongoLocationCatalogue | null = null;
 
 async function cleanDemo(conn: PgDb) {
   await conn.prepare("DELETE FROM trip_items WHERE trip_id = 'demo-trip'").run();
@@ -38,27 +35,19 @@ async function cleanDemo(conn: PgDb) {
 
 before(async () => {
   db = await connectPg();
-  for (let attempt = 0; attempt < 30; attempt++) {
-    try {
-      await ensureTable({ endpoint, tableName });
-      catalogue = new DynamoLocationCatalogue({ endpoint, tableName });
-      await catalogue.clear();
-      if (db) await cleanDemo(db);
-      return;
-    } catch {
-      await new Promise((resolve) => setTimeout(resolve, 500));
-    }
-  }
-  catalogue = null;
+  catalogue = await connectMongo('locations_seed_test');
+  await catalogue?.clear();
+  if (db) await cleanDemo(db);
 });
 
 after(async () => {
   await catalogue?.clear();
+  await catalogue?.close();
   if (db) await cleanDemo(db);
   await db?.close();
 });
 
-describe('seed on Postgres + DynamoDB', () => {
+describe('seed on Postgres + MongoDB', () => {
   test('writes catalogue and demo data, and is idempotent', async () => {
     if (!db || !catalogue) return;
 

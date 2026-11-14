@@ -1,4 +1,4 @@
-// GraphQL server (graphql-yoga) on Postgres + DynamoDB + Storage.
+// GraphQL server (graphql-yoga) on Postgres + MongoDB + local storage.
 
 import { createYoga, createSchema, createPubSub } from 'graphql-yoga';
 import { createServer } from 'node:http';
@@ -9,7 +9,6 @@ import { migrate } from './db/migrate.ts';
 import { resolveDatabaseUrl } from './pg/config.ts';
 import { ensureDemoUsers, getCurrentUserId } from './pg/auth.ts';
 import { createCatalogue } from './catalogue/index.ts';
-import { ensureTable } from './catalogue/bootstrap.ts';
 import { defaultStorage } from './storage.ts';
 import {
   PORT,
@@ -23,15 +22,13 @@ import { serveUploads } from './uploads.ts';
 const databaseUrl = await resolveDatabaseUrl();
 const db = await PgDb.connect(databaseUrl);
 
-// Local bootstrapping: schema + catalogue table must exist before serving.
-// In AWS both are provisioned by the wake workflow (migration/seed tasks).
+// Local bootstrapping: schema and demo identities must exist before serving.
 if (BOOTSTRAP_LOCAL) {
   await migrate(databaseUrl);
-  await ensureTable();
 }
 await ensureDemoUsers(db);
 
-const catalogue = createCatalogue();
+const catalogue = await createCatalogue();
 const storage = defaultStorage();
 const pubsub = createPubSub() as unknown as PubSub;
 

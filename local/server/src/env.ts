@@ -17,6 +17,9 @@ try {
 // ---- Base publica para los links de invitacion ----
 export const APP_URL = process.env.APP_URL ?? 'http://localhost:3000';
 
+// ---- MongoDB (catalogo de lugares) ----
+export const MONGODB_URL = process.env.MONGODB_URL ?? 'mongodb://localhost:27017/triplanner';
+
 export const PORT = Number(process.env.LOCAL_PORT ?? 4000);
 
 // ---- Servicio agente (FastAPI, :4100) ----

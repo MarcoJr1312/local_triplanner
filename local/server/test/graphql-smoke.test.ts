@@ -1,4 +1,4 @@
-// End-to-end resolver smoke test on the flipped stack (Postgres + DynamoDB + Storage).
+// End-to-end resolver smoke test on the flipped stack (Postgres + MongoDB + Storage).
 // Exercises the GraphQL surface without HTTP, using the same Ctx the server builds.
 
 import { after, before, beforeEach, describe, test } from 'node:test';
@@ -7,18 +7,15 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { connectPg, deleteUser, insertUser } from './helpers/pg.ts';
+import { connectMongo } from './helpers/mongo.ts';
 import type { PgDb } from '../src/pg/db.ts';
-import { DynamoLocationCatalogue, LOCAL_DYNAMO_ENDPOINT } from '../src/catalogue/dynamo.ts';
-import { ensureTable } from '../src/catalogue/bootstrap.ts';
+import type { MongoLocationCatalogue } from '../src/catalogue/mongo.ts';
 import { LocalDiskStorage } from '../src/storage.ts';
 import { deleteTripCascade } from '../src/pg/trips.ts';
 import { resolvers, type Ctx } from '../src/resolvers.ts';
 
-const endpoint = process.env.DYNAMODB_ENDPOINT ?? LOCAL_DYNAMO_ENDPOINT;
-const tableName = 'triplanner-locations-graphql-test';
-
 let db: PgDb | null = null;
-let catalogue: DynamoLocationCatalogue | null = null;
+let catalogue: MongoLocationCatalogue | null = null;
 let storage: LocalDiskStorage;
 let root: string;
 let ctx: Ctx | null = null;
@@ -28,21 +25,15 @@ const call = (fn: unknown, args: Record<string, unknown>) =>
 
 before(async () => {
   db = await connectPg();
-  for (let attempt = 0; attempt < 30; attempt++) {
-    try {
-      await ensureTable({ endpoint, tableName });
-      catalogue = new DynamoLocationCatalogue({ endpoint, tableName });
-      break;
-    } catch {
-      await new Promise((resolve) => setTimeout(resolve, 500));
-    }
-  }
+  catalogue = await connectMongo('locations_graphql_test');
+  await catalogue?.clear();
   root = mkdtempSync(path.join(tmpdir(), 'triplanner-smoke-'));
   storage = new LocalDiskStorage(root);
 });
 
 after(async () => {
   await catalogue?.clear();
+  await catalogue?.close();
   await db?.close();
   rmSync(root, { recursive: true, force: true });
 });

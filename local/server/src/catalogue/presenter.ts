@@ -1,5 +1,5 @@
 // Maps a catalogue row to the GraphQL `Location` shape.
-// Kept separate from the catalogue adapters so DynamoDB/Mongo do not own the API shape.
+// Kept separate from the catalogue adapters so the data store does not own the API shape.
 
 import type { HoursFormat, Location, LocationRow, SocialLink } from '../schema-types.ts';
 

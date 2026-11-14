@@ -1,10 +1,11 @@
+// Catalogue factory. MongoDB is the only location store in the local runner.
+
+import { MONGODB_URL } from '../env.ts';
+import { MongoLocationCatalogue } from './mongo.ts';
+
 export * from './types.ts';
-export { DynamoLocationCatalogue, DEFAULT_TABLE, LOCAL_DYNAMO_ENDPOINT } from './dynamo.ts';
-export { ensureTable } from './bootstrap.ts';
+export { MongoLocationCatalogue, DEFAULT_MONGO_URL, DEFAULT_COLLECTION } from './mongo.ts';
 
-import { DynamoLocationCatalogue } from './dynamo.ts';
-import type { LocationCatalogue } from './types.ts';
-
-export function createCatalogue(): LocationCatalogue {
-  return new DynamoLocationCatalogue();
+export async function createCatalogue(): Promise<MongoLocationCatalogue> {
+  return MongoLocationCatalogue.connect({ url: MONGODB_URL });
 }

@@ -62,9 +62,11 @@ auth and Dockerfiles.
 - M1.3 done (`d901d9b`): Firebase removed, `demo-user` + `demo-friend`.
 - M1.4 done (`0d042e9`): Resend removed; invitations return a copyable join
   link and the reminder email sweep is disabled.
-- M1.5 done: HasData runtime removed; place search is catalogue-only.
-- Remaining M1 work: AWS surface removal (M1.6). M2 replaces DynamoDB with
-  MongoDB.
+- M1.5 done (`c3657ad`): HasData runtime removed; place search is catalogue-only.
+- M1.6 done: AWS surface removed; runtime is Postgres + MongoDB + local disk.
+- M2 data layer done: `MongoLocationCatalogue`, catalogue-only search, and the
+  Postgres + Mongo integration suites (59 tests).
+- Next: M3 Toronto dataset (real HasData fetch, committed JSON + images).
 Do not assume the target architecture is already implemented — check the
 current tree.
 

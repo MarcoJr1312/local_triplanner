@@ -2,7 +2,7 @@
 #   docker build -f local/server/Dockerfile -t triplanner/api .
 FROM oven/bun:1.4.3-alpine
 
-# curl is required by the ECS container health check.
+# curl is required by the container health check.
 RUN apk add --no-cache curl
 
 WORKDIR /app
@@ -20,5 +20,6 @@ COPY local/graphql ./graphql
 ENV NODE_ENV=production
 EXPOSE 4000
 
-# CMD (not ENTRYPOINT) so ECS can override it with `bun run db:migrate`.
+# CMD (not ENTRYPOINT) so a compose init job can override it with
+# `bun run db:migrate` / `bun run db:seed`.
 CMD ["bun", "src/index.ts"]

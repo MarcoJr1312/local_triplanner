@@ -1,35 +1,24 @@
 import { after, before, beforeEach, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { connectPg, deleteUser, insertUser } from './helpers/pg.ts';
+import { connectMongo } from './helpers/mongo.ts';
 import type { PgDb } from '../src/pg/db.ts';
 import { setFavorite } from '../src/pg/favorites.ts';
-import { DynamoLocationCatalogue, LOCAL_DYNAMO_ENDPOINT } from '../src/catalogue/dynamo.ts';
-import { ensureTable } from '../src/catalogue/bootstrap.ts';
+import type { MongoLocationCatalogue } from '../src/catalogue/mongo.ts';
 import { searchCatalogue, searchLocationsWithCatalogue } from '../src/catalogue/search.ts';
 
-const endpoint = process.env.DYNAMODB_ENDPOINT ?? LOCAL_DYNAMO_ENDPOINT;
-const tableName = 'triplanner-locations-search-test';
-
 let db: PgDb | null = null;
-let catalogue: DynamoLocationCatalogue | null = null;
+let catalogue: MongoLocationCatalogue | null = null;
 
 before(async () => {
   db = await connectPg();
-  for (let attempt = 0; attempt < 30; attempt++) {
-    try {
-      await ensureTable({ endpoint, tableName });
-      catalogue = new DynamoLocationCatalogue({ endpoint, tableName });
-      await catalogue.clear();
-      return;
-    } catch {
-      await new Promise((resolve) => setTimeout(resolve, 500));
-    }
-  }
-  catalogue = null;
+  catalogue = await connectMongo('locations_search_test');
+  await catalogue?.clear();
 });
 
 after(async () => {
   await catalogue?.clear();
+  await catalogue?.close();
   await db?.close();
 });
 

@@ -1,39 +1,27 @@
-// Integration tests for the DynamoDB catalogue (DynamoDB Local in compose).
-// Skips when the container is not reachable.
+// Integration tests for the MongoDB catalogue. Skips when Mongo is unreachable.
 
 import { after, before, beforeEach, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { DynamoLocationCatalogue, LOCAL_DYNAMO_ENDPOINT } from '../src/catalogue/dynamo.ts';
-import { ensureTable } from '../src/catalogue/bootstrap.ts';
+import { connectMongo } from './helpers/mongo.ts';
+import type { MongoLocationCatalogue } from '../src/catalogue/mongo.ts';
 
-const endpoint = process.env.DYNAMODB_ENDPOINT ?? LOCAL_DYNAMO_ENDPOINT;
-const tableName = process.env.DYNAMODB_TEST_TABLE ?? 'triplanner-locations-test';
-
-let catalogue: DynamoLocationCatalogue | null = null;
+let catalogue: MongoLocationCatalogue | null = null;
 
 before(async () => {
-  for (let attempt = 0; attempt < 30; attempt++) {
-    try {
-      await ensureTable({ endpoint, tableName });
-      catalogue = new DynamoLocationCatalogue({ endpoint, tableName });
-      await catalogue.clear();
-      return;
-    } catch {
-      await new Promise((resolve) => setTimeout(resolve, 500));
-    }
-  }
-  catalogue = null;
+  catalogue = await connectMongo('locations_catalogue_test');
+  await catalogue?.clear();
 });
 
 after(async () => {
   await catalogue?.clear();
+  await catalogue?.close();
 });
 
 beforeEach(async () => {
   await catalogue?.clear();
 });
 
-describe('location catalogue on DynamoDB', () => {
+describe('location catalogue on MongoDB', () => {
   test('upsert dedupes by place_id and updates in place', async () => {
     if (!catalogue) return;
     const first = await catalogue.upsert({ id: 'loc-a', place_id: 'place-1', name: 'Museo', category: 'sight' });
@@ -50,7 +38,6 @@ describe('location catalogue on DynamoDB', () => {
 
     const siblings = await catalogue.listByParent('does-not-exist');
     assert.equal(siblings.length, 0);
-    // One row only: the second write updated the first.
     const found = await catalogue.search('museo renombrado');
     assert.equal(found.length, 1);
   });

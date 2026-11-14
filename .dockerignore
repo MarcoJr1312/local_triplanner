@@ -7,9 +7,5 @@
 **/*.sqlite-*
 **/uploads
 **/.env
-**/firebase-service-account.json
-aws-infra/**/.terraform
-aws-infra/**/*.tfstate
-aws-infra/**/*.tfplan
 .git
 .github

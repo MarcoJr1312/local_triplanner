@@ -1,4 +1,4 @@
-﻿// GraphQL resolvers on Postgres + DynamoDB catalogue + Storage.
+﻿// GraphQL resolvers on Postgres + MongoDB catalogue + local storage.
 
 import { randomUUID } from 'node:crypto';
 import { GraphQLError } from 'graphql';

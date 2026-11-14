@@ -1,7 +1,6 @@
-# Local Postgres for triplanner (server + agent).
-# pgvector image so the agent can use the same instance for embeddings.
+# Local data stores for the recruiter demo.
 # Start:  docker compose up -d
-# Stop:   docker compose down          (keeps the volume)
+# Stop:   docker compose down          (keeps volumes)
 # Reset:  docker compose down -v       (drops data, demo-grade)
 services:
   postgres:
@@ -12,7 +11,7 @@ services:
       POSTGRES_PASSWORD: triplanner
       POSTGRES_DB: triplanner
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -21,29 +20,20 @@ services:
       timeout: 3s
       retries: 20
 
-  # Location catalogue. Same engine as AWS, in-memory so a restart is a clean
-  # slate (the demo accepts data loss by design).
-  dynamodb:
-    image: amazon/dynamodb-local:latest
-    container_name: local_triplanner-dynamodb
-    command: "-jar DynamoDBLocal.jar -inMemory -sharedDb"
+  # Location catalogue: real Toronto places seeded from the committed dataset.
+  mongo:
+    image: mongo:7
+    container_name: local_triplanner-mongo
     ports:
-      - "8000:8000"
-
-  # S3-compatible storage for local dev and tests.
-  minio:
-    image: minio/minio:latest
-    container_name: local_triplanner-minio
-    command: server /data --console-address ":9001"
-    environment:
-      MINIO_ROOT_USER: triplanner
-      MINIO_ROOT_PASSWORD: triplanner123
-    ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "${MONGO_PORT:-27017}:27017"
     volumes:
-      - miniodata:/data
+      - mongodata:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
 
 volumes:
   pgdata:
-  miniodata:
+  mongodata:

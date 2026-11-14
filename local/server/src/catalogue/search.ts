@@ -1,6 +1,6 @@
 // Catalogue-backed location search. The local runner has no external place
-// provider: every result comes from the local catalogue (DynamoDB today,
-// MongoDB in M2). Favorites-first ordering and the 75 km radius stay here.
+// provider: every result comes from MongoDB. Favorites-first ordering and the
+// 75 km radius stay here.
 
 import { distanceKm } from '../geo.ts';
 import type { AsyncDb } from '../pg/db.ts';

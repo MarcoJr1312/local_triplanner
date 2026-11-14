@@ -1,5 +1,5 @@
-// Location catalogue contract. DynamoDB is the source of truth in AWS and in
-// local dev (DynamoDB Local), so search/details do not depend on Postgres.
+// Location catalogue contract. MongoDB is the source of truth in the local
+// runner, so search/details do not depend on Postgres.
 
 import type { LocationRow, UpsertLocationInput } from '../schema-types.ts';
 
