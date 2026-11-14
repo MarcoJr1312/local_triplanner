@@ -83,7 +83,7 @@ the client.
 **Prerequisite:** Docker Desktop (4 GB RAM recommended).
 
 ```bash
-git clone <repo>
+git clone https://github.com/MarcoJr1312/local_triplanner.git
 cd local_triplanner
 docker compose up --build
 ```
@@ -225,10 +225,11 @@ Add `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` (Read & Write token) to the
 GitHub repository secrets. Pushes to `main` publish `latest` + `sha-*`; tags
 `v*` publish semver tags. Images are multi-arch (`amd64` + `arm64`).
 
-Run the published images without building:
+Published images: `marcojr13/triplanner-{web,api,agent}` with tags
+`1.1.0`, `1.1`, `latest` and `sha-e335779`. Run them without building:
 
 ```bash
-DOCKERHUB_USERNAME=youruser IMAGE_TAG=latest \
+DOCKERHUB_USERNAME=marcojr13 IMAGE_TAG=1.1.0 \
   docker compose -f docker-compose.hub.yml up -d
 ```
 

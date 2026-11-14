@@ -42,7 +42,7 @@ Images:
 ## Run from Docker Hub
 
 ```bash
-DOCKERHUB_USERNAME=youruser IMAGE_TAG=latest \
+DOCKERHUB_USERNAME=marcojr13 IMAGE_TAG=1.1.0 \
   docker compose -f docker-compose.hub.yml up -d
 ```
 
@@ -53,12 +53,16 @@ DOCKERHUB_USERNAME=youruser IMAGE_TAG=latest \
 - Source and Docker Hub Compose files validate.
 - Service tests: 59 API, 16 web, 11 agent.
 - Full Compose smoke passes.
-- Docker Hub publishing is configured but not executed from this machine: the
-  GitHub remote and Docker Hub secrets are still TBD.
+- GitHub Actions: **8/8 runs success** on `main` and tag `v1.1.0`.
+- Docker Hub images published:
+  - `marcojr13/triplanner-web`
+  - `marcojr13/triplanner-api`
+  - `marcojr13/triplanner-agent`
+- Tags: `latest`, `1.1`, `1.1.0`, `sha-e335779`; multi-arch `amd64` + `arm64`.
+- The published stack was pulled from Docker Hub and passed `scripts/smoke.ps1`.
 
 ## Next
 
-1. Configure the GitHub remote.
-2. Add `DOCKERHUB_USERNAME` + `DOCKERHUB_TOKEN`.
-3. Push `main` and tag `v1.1.0`.
-4. Confirm the three images on Docker Hub.
+1. Run the macOS clean-clone checklist.
+2. Share `https://github.com/MarcoJr1312/local_triplanner`.
+3. Optional: enable branch protection for `main`.

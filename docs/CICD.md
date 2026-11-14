@@ -21,6 +21,19 @@ Triggers:
 
 Path filters keep each workflow scoped to its service files.
 
+## Current images
+
+- Repository: https://github.com/MarcoJr1312/local_triplanner
+- Docker Hub namespace: `marcojr13`
+- Images:
+  - `marcojr13/triplanner-web`
+  - `marcojr13/triplanner-api`
+  - `marcojr13/triplanner-agent`
+- Published tags: `latest`, `1.1`, `1.1.0`, `sha-e335779`.
+- Architectures: `linux/amd64`, `linux/arm64`.
+- Verification: 8/8 GitHub Actions runs passed on `main` and tag `v1.1.0`;
+  the published stack was pulled and passed the smoke test.
+
 ## Docker Hub setup
 
 1. Create a Docker Hub access token with **Read & Write** permission.
@@ -57,7 +70,7 @@ All published images are multi-arch: `linux/amd64` and `linux/arm64`.
 ## Run the published images
 
 ```bash
-DOCKERHUB_USERNAME=youruser IMAGE_TAG=latest \
+DOCKERHUB_USERNAME=marcojr13 IMAGE_TAG=1.1.0 \
   docker compose -f docker-compose.hub.yml up -d
 ```
 

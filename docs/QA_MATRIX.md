@@ -14,14 +14,18 @@
 | Restart persistence | `docker compose down && docker compose up -d` | pass |
 | Clean reset | `docker compose down -v && docker compose up -d` | pass |
 | Clean clone, Windows 11 + Docker Desktop | clone → `docker compose up -d --build` → smoke | pass, 63.4s warm build+start |
+| GitHub Actions on `main` | web/api/agent/compose-smoke | 4/4 success |
+| GitHub Actions on tag `v1.1.0` | web/api/agent/compose-smoke | 4/4 success |
+| Docker Hub publish | `marcojr13/triplanner-{web,api,agent}` | tags `latest`, `1.1`, `1.1.0`, `sha-e335779`; amd64 + arm64 |
+| Published stack from Docker Hub | `docker compose -f docker-compose.hub.yml up -d` + smoke | pass |
 
 ## Platform status
 
 | Platform | Status | Notes |
 |---|---|---|
 | Windows 11 + Docker Desktop | **PASS** | Clean clone and full smoke executed. |
-| Linux | **CI configured** | `.github/workflows/ci.yml` runs tests + Compose smoke on `ubuntu-latest`. |
-| macOS (Intel/Apple Silicon) | **PENDING** | Docker Desktop + multi-arch images; use the checklist below. |
+| Linux | **PASS (Actions)** | Per-service workflows + Compose smoke on `ubuntu-latest`. |
+| macOS (Intel/Apple Silicon) | **PENDING** | Docker Hub images are multi-arch; use the checklist below. |
 
 ## macOS checklist
 
@@ -40,6 +44,5 @@ Record the result in this file when a Mac is available.
 ## Known non-blocking gaps
 
 - macOS clean-clone result is TBD.
-- GitHub remote/push and a public release URL are TBD.
 - No email provider (intentional).
 - AI demo mode is the default; real providers are opt-in.

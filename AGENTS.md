@@ -76,8 +76,10 @@ auth and Dockerfiles.
   clean-clone QA and the `v1.0.0` tag.
 - CI/CD upgrade (`v1.1.0`): per-service workflows in `.github/workflows/`,
   multi-arch Docker Hub images and `docker-compose.hub.yml`.
-- Known limitation: macOS clean-clone QA is pending; GitHub remote/push and
-  Docker Hub secrets are TBD.
+- CI/CD verified: 8/8 GitHub Actions runs passed; published images
+  `marcojr13/triplanner-{web,api,agent}` (tags `latest`, `1.1`, `1.1.0`,
+  `sha-e335779`) and the published stack passed the smoke test.
+- Known limitation: macOS clean-clone QA is pending.
 Do not assume the target architecture is already implemented — check the
 current tree.
 
