@@ -1,4 +1,4 @@
-// Carga del schema GraphQL: el schema base (local/graphql/schema.graphql, heredado
+// Carga del schema GraphQL: el schema base (backend/graphql/schema.graphql, heredado
 // del contrato original de AppSync) + extension local
 // (searchLocations / locationDetails sobre el catalogo local).
 
@@ -7,7 +7,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-// Repo: local/server/src -> local/graphql. Container: /app/src -> /app/graphql.
+// Repo: backend/server/src -> backend/graphql. Container: /app/src -> /app/graphql.
 const BASE_SCHEMA_PATH =
   [
     path.resolve(__dirname, '..', '..', 'graphql', 'schema.graphql'),

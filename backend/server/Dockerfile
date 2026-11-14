@@ -1,5 +1,5 @@
 # Build from the repository root:
-#   docker build -f local/server/Dockerfile -t triplanner/api .
+#   docker build -f backend/server/Dockerfile -t triplanner/api .
 FROM oven/bun:1.4.3-alpine
 
 # curl is required by the container health check.
@@ -7,15 +7,15 @@ RUN apk add --no-cache curl
 
 WORKDIR /app
 
-COPY local/server/package.json local/server/bun.lock ./
+COPY backend/server/package.json backend/server/bun.lock ./
 RUN bun install --frozen-lockfile --production
 
-COPY local/server/src ./src
+COPY backend/server/src ./src
 # db:migrate / db:seed resolve ../../db relative to src.
-COPY local/db/pg ./db/pg
-COPY local/db/seed-data.json ./db/seed-data.json
+COPY backend/db/pg ./db/pg
+COPY backend/db/seed-data.json ./db/seed-data.json
 # schema.graphql lives next to src in the image.
-COPY local/graphql ./graphql
+COPY backend/graphql ./graphql
 
 ENV NODE_ENV=production
 EXPOSE 4000

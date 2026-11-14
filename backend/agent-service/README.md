@@ -7,7 +7,7 @@ Postgres con pgvector y el proveedor LLM es opcional.
 ## Arranque
 
 ```bash
-cd local/agent-service
+cd backend/agent-service
 uv sync
 uv run uvicorn tripsuggest.main:app --host 127.0.0.1 --port 4100
 ```

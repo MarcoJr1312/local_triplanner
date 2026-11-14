@@ -1,4 +1,4 @@
-// Applies local/db/pg/schema.sql to $DATABASE_URL (idempotent).
+// Applies backend/db/pg/schema.sql to $DATABASE_URL (idempotent).
 // Used by `bun run db:migrate` locally and by the ECS migration task in wake.yml.
 
 import { existsSync, readFileSync } from 'node:fs';
@@ -8,7 +8,7 @@ import { Client } from 'pg';
 import { resolveDatabaseUrl } from '../pg/config.ts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-// Repo layout: local/server/src/db -> local/db/pg/schema.sql (three levels up).
+// Repo layout: backend/server/src/db -> backend/db/pg/schema.sql (three levels up).
 // Container layout: /app/src/db -> /app/db/pg/schema.sql (two levels up).
 const SCHEMA_PATH =
   [

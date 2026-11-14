@@ -1,6 +1,6 @@
 // Idempotent seed for the Postgres + MongoDB stack.
 // - applies the Postgres schema
-// - upserts destinations/activities from local/db/seed-data.json into MongoDB
+// - upserts destinations/activities from backend/db/seed-data.json into MongoDB
 // - creates the demo user, trip, membership and items
 // Re-running does not duplicate anything.
 
@@ -15,7 +15,7 @@ import type { LocationCatalogue } from './catalogue/types.ts';
 import type { AsyncDb } from './pg/db.ts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-// Repo: local/server/src -> local/db. Container: /app/src -> /app/db.
+// Repo: backend/server/src -> backend/db. Container: /app/src -> /app/db.
 const DB_DIR =
   [path.resolve(__dirname, '..', '..', 'db'), path.resolve(__dirname, '..', 'db')].find((candidate) =>
     existsSync(candidate),

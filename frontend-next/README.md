@@ -18,7 +18,7 @@ Navegador → Next (:3000) → app/api/graphql/route.ts → backend local TS (:4
 ```
 
 - El navegador **nunca** habla directo con :4000 ni ve credenciales.
-- `HASDATA_API_KEY` vive solo en `local/.env` (backend). Prohibido `NEXT_PUBLIC_*` sensible.
+- `HASDATA_API_KEY` vive solo en `backend/.env` (backend). Prohibido `NEXT_PUBLIC_*` sensible.
 - Backend URL server-side: `NEXT_PRIVATE_BACKEND_URL` (default `http://localhost:4000/graphql`).
 
 ## Rutas
@@ -39,7 +39,7 @@ bun run build   # build de producción
 bun run start   # servir el build
 ```
 
-Requisitos: backend local TS corriendo en `:4000` (`cd ../local/server && bun src/index.ts`).
+Requisitos: backend local TS corriendo en `:4000` (`cd ../backend/server && bun src/index.ts`).
 Sin backend, el proxy devuelve 502 y la UI muestra estados vacíos.
 
 ## Reglas (ver AGENTS.md raíz)

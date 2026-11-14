@@ -15,7 +15,7 @@ build/
 *.pem
 
 # Uploads locales (avatares)
-local/server/uploads/
+backend/server/uploads/
 
 # OS
 .DS_Store

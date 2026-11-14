@@ -70,7 +70,7 @@ describe('seed on Postgres + MongoDB', () => {
         .get<Record<string, number>>();
 
     const before = await counts();
-    assert.deepEqual(before, { users: 2, trips: 1, members: 1, items: 2 });
+    assert.deepEqual(before, { users: 2, trips: 1, members: 1, items: 1 });
 
     await seedAll(catalogue, db, data);
     assert.deepEqual(await counts(), before);

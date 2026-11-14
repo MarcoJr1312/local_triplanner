@@ -49,9 +49,9 @@ the client.
 | Area | Stack |
 |---|---|
 | Frontend (`frontend-next/`) | Next.js 15 App Router, React 19, TypeScript, shadcn/ui on Radix, Tailwind v4 |
-| Backend (`local/server/`) | TypeScript on Bun, graphql-yoga, Postgres (`pg`), MongoDB (`mongodb`) |
-| Agent (`local/agent-service/`) | Python 3.12, uv, FastAPI, Agno, pgvector |
-| Data (`local/db/`) | Postgres `pg/schema.sql` + idempotent seed; MongoDB Toronto catalogue |
+| Backend (`backend/server/`) | TypeScript on Bun, graphql-yoga, Postgres (`pg`), MongoDB (`mongodb`) |
+| Agent (`backend/agent-service/`) | Python 3.12, uv, FastAPI, Agno, pgvector |
+| Data (`backend/db/`) | Postgres `pg/schema.sql` + idempotent seed; MongoDB Toronto catalogue |
 | Local infra | Docker Compose: PostgreSQL 17 + pgvector, MongoDB 7 |
 
 ## Repository layout
@@ -59,7 +59,7 @@ the client.
 ```
 .
 ├── frontend-next/          Next.js app (App Router, shadcn/ui, i18n)
-├── local/
+├── backend/
 │   ├── server/             GraphQL API, demo auth, uploads
 │   ├── agent-service/      FastAPI suggestion agent (pgvector)
 │   ├── db/                 Postgres schema + seed data
@@ -84,13 +84,13 @@ are temporary until the Compose packaging milestone lands.
 
 ```bash
 docker compose up -d
-cp local/.env.example local/.env
+cp backend/.env.example backend/.env
 ```
 
 ### 2. Backend
 
 ```bash
-cd local/server
+cd backend/server
 bun install
 bun run db:migrate
 bun run db:seed
@@ -112,7 +112,7 @@ App: http://localhost:3000/login — choose **Demo (owner)** or **Demo Friend**.
 ### 4. Agent
 
 ```bash
-cd local/agent-service
+cd backend/agent-service
 uv sync
 uv run uvicorn tripsuggest.main:app --host 127.0.0.1 --port 4100
 ```
@@ -128,7 +128,7 @@ identity joins the trip. The invite form is prefilled with
 
 ## Configuration
 
-### Backend (`local/.env`)
+### Backend (`backend/.env`)
 
 | Variable | Purpose |
 |---|---|
@@ -141,7 +141,7 @@ identity joins the trip. The invite form is prefilled with
 | `AGENT_BASE_URL` | Agent base URL (default `http://127.0.0.1:4100`) |
 | `TRIPLANNER_UPLOADS_OVERRIDE` | Optional uploads directory |
 
-### Agent (`local/agent-service/.env`)
+### Agent (`backend/agent-service/.env`)
 
 | Variable | Purpose |
 |---|---|
@@ -156,25 +156,25 @@ identity joins the trip. The invite form is prefilled with
 The recruiter catalogue is generated once from HasData and committed:
 
 ```bash
-cp local/.env.fetch.example local/.env.fetch
-# put HASDATA_API_KEY=... in local/.env.fetch (gitignored)
-bun local/server/scripts/fetch-toronto.ts
-cd local/server && bun run db:seed
+cp backend/.env.fetch.example backend/.env.fetch
+# put HASDATA_API_KEY=... in backend/.env.fetch (gitignored)
+bun backend/server/scripts/fetch-toronto.ts
+cd backend/server && bun run db:seed
 ```
 
-The script writes `local/db/toronto-locations.json`, optional local images under
-`local/server/uploads/seed/`, and `local/db/TORONTO_DATA.md`. The API runtime
+The script writes `backend/db/toronto-locations.json`, optional local images under
+`backend/server/uploads/seed/`, and `backend/db/TORONTO_DATA.md`. The API runtime
 never reads the key.
 
 ## Testing
 
 ```bash
 # Backend: Postgres + MongoDB integration tests
-cd local/server && bun test
-cd local/server && bunx tsc --noEmit
+cd backend/server && bun test
+cd backend/server && bunx tsc --noEmit
 
 # Agent: deterministic tests
-cd local/agent-service && uv run python tests/test_m2.py
+cd backend/agent-service && uv run python tests/test_m2.py
 
 # Frontend helpers
 cd frontend-next && bun test

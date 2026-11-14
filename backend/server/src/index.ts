@@ -67,7 +67,7 @@ server.listen(PORT, () => {
   console.log(`[triplanner-local] GraphQL en http://localhost:${PORT}/graphql`);
   if (isUsingDefaultInternalToken()) {
     console.warn(
-      '[triplanner-local] INTERNAL_TOKEN no definido: usando default de desarrollo (define INTERNAL_TOKEN en local/.env)',
+      '[triplanner-local] INTERNAL_TOKEN no definido: usando default de desarrollo (define INTERNAL_TOKEN en backend/.env)',
     );
   }
 });

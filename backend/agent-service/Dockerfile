@@ -1,5 +1,5 @@
 # Build from the repository root:
-#   docker build -f local/agent-service/Dockerfile -t triplanner/agent .
+#   docker build -f backend/agent-service/Dockerfile -t triplanner/agent .
 FROM python:3.12-slim
 
 # curl is required by the container health check.
@@ -11,8 +11,8 @@ RUN pip install --no-cache-dir uv
 
 WORKDIR /app
 
-COPY local/agent-service/pyproject.toml local/agent-service/uv.lock local/agent-service/README.md ./
-COPY local/agent-service/src ./src
+COPY backend/agent-service/pyproject.toml backend/agent-service/uv.lock backend/agent-service/README.md ./
+COPY backend/agent-service/src ./src
 RUN uv sync --frozen --no-dev
 
 ENV PATH="/app/.venv/bin:$PATH"

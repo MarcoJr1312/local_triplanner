@@ -1,13 +1,13 @@
 // One-time HasData ingestion for the Toronto recruiter dataset.
 //
 // Usage:
-//   1. cp local/.env.fetch.example local/.env.fetch
-//   2. put HASDATA_API_KEY=... in local/.env.fetch
-//   3. bun local/server/scripts/fetch-toronto.ts
+//   1. cp backend/.env.fetch.example backend/.env.fetch
+//   2. put HASDATA_API_KEY=... in backend/.env.fetch
+//   3. bun backend/server/scripts/fetch-toronto.ts
 //
 // The script is not part of the API runtime. It writes
-// local/db/toronto-locations.json and optional local images under
-// local/server/uploads/seed/. Run it again to refresh the dataset.
+// backend/db/toronto-locations.json and optional local images under
+// backend/server/uploads/seed/. Run it again to refresh the dataset.
 
 import { createHash } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
@@ -15,12 +15,12 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const LOCAL_DIR = path.resolve(__dirname, '..', '..');
-const DB_DIR = path.join(LOCAL_DIR, 'db');
+const BACKEND_DIR = path.resolve(__dirname, '..', '..');
+const DB_DIR = path.join(BACKEND_DIR, 'db');
 const UPLOADS_DIR = path.resolve(__dirname, '..', 'uploads', 'seed');
 const OUT_PATH = path.join(DB_DIR, 'toronto-locations.json');
 const ATTR_PATH = path.join(DB_DIR, 'TORONTO_DATA.md');
-const ENV_FETCH = path.join(LOCAL_DIR, '.env.fetch');
+const ENV_FETCH = path.join(BACKEND_DIR, '.env.fetch');
 
 try {
   process.loadEnvFile(ENV_FETCH);
@@ -32,7 +32,7 @@ const API_KEY = (process.env.HASDATA_API_KEY ?? '').trim();
 if (!API_KEY) {
   console.error(
     'Falta HASDATA_API_KEY.\n' +
-      'Copia local/.env.fetch.example a local/.env.fetch y completa la key.',
+      'Copia backend/.env.fetch.example a backend/.env.fetch y completa la key.',
   );
   process.exit(1);
 }
@@ -335,7 +335,7 @@ async function main(): Promise<void> {
       `- Fetched: ${payload.fetchedAt}\n` +
       `- Queries: ${QUERIES.map((query) => query.q).join('; ')}\n` +
       `- Places: ${places.length} (${counts.sight} sight, ${counts.food} food, ${counts.activity} activity, ${counts.nightlife} nightlife)\n` +
-      `- Images: ${images} local files under \`local/server/uploads/seed/\`; others use no image.\n` +
+      `- Images: ${images} local files under \`backend/server/uploads/seed/\`; others use no image.\n` +
       `- The HasData API key is not stored in this file or the dataset.\n`,
     'utf8',
   );

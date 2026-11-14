@@ -244,7 +244,7 @@ function TripDetailContent() {
 
   // Presencia en vivo: listPresence UNA sola vez al montar (carga inicial) y
   // despues solo la subscription onPresenceChanged (SSE). El backend
-  // (local/server/src/presence.ts) publica la entrada COMPLETA del usuario en
+  // (backend/server/src/presence.ts) publica la entrada COMPLETA del usuario en
   // cada heartbeat y NO emite ningun evento de salida ni campo de expiracion:
   // por eso el merge simple por userId (upsert) es suficiente y correcto. Los
   // puntos de usuarios inactivos se atenuan por antiguedad de lastSeen, no hay

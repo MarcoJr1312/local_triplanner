@@ -86,10 +86,10 @@ current tree.
 docker compose up --build        # full demo
 docker compose down              # stop, keep volumes
 docker compose down -v           # reset data
-cd local/server && bun test      # API tests (needs Postgres/Mongo)
-cd local/server && bunx tsc --noEmit
+cd backend/server && bun test      # API tests (needs Postgres/Mongo)
+cd backend/server && bunx tsc --noEmit
 cd frontend-next && bun test
-cd local/agent-service && uv run python tests/test_m2.py
+cd backend/agent-service && uv run python tests/test_m2.py
 ```
 
 ## Working rules

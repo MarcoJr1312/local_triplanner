@@ -1,6 +1,6 @@
-// Tipos del dominio de Triplanner, reflejando local/graphql/schema.graphql
+// Tipos del dominio de Triplanner, reflejando backend/graphql/schema.graphql
 // + las extensiones locales (searchLocations, locationDetails, locationById).
-// Se mantienen alineados a mano con el schema (fuente: local/graphql/schema.graphql).
+// Se mantienen alineados a mano con el schema (fuente: backend/graphql/schema.graphql).
 
 // The server runs on Postgres now; `Db` is the async handle from src/pg/db.ts.
 export type { AsyncDb as Db } from './pg/db.ts';

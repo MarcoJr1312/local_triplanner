@@ -3,7 +3,7 @@ import { Flame, Mountain, Rose, Snowflake, Sun, Sunrise, Trees, WavesHorizontal 
 import type { TranslationKey } from './i18n';
 
 // Portadas de viaje (M2): presets de gradiente espejo del backend
-// (local/server/src/covers.ts) + resolución foto/preset/default. Los ids son
+// (backend/server/src/covers.ts) + resolución foto/preset/default. Los ids son
 // estables y validados por el backend; aquí solo se renderiza el gradiente.
 
 export interface TripCoverPreset {
