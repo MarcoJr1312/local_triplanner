@@ -33,7 +33,10 @@ def normalize_terms(terms: Iterable[Any]) -> list[str]:
 
 def interest_id(user_id: str, term: str) -> str:
     """Stable Chroma id for a user's interest term."""
-    digest = hashlib.sha1(term.strip().lower().encode("utf-8")).hexdigest()[:12]
+    # Non-cryptographic stable id; SHA-1 is used only for a short key.
+    digest = hashlib.sha1(  # nosemgrep: python.lang.security.insecure-hash-algorithms.insecure-hash-algorithm-sha1
+        term.strip().lower().encode("utf-8"), usedforsecurity=False
+    ).hexdigest()[:12]
     return f"ui-{user_id}-{digest}"
 
 

@@ -2,7 +2,8 @@
 #   docker build -f backend/server/Dockerfile -t triplanner/api .
 FROM oven/bun:1.4.3-alpine
 
-RUN apk add --no-cache curl \
+RUN apk upgrade --no-cache \
+    && apk add --no-cache curl \
     && addgroup -S app \
     && adduser -S app -G app
 

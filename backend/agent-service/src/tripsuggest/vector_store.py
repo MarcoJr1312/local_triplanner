@@ -51,7 +51,10 @@ def _default_embedder() -> Embedder:
         for text in texts:
             vector = [0.0] * EMBEDDING_DIM
             for token in re.findall(r"[a-z0-9]+", text.lower()):
-                digest = hashlib.sha1(token.encode("utf-8")).digest()
+                # Non-cryptographic feature hashing for the offline embedder.
+                digest = hashlib.sha1(  # nosemgrep: python.lang.security.insecure-hash-algorithms.insecure-hash-algorithm-sha1
+                    token.encode("utf-8"), usedforsecurity=False
+                ).digest()
                 index = int.from_bytes(digest[:2], "big") % EMBEDDING_DIM
                 sign = 1.0 if digest[2] % 2 == 0 else -1.0
                 vector[index] += sign

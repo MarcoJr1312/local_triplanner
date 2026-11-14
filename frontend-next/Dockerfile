@@ -13,7 +13,14 @@ COPY frontend-next/ ./
 RUN bun run build
 
 FROM node:22-alpine AS runner
-RUN apk add --no-cache curl
+# Node is the only runtime needed; dropping npm/corepack removes their
+# bundled dependency tree from the shipped image.
+RUN apk upgrade --no-cache \
+    && apk add --no-cache curl \
+    && rm -rf /usr/local/lib/node_modules/npm \
+              /usr/local/bin/npm \
+              /usr/local/bin/npx \
+              /usr/local/bin/corepack
 WORKDIR /app
 ENV NODE_ENV=production \
     PORT=3000 \

@@ -17,6 +17,12 @@
 | Ollama default URL | save Ollama with a blank base URL; effective model uses `host.docker.internal` | pass |
 | Search detail data | `searchLocations` returns description, address, rating, phone, website and image | pass |
 | Default language | demo profiles `language=en`; i18n storage default `en` | pass |
+| Secret scan (gitleaks) | full 69-commit history | 1 historical Firebase web key; none in `HEAD` |
+| Frontend dependency audit | `cd frontend-next && bun audit` | clean |
+| API dependency audit | `cd backend/server && bun audit` | clean |
+| Agent dependency audit | `uvx pip-audit` on exported lockfile | clean |
+| SAST (Semgrep) | `p/security-audit`, `p/secrets`, `p/owasp-top-ten` | 0 code findings; 26 mutable-action-tag warnings |
+| Container scan (Docker Scout) | web / API / agent after rebuild | 0 critical; 1 / 1 / 6 high base-image CVEs |
 | Restart persistence | `docker compose down && docker compose up -d` | pass |
 | Clean reset | `docker compose down -v && docker compose up -d` | pass |
 | Clean clone, Windows 11 + Docker Desktop | clone → `docker compose up -d --build` → smoke | pass, 63.4s warm build+start |
