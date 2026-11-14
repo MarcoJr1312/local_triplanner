@@ -239,8 +239,9 @@ Add `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` (Read & Write token) to the
 GitHub repository secrets. Pushes to `main` publish `latest` + `sha-*`; tags
 `v*` publish semver tags. Images are multi-arch (`amd64` + `arm64`).
 
-Published images: `marcojr13/triplanner-{web,api,agent}` with tags
-`1.2.2`, `1.2`, `latest` and `sha-3e15bed`. Run them without building:
+Published images: `marcojr13/triplanner-{web,api,agent}` with release tags
+`1.2.2`, `1.2`, `sha-3e15bed`; `latest` tracks the current `main`. Run them
+without building:
 
 ```bash
 docker compose -f docker-compose.hub.yml up -d

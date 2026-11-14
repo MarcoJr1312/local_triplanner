@@ -21,6 +21,7 @@
 | Frontend dependency audit | `cd frontend-next && bun audit` | clean; enforced in `web.yml` |
 | API dependency audit | `cd backend/server && bun audit` | clean; enforced in `api.yml` |
 | Agent dependency audit | `uvx pip-audit` on exported lockfile | clean; enforced in `agent.yml` |
+| CI dependency audits (`4e009c3`) | web/api/agent audit steps | 3/3 success |
 | SAST (Semgrep) | `p/security-audit`, `p/secrets`, `p/owasp-top-ten` | 0 code findings; 26 mutable-action-tag warnings |
 | Container scan (Docker Scout) | web / API / agent after rebuild | 0 critical; 1 / 1 / 6 high base-image CVEs |
 | Restart persistence | `docker compose down && docker compose up -d` | pass |
@@ -31,7 +32,7 @@
 | GitHub Actions on tag `v1.2.1` | web/api/agent/compose-smoke | 4/4 success |
 | GitHub Actions on `main` (`3e15bed`, v1.2.2) | web/api/agent/compose-smoke | 4/4 success |
 | GitHub Actions on tag `v1.2.2` | web/api/agent/compose-smoke | 4/4 success |
-| Docker Hub publish | `marcojr13/triplanner-{web,api,agent}` | tags `latest`, `1.2`, `1.2.2`, `sha-3e15bed`; amd64 + arm64 |
+| Docker Hub publish | `marcojr13/triplanner-{web,api,agent}` | release tags `1.2.2`, `1.2`, `sha-3e15bed`; current `main` `sha-4e009c3`; amd64 + arm64 |
 | Published stack from Docker Hub | `IMAGE_TAG=1.2.2 docker compose -f docker-compose.hub.yml up -d` + smoke | pass; 0 critical container CVEs |
 
 ## Platform status
