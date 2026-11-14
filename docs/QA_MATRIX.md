@@ -11,13 +11,13 @@
 | Agent tests | `cd backend/agent-service && uv run python tests/test_m2.py` | 11/11 |
 | Agent runtime settings tests | `cd backend/agent-service && uv run python tests/test_settings.py` | 7/7 |
 | Compose smoke (PowerShell) | `powershell -File scripts/smoke.ps1` | pass (includes `getLlmSettings`) |
-| Compose smoke (bash) | `bash scripts/smoke.sh` | pass on tag `v1.2.1` (CI) |
+| Compose smoke (bash) | `bash scripts/smoke.sh` | pass on tag `v1.2.2` (CI) |
 | In-app LLM settings | save Ollama, restart agent, public config, restore demo | pass |
 | Env-configured provider edit | edit the model without re-entering the env key; key stays env-only | pass |
 | Ollama default URL | save Ollama with a blank base URL; effective model uses `host.docker.internal` | pass |
 | Search detail data | `searchLocations` returns description, address, rating, phone, website and image | pass |
 | Default language | demo profiles `language=en`; i18n storage default `en` | pass |
-| Secret scan (gitleaks) | full 69-commit history | 1 historical Firebase web key; none in `HEAD` |
+| Secret scan (gitleaks) | full history at scan time (69 commits) | 1 historical Firebase web key; none in `HEAD` |
 | Frontend dependency audit | `cd frontend-next && bun audit` | clean |
 | API dependency audit | `cd backend/server && bun audit` | clean |
 | Agent dependency audit | `uvx pip-audit` on exported lockfile | clean |
@@ -29,8 +29,10 @@
 | GitHub Actions on `main` (`6176ac4`, v1.2.0) | web/api/agent/compose-smoke | 4/4 success |
 | GitHub Actions on `main` (`b8a861b`, v1.2.1) | agent/compose-smoke | 2/2 success |
 | GitHub Actions on tag `v1.2.1` | web/api/agent/compose-smoke | 4/4 success |
-| Docker Hub publish | `marcojr13/triplanner-{web,api,agent}` | tags `latest`, `1.2`, `1.2.1`, `sha-b8a861b`; amd64 + arm64 |
-| Published stack from Docker Hub | `IMAGE_TAG=1.2.1 docker compose -f docker-compose.hub.yml up -d` + smoke | pass |
+| GitHub Actions on `main` (`3e15bed`, v1.2.2) | web/api/agent/compose-smoke | 4/4 success |
+| GitHub Actions on tag `v1.2.2` | web/api/agent/compose-smoke | 4/4 success |
+| Docker Hub publish | `marcojr13/triplanner-{web,api,agent}` | tags `latest`, `1.2`, `1.2.2`, `sha-3e15bed`; amd64 + arm64 |
+| Published stack from Docker Hub | `IMAGE_TAG=1.2.2 docker compose -f docker-compose.hub.yml up -d` + smoke | pass; 0 critical container CVEs |
 
 ## Platform status
 

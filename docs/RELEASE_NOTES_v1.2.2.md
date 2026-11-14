@@ -48,7 +48,11 @@ See `docs/SECURITY.md` for the full report and accepted risks.
 - Frontend typecheck + 16/16 tests + production build.
 - Agent 11/11 (M2) + 7/7 (runtime settings).
 - Compose smoke on the rebuilt stack: pass.
-- GitHub Actions and Docker Hub publishing: see the runs for this tag.
+- GitHub Actions: 8/8 runs success (4 on `main` + 4 on tag `v1.2.2`).
+- Docker Hub images published for web, api and agent with tags `latest`,
+  `1.2`, `1.2.2` and `sha-3e15bed`; `linux/amd64` + `linux/arm64`.
+- The published `1.2.2` stack passed `scripts/smoke.ps1`; Docker Scout reports
+  0 critical CVEs on all three images.
 
 ## Upgrade
 

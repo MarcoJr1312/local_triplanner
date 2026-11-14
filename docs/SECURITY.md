@@ -27,7 +27,7 @@ Desktop.
 
 ### Secrets
 
-- `gitleaks` over all 69 commits: **1 finding**, the old
+- `gitleaks` over the full history at scan time (69 commits): **1 finding**, the old
   `FIREBASE_WEB_API_KEY` in `local/.env.example` (commit `bee7caf`).
 - It is a Firebase **web** key, a public client identifier by design, and was
   removed with Firebase in `d901d9b`.

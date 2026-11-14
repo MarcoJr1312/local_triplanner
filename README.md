@@ -8,7 +8,7 @@ to Google Maps routes or an Uber deep link.
 The product UI is **English by default**, with an **es/en** switch in the
 profile settings.
 
-> **Status:** **v1.2.1** - one-command Docker Compose demo plus per-service
+> **Status:** **v1.2.2** - one-command Docker Compose demo plus per-service
 > CI/CD and multi-arch Docker Hub publishing. The cloud dependencies (Firebase,
 > HasData, Resend, AWS) are removed from the runtime; place search reads a local
 > MongoDB catalogue seeded with 186 real Toronto places.
@@ -234,7 +234,7 @@ GitHub repository secrets. Pushes to `main` publish `latest` + `sha-*`; tags
 `v*` publish semver tags. Images are multi-arch (`amd64` + `arm64`).
 
 Published images: `marcojr13/triplanner-{web,api,agent}` with tags
-`1.2.1`, `1.2`, `latest` and `sha-b8a861b`. Run them without building:
+`1.2.2`, `1.2`, `latest` and `sha-3e15bed`. Run them without building:
 
 ```bash
 docker compose -f docker-compose.hub.yml up -d
@@ -244,7 +244,7 @@ The file defaults to `DOCKERHUB_USERNAME=marcojr13` and `IMAGE_TAG=latest`.
 Override them for a fork or a pinned version:
 
 ```bash
-DOCKERHUB_USERNAME=youruser IMAGE_TAG=1.2.1 \
+DOCKERHUB_USERNAME=youruser IMAGE_TAG=1.2.2 \
   docker compose -f docker-compose.hub.yml up -d
 ```
 
@@ -294,4 +294,5 @@ cd frontend-next && bun test
 - Demo auth only; no production identity provider is wired.
 - Membership checks on every read and mutation.
 - Attachments are gated by per-file visibility and short-lived HMAC URLs.
-- No secrets in the client bundle or the repository.
+- No live secrets in the current tree; the only historical finding is an old
+  Firebase web key documented in [docs/SECURITY.md](docs/SECURITY.md).
