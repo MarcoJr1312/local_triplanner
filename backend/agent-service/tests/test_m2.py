@@ -272,6 +272,40 @@ def test_destination_index_shape() -> None:
     assert index.content_hash == "hash-3"
 
 
+def test_demo_mode_returns_actionable_blocks() -> None:
+    from tripsuggest.settings import get_settings
+
+    os.environ["LLM_PROVIDER"] = "none"
+    os.environ.pop("LLM_API_KEY", None)
+    get_settings.cache_clear()
+
+    from tripsuggest.agent import _demo_day_plan_answer, _demo_suggestions_answer
+    from tripsuggest.plan import parse_plan_block
+    from tripsuggest.provider import effective_model_name, is_demo_provider, make_model
+
+    assert is_demo_provider() is True
+    assert make_model() is None
+    assert effective_model_name() == ""
+
+    context = {
+        "trip": {"destinationName": "Toronto"},
+        "days": [{"items": [{"locationId": "tor-1", "title": "CN Tower", "category": "sight", "cost": 43}]}],
+    }
+    vector = [{"id": "tor-2", "name": "ROM", "category": "sight", "cost": 26, "rating": 4.7}]
+
+    answer = _demo_suggestions_answer(context, vector, "es", ["museos"])
+    assert "```suggestions" in answer
+    assert '"placeId": "tor-2"' in answer
+
+    plan_answer = _demo_day_plan_answer(context, vector, "es")
+    plan = parse_plan_block(plan_answer)
+    assert len(plan) == 2
+    assert plan[0]["startTime"] == "09:00"
+    assert {entry["placeId"] for entry in plan} == {"tor-1", "tor-2"}
+
+    get_settings.cache_clear()
+
+
 TESTS: list[Callable[[], None]] = [
     test_normalize_terms,
     test_sync_diff_is_idempotent_and_ids_are_stable,
@@ -283,6 +317,7 @@ TESTS: list[Callable[[], None]] = [
     test_suggestions_prompt_includes_interests,
     test_reindex_only_when_hash_changes,
     test_destination_index_shape,
+    test_demo_mode_returns_actionable_blocks,
 ]
 
 

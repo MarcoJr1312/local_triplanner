@@ -28,28 +28,33 @@ class Settings:
     """Configuration values, resolved once at import time.
 
     Attributes:
-        deepseek_api_key: DeepSeek API key (OpenAI-compatible). Optional in demo mode.
+        llm_provider: ``none`` (deterministic demo), ``deepseek``, ``openai``,
+            ``anthropic`` or ``ollama``.
+        llm_api_key: Provider key. Falls back to ``DEEPSEEK_API_KEY``.
+        llm_base_url: Provider base URL (OpenAI-compatible or Ollama ``/v1``).
+        llm_model: Model id for the selected provider.
         internal_token: Shared secret for internal agent endpoints.
-        llm_base_url: OpenAI-compatible base URL.
-        llm_model: Model id.
         database_url: Postgres connection string (pgvector).
         backend_url: Internal backend base URL.
     """
 
-    deepseek_api_key: str
-    internal_token: str
+    llm_provider: str
+    llm_api_key: str
     llm_base_url: str
     llm_model: str
+    internal_token: str
     database_url: str
     backend_url: str
 
     @classmethod
     def from_env(cls) -> "Settings":
+        provider = _env("LLM_PROVIDER", "none").lower() or "none"
         return cls(
-            deepseek_api_key=_env("DEEPSEEK_API_KEY"),
+            llm_provider=provider,
+            llm_api_key=_env("LLM_API_KEY") or _env("DEEPSEEK_API_KEY"),
+            llm_base_url=_env("LLM_BASE_URL") or _env("AGENT_LLM_BASE_URL"),
+            llm_model=_env("LLM_MODEL") or _env("AGENT_LLM_MODEL"),
             internal_token=_env("INTERNAL_TOKEN"),
-            llm_base_url=_env("AGENT_LLM_BASE_URL", "https://api.deepseek.com"),
-            llm_model=_env("AGENT_LLM_MODEL", "deepseek-v4-pro"),
             database_url=_resolve_database_url(),
             backend_url=_env("BACKEND_URL", "http://127.0.0.1:4000"),
         )

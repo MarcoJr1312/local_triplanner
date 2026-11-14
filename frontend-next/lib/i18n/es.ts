@@ -315,6 +315,9 @@ export const es = {
 
   // ---- suggestions ----
   'suggestions.title': 'Sugerencias de IA',
+  'suggestions.demoBadge': 'Modo demo IA',
+  'suggestions.demoHint':
+    'Respuestas deterministas del catálogo local, sin proveedor LLM. Configura LLM_PROVIDER para usar IA real.',
   'suggestions.intro': 'Ideas generadas para este día según tu destino.',
   'suggestions.empty.title': 'No hay sugerencias para este día',
   'suggestions.empty.subtitle': 'Prueba con otro día o ajusta el presupuesto del viaje.',

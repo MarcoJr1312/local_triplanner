@@ -27,6 +27,7 @@ from tripsuggest.agent import run_agent, run_day_plan_agent
 from tripsuggest.auth import resolve_demo_user
 from tripsuggest.auto_suggest import NoInterestsError, auto_suggest
 from tripsuggest.backend import BackendClient, BackendError
+from tripsuggest.provider import effective_model_name, is_demo_provider
 from tripsuggest.vector_store import (
     embed_query,
     ensure_indexed,
@@ -267,6 +268,18 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+@app.get("/api/agent/config")
+def agent_config() -> dict[str, Any]:
+    """Provider status for the AI badge. Public and read-only."""
+    settings = get_settings()
+    demo = is_demo_provider()
+    return {
+        "provider": "none" if demo else settings.llm_provider,
+        "model": effective_model_name(),
+        "demo": demo,
+    }
+
+
 @app.post("/api/agent/suggestions")
 async def suggestions(
     body: SuggestionsRequest,
@@ -298,7 +311,10 @@ async def suggestions(
         logger.exception("unexpected error in suggestions")
         return _error(500, "AGENT_ERROR", str(exc))
 
-    return JSONResponse(status_code=200, content={"answer": answer})
+    return JSONResponse(
+        status_code=200,
+        content={"answer": answer, "mode": "demo" if is_demo_provider() else "llm"},
+    )
 
 
 @app.post("/api/agent/auto-suggest")

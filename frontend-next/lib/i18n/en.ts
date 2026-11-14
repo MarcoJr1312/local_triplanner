@@ -317,6 +317,9 @@ export const en: typeof es = {
 
   // ---- suggestions ----
   'suggestions.title': 'AI suggestions',
+  'suggestions.demoBadge': 'AI demo mode',
+  'suggestions.demoHint':
+    'Deterministic answers from the local catalogue, no LLM provider. Set LLM_PROVIDER to use real AI.',
   'suggestions.intro': 'Ideas generated for this day based on your destination.',
   'suggestions.empty.title': 'No suggestions for this day',
   'suggestions.empty.subtitle': 'Try another day or adjust the trip budget.',

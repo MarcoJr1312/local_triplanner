@@ -8,9 +8,11 @@ import { useI18n } from '@/lib/i18n';
 import type { AutoSuggestItem, Suggestion, Trip } from '@/lib/types';
 import {
   extractSuggestions,
+  getAgentConfig,
   getSuggestionChats,
   postSuggestion,
   stripSuggestionsBlock,
+  type AgentConfig,
   type SuggestionItem,
 } from '@/lib/suggestions';
 import { toast } from 'sonner';
@@ -66,6 +68,7 @@ export default function SuggestionsPanel({ open, trip, day, onClose }: Suggestio
   const [autoOffset, setAutoOffset] = useState(0);
   const [autoNoInterests, setAutoNoInterests] = useState(false);
   const [showInterests, setShowInterests] = useState(false);
+  const [agentConfig, setAgentConfig] = useState<AgentConfig | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -84,6 +87,7 @@ export default function SuggestionsPanel({ open, trip, day, onClose }: Suggestio
     setAutoOffset(0);
     setAutoNoInterests(false);
     setShowInterests(false);
+    setAgentConfig(null);
     getSuggestionChats(tripId, day)
       .then((chats) => {
         if (cancelled) return;
@@ -106,6 +110,21 @@ export default function SuggestionsPanel({ open, trip, day, onClose }: Suggestio
       cancelled = true;
     };
   }, [open, tripId, day]);
+
+  useEffect(() => {
+    if (!open) return;
+    let alive = true;
+    getAgentConfig()
+      .then((config) => {
+        if (alive) setAgentConfig(config);
+      })
+      .catch(() => {
+        // The panel still works without the badge.
+      });
+    return () => {
+      alive = false;
+    };
+  }, [open]);
 
   useEffect(() => {
     const el = scrollRef.current;
@@ -272,7 +291,15 @@ export default function SuggestionsPanel({ open, trip, day, onClose }: Suggestio
   return (
     <Modal open={open} onClose={onClose} title={t('suggestions.title')} size="md">
       <div className="flex h-[60dvh] min-h-[300px] max-h-[560px] flex-col">
-        <div className="mb-2 flex items-center justify-end">
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            {agentConfig?.demo && (
+              <span className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
+                <Sparkles className="h-3 w-3" />
+                {t('suggestions.demoBadge')}
+              </span>
+            )}
+          </div>
           <button
             type="button"
             onClick={handleAutoSuggest}
@@ -287,6 +314,9 @@ export default function SuggestionsPanel({ open, trip, day, onClose }: Suggestio
             {t('interests.autoSuggest')}
           </button>
         </div>
+        {agentConfig?.demo && (
+          <p className="mb-2 text-[11px] text-muted">{t('suggestions.demoHint')}</p>
+        )}
         <div ref={scrollRef} className="scrollbar-thin min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
           {loading ? (
             <div className="flex h-full items-center justify-center">

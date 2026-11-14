@@ -6,6 +6,30 @@ import { ApiError, api, getAuthHeaders } from './api';
 import type { SuggestionChat, SuggestionChatMessage } from './types';
 
 const AGENT_ENDPOINT = '/api/agent/suggestions';
+const AGENT_CONFIG_ENDPOINT = '/api/agent/config';
+
+export interface AgentConfig {
+  provider: string;
+  model: string;
+  demo: boolean;
+}
+
+// Provider status for the AI badge; never fails the panel.
+export async function getAgentConfig(): Promise<AgentConfig | null> {
+  try {
+    const res = await fetch(AGENT_CONFIG_ENDPOINT, { cache: 'no-store' });
+    if (!res.ok) return null;
+    const json = (await res.json()) as Partial<AgentConfig>;
+    if (typeof json.demo !== 'boolean' || typeof json.provider !== 'string') return null;
+    return {
+      provider: json.provider,
+      model: typeof json.model === 'string' ? json.model : '',
+      demo: json.demo,
+    };
+  } catch {
+    return null;
+  }
+}
 
 // El agente tarda (llamada LLM + RAG); damos margen sobre su propio timeout de
 // 90s. Si aquí se agota, se mapea a un AGENT_TIMEOUT local.

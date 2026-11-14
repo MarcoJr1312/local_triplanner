@@ -153,15 +153,53 @@ identity joins the trip. The invite form is prefilled with
 | `AGENT_BASE_URL` | Agent base URL (default `http://127.0.0.1:4100`) |
 | `TRIPLANNER_UPLOADS_OVERRIDE` | Optional uploads directory |
 
-### Agent (`backend/agent-service/.env`)
+### Agent (`backend/agent-service/.env`) — host development
 
 | Variable | Purpose |
 |---|---|
 | `DATABASE_URL` | Postgres with pgvector (same database as the backend) |
 | `BACKEND_URL` | Internal backend base URL |
 | `INTERNAL_TOKEN` | Shared secret with the backend |
-| `DEEPSEEK_API_KEY` | Optional LLM key |
-| `AGENT_LLM_MODEL`, `AGENT_LLM_BASE_URL` | Optional model/endpoint |
+| `LLM_PROVIDER` | `none` (default), `deepseek`, `openai`, `anthropic`, `ollama` |
+| `LLM_API_KEY` | Provider key (not needed for `none` or local Ollama) |
+| `LLM_MODEL` | Provider model id |
+| `LLM_BASE_URL` | Optional endpoint; Ollama uses `.../v1` |
+
+### LLM providers (Docker demo)
+
+The default `LLM_PROVIDER=none` uses deterministic answers from the local
+catalogue and shows an **AI demo mode** badge. To enable a real provider,
+create a root `.env` from `.env.example` and set:
+
+```bash
+cp .env.example .env
+
+# DeepSeek
+LLM_PROVIDER=deepseek
+LLM_API_KEY=...
+LLM_MODEL=deepseek-v4-pro
+
+# OpenAI
+LLM_PROVIDER=openai
+LLM_API_KEY=...
+LLM_MODEL=gpt-4o-mini
+
+# Anthropic
+LLM_PROVIDER=anthropic
+LLM_API_KEY=...
+LLM_MODEL=claude-sonnet-4-5-20250929
+
+# Ollama on the host (no key)
+LLM_PROVIDER=ollama
+LLM_MODEL=llama3.1
+LLM_BASE_URL=http://host.docker.internal:11434/v1
+```
+
+Then:
+
+```bash
+docker compose up -d --build agent web
+```
 
 ## Toronto dataset (maintainers)
 

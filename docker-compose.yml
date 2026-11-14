@@ -69,9 +69,13 @@ services:
       DATABASE_URL: postgres://triplanner:triplanner@postgres:5432/triplanner
       BACKEND_URL: http://api:4000
       INTERNAL_TOKEN: ${INTERNAL_TOKEN:-dev-internal-token}
+      LLM_PROVIDER: ${LLM_PROVIDER:-none}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_MODEL: ${LLM_MODEL:-}
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
-      AGENT_LLM_MODEL: ${AGENT_LLM_MODEL:-deepseek-v4-pro}
-      AGENT_LLM_BASE_URL: ${AGENT_LLM_BASE_URL:-https://api.deepseek.com}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       api:
         condition: service_healthy

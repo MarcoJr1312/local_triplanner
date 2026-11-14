@@ -1,33 +1,35 @@
 import type { NextRequest } from 'next/server';
 
-// Proxy del servicio agente (127.0.0.1:4100) como ROUTE HANDLER.
-// Reemplaza el rewrite de next.config.ts porque el proxy de rewrites del
-// dev server corta los pedidos a los 30s exactos y el agente tarda 20-90s
-// (LLM + RAG en frío). El fetch del servidor NO tiene ese límite; timeout
-// generoso de 150s (el agente propio corta a 90s).
-
+// Proxy for the agent service. Runtime env keeps the same Next image working
+// in Docker (`http://agent:4100`) and in host development (`127.0.0.1:4100`).
 const AGENT_ORIGIN = (process.env.NEXT_PRIVATE_AGENT_URL ?? 'http://127.0.0.1:4100').replace(/\/+$/, '');
 
 export const dynamic = 'force-dynamic';
 
-export async function POST(request: NextRequest, ctx: { params: Promise<{ path: string[] }> }) {
+async function proxy(
+  request: NextRequest,
+  ctx: { params: Promise<{ path: string[] }> },
+  method: 'GET' | 'POST',
+): Promise<Response> {
   const { path } = await ctx.params;
   const target = `${AGENT_ORIGIN}/api/agent/${path.join('/')}`;
 
-  const authorization = request.headers.get('authorization');
+  const headers: Record<string, string> = {};
   const xUserId = request.headers.get('x-user-id')?.trim();
-  const contentType = request.headers.get('content-type') ?? 'application/json';
+  if (xUserId) headers['x-user-id'] = xUserId;
+
+  let body: ArrayBuffer | undefined;
+  if (method === 'POST') {
+    headers['Content-Type'] = request.headers.get('content-type') ?? 'application/json';
+    body = await request.arrayBuffer();
+  }
 
   let upstream: Response;
   try {
     upstream = await fetch(target, {
-      method: 'POST',
-      headers: {
-        'Content-Type': contentType,
-        ...(authorization ? { authorization } : {}),
-        ...(xUserId ? { 'x-user-id': xUserId } : {}),
-      },
-      body: await request.arrayBuffer(),
+      method,
+      headers,
+      body,
       cache: 'no-store',
       signal: AbortSignal.timeout(150_000),
     });
@@ -43,4 +45,18 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ path: 
     status: upstream.status,
     headers: { 'Content-Type': upstream.headers.get('content-type') ?? 'application/json' },
   });
+}
+
+export async function GET(
+  request: NextRequest,
+  ctx: { params: Promise<{ path: string[] }> },
+): Promise<Response> {
+  return proxy(request, ctx, 'GET');
+}
+
+export async function POST(
+  request: NextRequest,
+  ctx: { params: Promise<{ path: string[] }> },
+): Promise<Response> {
+  return proxy(request, ctx, 'POST');
 }

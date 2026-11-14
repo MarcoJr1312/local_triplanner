@@ -8,6 +8,7 @@ tool.
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from agno.agent import Agent
@@ -168,6 +169,162 @@ def build_day_plan_prompt(context: dict[str, Any], vector_places: list[dict[str,
     )
 
 
+def _candidate_places(
+    context: dict[str, Any],
+    vector_places: list[dict[str, Any]],
+    limit: int = 5,
+) -> list[dict[str, Any]]:
+    """Deterministic candidates for demo mode: vector hits first, then itinerary."""
+    candidates: list[dict[str, Any]] = []
+    seen: set[str] = set()
+
+    def add(
+        place_id: Any,
+        title: Any,
+        category: Any,
+        cost: Any,
+        rating: Any = None,
+    ) -> None:
+        pid = str(place_id or "").strip()
+        name = str(title or "").strip()
+        if not pid or not name or pid in seen:
+            return
+        seen.add(pid)
+        try:
+            numeric_cost = float(cost) if cost not in (None, "") else 0.0
+        except (TypeError, ValueError):
+            numeric_cost = 0.0
+        candidates.append(
+            {
+                "placeId": pid,
+                "title": name,
+                "category": str(category or "activity"),
+                "cost": numeric_cost,
+                "rating": rating,
+            }
+        )
+
+    for place in vector_places or []:
+        add(
+            place.get("id") or place.get("placeId"),
+            place.get("name") or place.get("title"),
+            place.get("category"),
+            place.get("cost"),
+            place.get("rating"),
+        )
+    for day in context.get("days") or []:
+        for item in day.get("items") or []:
+            add(
+                item.get("locationId") or item.get("placeId") or item.get("id"),
+                item.get("title"),
+                item.get("category"),
+                item.get("cost"),
+            )
+    return candidates[:limit]
+
+
+def _demo_suggestions_answer(
+    context: dict[str, Any],
+    vector_places: list[dict[str, Any]],
+    locale: str,
+    interests: list[str] | None,
+) -> str:
+    lang = locale if locale in ("es", "en") else "es"
+    destination = (context.get("trip") or {}).get("destinationName") or (
+        "el destino" if lang == "es" else "the destination"
+    )
+    places = _candidate_places(context, vector_places, 4)
+    if not places:
+        return (
+            "Todavía no tengo lugares del catálogo para recomendarte. "
+            "Prueba a buscar un lugar o ajusta los intereses del viaje."
+            if lang == "es"
+            else "I don't have catalogue places to recommend yet. "
+            "Try searching for a place or adjusting the trip interests."
+        )
+
+    if lang == "es":
+        lines = [f"Ideas del catálogo local para {destination}:"]
+        if interests:
+            lines.append(f"Tus intereses: {', '.join(interests)}.")
+    else:
+        lines = [f"Ideas from the local catalogue for {destination}:"]
+        if interests:
+            lines.append(f"Your interests: {', '.join(interests)}.")
+
+    for place in places:
+        bits = [place["title"], f"({place['category']})"]
+        if place.get("rating") not in (None, 0.0, 0):
+            bits.append(f"rating {place['rating']}")
+        if place.get("cost"):
+            bits.append(f"~{place['cost']:.0f}")
+        lines.append("- " + " · ".join(bits))
+
+    lines.append(
+        "Puedes añadirlos al día con el botón +."
+        if lang == "es"
+        else "Use the + button to add them to the day."
+    )
+    payload = [
+        {
+            "placeId": place["placeId"],
+            "title": place["title"],
+            "category": place["category"],
+            "cost": place["cost"],
+        }
+        for place in places
+    ]
+    block = json.dumps(payload, ensure_ascii=False)
+    return "\n".join(lines) + f"\n\n```suggestions\n{block}\n```"
+
+
+def _demo_day_plan_answer(
+    context: dict[str, Any],
+    vector_places: list[dict[str, Any]],
+    locale: str,
+) -> str:
+    lang = locale if locale in ("es", "en") else "es"
+    destination = (context.get("trip") or {}).get("destinationName") or (
+        "el destino" if lang == "es" else "the destination"
+    )
+    places = _candidate_places(context, vector_places, 5)
+    if not places:
+        return (
+            "Todavía no tengo lugares del catálogo para armar el día."
+            if lang == "es"
+            else "I don't have catalogue places to build the day yet."
+        )
+
+    times = ["09:00", "11:30", "13:30", "16:00", "19:30"]
+    entries = [
+        {
+            "placeId": place["placeId"],
+            "title": place["title"],
+            "category": place["category"],
+            "cost": place["cost"],
+            "startTime": times[index] if index < len(times) else None,
+        }
+        for index, place in enumerate(places)
+    ]
+    if lang == "es":
+        lines = [
+            f"Plan de un día en {destination}:",
+            "Combina una visita por la mañana, comida, una actividad de tarde y cena.",
+        ]
+    else:
+        lines = [
+            f"One-day plan for {destination}:",
+            "A morning visit, lunch, an afternoon activity and dinner.",
+        ]
+    lines.append(
+        "Ajusta los horarios a tu ritmo; el catálogo es local y determinista."
+        if lang == "es"
+        else "Adjust the times to your pace; the catalogue is local and deterministic."
+    )
+    block = json.dumps(entries, ensure_ascii=False)
+    return "\n".join(lines) + f"\n\n```plan\n{block}\n```"
+
+
 def run_agent(
     *,
     client: Any,
@@ -180,8 +337,12 @@ def run_agent(
     interests: list[str] | None = None,
 ) -> str:
     """Run the agent over the conversation and return its full answer."""
+    model = make_model()
+    if model is None:
+        return _demo_suggestions_answer(context, vector_places, locale, interests)
+
     agent = Agent(
-        model=make_model(),
+        model=model,
         tools=make_tools(client, trip_id, user_id),
         description="Asistente de sugerencias de viaje de Triplanner.",
         instructions=build_system_prompt(context, vector_places, locale, interests),
@@ -211,8 +372,12 @@ def run_day_plan_agent(
 ) -> str:
     """Run the agent over a single "plan one day" prompt and return its answer."""
     destination = (context.get("trip") or {}).get("destinationName") or "el destino"
+    model = make_model()
+    if model is None:
+        return _demo_day_plan_answer(context, vector_places, locale)
+
     agent = Agent(
-        model=make_model(),
+        model=model,
         tools=make_tools(client, trip_id, user_id),
         description="Planificador de un día de viaje de Triplanner.",
         instructions=build_day_plan_prompt(context, vector_places, locale),
