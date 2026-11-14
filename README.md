@@ -8,7 +8,7 @@ to Google Maps routes or an Uber deep link.
 The product UI is **English by default**, with an **es/en** switch in the
 profile settings.
 
-> **Status:** **v1.2.0** - one-command Docker Compose demo plus per-service
+> **Status:** **v1.2.1** - one-command Docker Compose demo plus per-service
 > CI/CD and multi-arch Docker Hub publishing. The cloud dependencies (Firebase,
 > HasData, Resend, AWS) are removed from the runtime; place search reads a local
 > MongoDB catalogue seeded with 186 real Toronto places.
@@ -234,7 +234,7 @@ GitHub repository secrets. Pushes to `main` publish `latest` + `sha-*`; tags
 `v*` publish semver tags. Images are multi-arch (`amd64` + `arm64`).
 
 Published images: `marcojr13/triplanner-{web,api,agent}` with tags
-`1.2.0`, `1.2`, `latest` and `sha-6176ac4`. Run them without building:
+`1.2.1`, `1.2`, `latest` and `sha-b8a861b`. Run them without building:
 
 ```bash
 docker compose -f docker-compose.hub.yml up -d
@@ -244,7 +244,7 @@ The file defaults to `DOCKERHUB_USERNAME=marcojr13` and `IMAGE_TAG=latest`.
 Override them for a fork or a pinned version:
 
 ```bash
-DOCKERHUB_USERNAME=youruser IMAGE_TAG=1.2.0 \
+DOCKERHUB_USERNAME=youruser IMAGE_TAG=1.2.1 \
   docker compose -f docker-compose.hub.yml up -d
 ```
 
