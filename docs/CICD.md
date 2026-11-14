@@ -70,7 +70,14 @@ All published images are multi-arch: `linux/amd64` and `linux/arm64`.
 ## Run the published images
 
 ```bash
-DOCKERHUB_USERNAME=marcojr13 IMAGE_TAG=1.1.0 \
+docker compose -f docker-compose.hub.yml up -d
+```
+
+The file defaults to `DOCKERHUB_USERNAME=marcojr13` and `IMAGE_TAG=latest`.
+Override them for a fork or a pinned version:
+
+```bash
+DOCKERHUB_USERNAME=youruser IMAGE_TAG=1.1.0 \
   docker compose -f docker-compose.hub.yml up -d
 ```
 
@@ -83,7 +90,8 @@ WEB_PORT=3000
 POSTGRES_PORT=5432
 MONGO_PORT=27017
 LLM_PROVIDER=none
-IMAGE_TAG=1.0.0
+DOCKERHUB_USERNAME=marcojr13
+IMAGE_TAG=1.1.0
 ```
 
 The API container runs migrations and the idempotent seed on every start, so a

@@ -229,7 +229,14 @@ Published images: `marcojr13/triplanner-{web,api,agent}` with tags
 `1.1.0`, `1.1`, `latest` and `sha-e335779`. Run them without building:
 
 ```bash
-DOCKERHUB_USERNAME=marcojr13 IMAGE_TAG=1.1.0 \
+docker compose -f docker-compose.hub.yml up -d
+```
+
+The file defaults to `DOCKERHUB_USERNAME=marcojr13` and `IMAGE_TAG=latest`.
+Override them for a fork or a pinned version:
+
+```bash
+DOCKERHUB_USERNAME=youruser IMAGE_TAG=1.1.0 \
   docker compose -f docker-compose.hub.yml up -d
 ```
 

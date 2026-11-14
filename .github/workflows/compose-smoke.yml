@@ -8,6 +8,7 @@ on:
       - "backend/**"
       - "frontend-next/**"
       - "docker-compose.yml"
+      - "docker-compose.hub.yml"
       - "scripts/smoke.sh"
       - ".dockerignore"
       - ".env.example"
@@ -17,6 +18,7 @@ on:
       - "backend/**"
       - "frontend-next/**"
       - "docker-compose.yml"
+      - "docker-compose.hub.yml"
       - "scripts/smoke.sh"
       - ".dockerignore"
       - ".env.example"
@@ -37,6 +39,8 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+      - name: Validate Docker Hub compose
+        run: docker compose -f docker-compose.hub.yml config --quiet
       - name: Build images
         run: docker compose build
       - name: Start stack

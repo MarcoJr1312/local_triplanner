@@ -42,9 +42,11 @@ Images:
 ## Run from Docker Hub
 
 ```bash
-DOCKERHUB_USERNAME=marcojr13 IMAGE_TAG=1.1.0 \
-  docker compose -f docker-compose.hub.yml up -d
+docker compose -f docker-compose.hub.yml up -d
 ```
+
+Defaults: `DOCKERHUB_USERNAME=marcojr13`, `IMAGE_TAG=latest`. Override them for
+a fork or a pinned version.
 
 ## Verification in this release
 

@@ -35,7 +35,7 @@ services:
     restart: unless-stopped
 
   api:
-    image: ${DOCKERHUB_USERNAME:?Set DOCKERHUB_USERNAME}/triplanner-api:${IMAGE_TAG:-latest}
+    image: ${DOCKERHUB_USERNAME:-marcojr13}/triplanner-api:${IMAGE_TAG:-latest}
     container_name: local_triplanner-api
     pull_policy: always
     environment:
@@ -58,7 +58,7 @@ services:
     restart: unless-stopped
 
   agent:
-    image: ${DOCKERHUB_USERNAME:?Set DOCKERHUB_USERNAME}/triplanner-agent:${IMAGE_TAG:-latest}
+    image: ${DOCKERHUB_USERNAME:-marcojr13}/triplanner-agent:${IMAGE_TAG:-latest}
     container_name: local_triplanner-agent
     pull_policy: always
     environment:
@@ -78,7 +78,7 @@ services:
     restart: unless-stopped
 
   web:
-    image: ${DOCKERHUB_USERNAME:?Set DOCKERHUB_USERNAME}/triplanner-web:${IMAGE_TAG:-latest}
+    image: ${DOCKERHUB_USERNAME:-marcojr13}/triplanner-web:${IMAGE_TAG:-latest}
     container_name: local_triplanner-web
     pull_policy: always
     environment:
