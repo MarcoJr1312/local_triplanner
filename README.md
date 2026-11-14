@@ -292,15 +292,6 @@ cd backend/server && bun audit
 # Agent: see docs/CICD.md for the pip-audit lockfile command
 ```
 
-## Roadmap
-
-1. **M1 (done)** — remove Firebase, Resend, HasData and AWS from the runtime.
-2. **M2 (done)** — Postgres + MongoDB data layer and integration tests.
-3. **M3 (done)** — 186 real Toronto places + 80 local images, seeded demo trip.
-4. **M4 (next)** — Dockerfiles and one-command Compose stack for web/api/agent.
-5. **M5** — demo identity switcher, invite link polish, optional LLM providers.
-6. **M6** — recruiter README, demo tour, smoke script, CI and v1.0.0.
-
 ## Security
 
 - Demo auth only; no production identity provider is wired.
