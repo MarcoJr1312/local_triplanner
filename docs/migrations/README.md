@@ -67,6 +67,10 @@ emailService:
   enabled: true
   image: { repository: ..., tag: ..., pullPolicy: ... }
   replicaCount: 1      # recruiter node = single replica
+  service: { enabled: true, port: 4200 }
+  settingsFile: /app/.data/email.json   # runtime BYOK overrides
+  persistence: { enabled: true, size: 1Gi }
+  internalToken: { existingSecret: triplanner-internal, key: INTERNAL_TOKEN }
   resources: {}
   podSecurityContext: {}
   securityContext: {}
@@ -85,6 +89,10 @@ workload, no HPA/PDB, plaintext Kafka inside the pod network, and
 `appUrl=http://localhost:3000` (or the NodePort/Ingress URL the recruiter
 opens). A hosted profile can raise replicas and enable TLS/SASL; it is an
 override, not the baseline.
+
+Provider keys follow the **BYOK** convention: the recruiter enters them in the
+app, the service stores the override `0600` on its PVC, and the chart only
+carries an optional seed. Never put a provider key in `values.yaml`.
 
 Rules:
 
