@@ -1,0 +1,10 @@
+apiVersion: v2
+name: helm-triplanner
+description: Triplanner email microservice (Kafka consumer + BYOK settings)
+type: application
+
+# Chart version. Bump on chart changes.
+version: 0.1.0
+
+# Version of the deployed email service image.
+appVersion: "0.1.0"

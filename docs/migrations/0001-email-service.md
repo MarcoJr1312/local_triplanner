@@ -434,7 +434,7 @@ emailService:
 
   podSecurityContext:
     runAsNonRoot: true
-    fsGroup: 100          # Bun Alpine image's app group; makes the PVC writable
+    fsGroup: 101          # Bun Alpine image's app GID; makes the PVC writable
     fsGroupChangePolicy: OnRootMismatch
     seccompProfile:
       type: RuntimeDefault
@@ -731,7 +731,7 @@ Rules:
   `0700`. The file lives on the PVC, so it survives pod restarts.
 - The PVC must be writable by the non-root container user. Set
   `podSecurityContext.fsGroup` to the image's app GID (the Bun Alpine image
-  creates `app` as UID/GID 100) or use an initContainer to chown the mount.
+  creates `app` as UID 100/GID 101) or use an initContainer to chown the mount.
 - The provider router rebuilds when settings change; the next event uses the
   new key without restarting the pod.
 - If the PVC is deleted, the recruiter re-enters the key. An optional

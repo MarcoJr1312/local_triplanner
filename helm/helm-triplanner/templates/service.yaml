@@ -1,0 +1,19 @@
+{{- if .Values.emailService.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: triplanner-email
+  labels:
+    app.kubernetes.io/name: triplanner-email
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: email
+spec:
+  type: {{ .Values.emailService.service.type }}
+  selector:
+    app.kubernetes.io/name: triplanner-email
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  ports:
+    - name: http
+      port: {{ .Values.emailService.service.port }}
+      targetPort: http
+{{- end }}

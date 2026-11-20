@@ -65,23 +65,26 @@ kafka:                 # shared by api (producer) and email (consumer)
 
 emailService:
   enabled: true
-  image: { repository: ..., tag: ..., pullPolicy: ... }
   replicaCount: 1      # recruiter node = single replica
-  service: { enabled: true, port: 4200 }
-  settingsFile: /app/.data/email.json   # runtime BYOK overrides
-  persistence: { enabled: true, size: 1Gi }
-  internalToken: { existingSecret: triplanner-internal, key: INTERNAL_TOKEN }
-  resources: {}
-  podSecurityContext: {}
-  securityContext: {}
-  livenessProbe: {}
-  readinessProbe: {}
-  autoscaling: { enabled: false }
-  podDisruptionBudget: { enabled: false }
-  networkPolicy: {}
-  nodeSelector: {}
-  tolerations: []
-  affinity: {}
+  provider: sink       # recruiter switches to resend in the app
+  service:
+    enabled: true
+    type: ClusterIP
+    port: 4200
+  settingsFile: /app/.data/email.json
+  persistence:
+    enabled: true
+    size: 1Gi
+  internalToken:
+    existingSecret: triplanner-internal
+    key: INTERNAL_TOKEN
+  podSecurityContext:
+    runAsNonRoot: true
+    fsGroup: 101                  # makes the PVC writable by the Bun app group
+
+api:
+  email:
+    serviceUrl: http://triplanner-email:4200
 ```
 
 The default profile is a **single-node recruiter install**: one replica per
