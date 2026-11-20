@@ -21,6 +21,6 @@ USER app
 EXPOSE 4200
 
 HEALTHCHECK --interval=10s --timeout=3s --start-period=20s --retries=6 \
-  CMD curl -f http://localhost:4200/health || exit 1
+  CMD sh -c 'curl -f "http://localhost:${HEALTH_PORT:-4200}/health" || exit 1'
 
 CMD ["bun", "src/index.ts"]
