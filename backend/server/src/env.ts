@@ -28,6 +28,10 @@ export const AGENT_BASE_URL = (process.env.AGENT_BASE_URL ?? 'http://127.0.0.1:4
 // ---- Servicio de email (Kafka consumer + BYOK settings, :4200) ----
 export const EMAIL_SERVICE_URL = (process.env.EMAIL_SERVICE_URL ?? 'http://127.0.0.1:4200').replace(/\/+$/, '');
 
+// ---- Go demo broker (HTTP topic/offset/ack, :8080) ----
+export const BROKER_URL = (process.env.BROKER_URL ?? 'http://127.0.0.1:8080').replace(/\/+$/, '');
+export const BROKER_TOPIC = process.env.BROKER_TOPIC ?? 'TripInvitation';
+
 // ---- Token interno (endpoints REST /internal/*) ----
 export const INTERNAL_TOKEN = process.env.INTERNAL_TOKEN ?? 'dev-internal-token';
 

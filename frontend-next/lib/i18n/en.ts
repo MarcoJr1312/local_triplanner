@@ -214,6 +214,7 @@ export const en: typeof es = {
   'members.offline': 'Offline',
   'members.onlineCount': '{n} online',
   'members.you': '(you)',
+  'members.demoInvite': 'Demo',
   'members.roleAria': 'Role of {name}',
   'members.removeAria': 'Remove {name}',
   'members.leave': 'Leave trip',

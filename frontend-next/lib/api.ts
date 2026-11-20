@@ -327,7 +327,7 @@ const TRIP_FIELDS = `
   inviteCode
   coverPreset
   coverPhotoUrl
-  members { userId displayName email role joinedAt color avatarUrl }
+  members { userId displayName email invitedEmail role joinedAt color avatarUrl }
   items { id day order activityId title category cost startTime notes imageUrl addedBy isFavorite lat lng locationText reminderEnabled attachments { id fileName mimeType sizeBytes url createdAt uploadedByName viewerIds visibility createdBy } }
   myRole
   createdAt

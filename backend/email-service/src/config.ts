@@ -1,40 +1,21 @@
 // Environment contract for the email microservice.
-//
-// Every value here maps 1:1 to a Helm value documented in
-// docs/migrations/0001-email-service.md. Secrets are passed as environment
-// variables sourced from Kubernetes Secrets; they are never read from files
-// inside the repository.
 
 import path from 'node:path';
 
 export type EmailProviderName = 'resend' | 'sink';
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
-export type SaslMechanism = 'plain' | 'scram-sha-256' | 'scram-sha-512';
 
 export const DEFAULT_INTERNAL_TOKEN = 'dev-internal-token';
 
-export interface KafkaSaslSettings {
-  mechanism: SaslMechanism;
-  username: string;
-  password: string;
-}
-
-export interface KafkaSettings {
-  brokers: string[];
-  clientId: string;
-  groupId: string;
+export interface BrokerSettings {
+  url: string;
   topic: string;
+  consumer: string;
   dlqTopic: string;
-  ssl: boolean;
-  sslCaPath?: string;
-  sslRejectUnauthorized: boolean;
-  sasl?: KafkaSaslSettings;
-  ensureTopics: boolean;
-  partitions: number;
-  replicationFactor: number;
-  concurrency: number;
-  connectionTimeoutMs: number;
+  batchSize: number;
+  waitSeconds: number;
   requestTimeoutMs: number;
+  retryDelayMs: number;
 }
 
 export interface EmailSettings {
@@ -49,7 +30,7 @@ export interface EmailSettings {
 }
 
 export interface AppConfig {
-  kafka: KafkaSettings;
+  broker: BrokerSettings;
   email: EmailSettings;
   appUrl: string;
   healthPort: number;
@@ -67,6 +48,8 @@ export class ConfigError extends Error {
 }
 
 type Env = Record<string, string | undefined>;
+
+const NAME_RE = /^[A-Za-z0-9._-]{1,128}$/;
 
 function readOptional(env: Env, name: string): string | undefined {
   const raw = env[name];
@@ -92,14 +75,6 @@ function readInt(env: Env, name: string, fallback: number, min: number, max: num
   return value;
 }
 
-function readBool(env: Env, name: string, fallback: boolean): boolean {
-  const raw = readOptional(env, name)?.toLowerCase();
-  if (raw === undefined) return fallback;
-  if (raw === 'true' || raw === '1') return true;
-  if (raw === 'false' || raw === '0') return false;
-  throw new ConfigError(`${name} must be true or false`);
-}
-
 function readEnum<T extends string>(env: Env, name: string, values: readonly T[], fallback: T): T {
   const raw = readOptional(env, name)?.toLowerCase() ?? fallback;
   if (!(values as readonly string[]).includes(raw)) {
@@ -122,36 +97,17 @@ function readUrl(env: Env, name: string, fallback: string): string {
   return value.replace(/\/+$/, '');
 }
 
-export function loadConfig(env: Env = process.env): AppConfig {
-  const brokersRaw = readOptional(env, 'KAFKA_BROKERS');
-  if (!brokersRaw) throw new ConfigError('KAFKA_BROKERS is required');
-  const brokers = brokersRaw
-    .split(',')
-    .map((broker) => broker.trim())
-    .filter((broker) => broker.length > 0);
-  if (brokers.length === 0) throw new ConfigError('KAFKA_BROKERS must contain at least one broker');
-
-  const saslMechanism = readOptional(env, 'KAFKA_SASL_MECHANISM')?.toLowerCase();
-  const saslUsername = readOptional(env, 'KAFKA_SASL_USERNAME');
-  const saslPassword = readOptional(env, 'KAFKA_SASL_PASSWORD');
-  let sasl: KafkaSaslSettings | undefined;
-  if (saslMechanism) {
-    if (!(['plain', 'scram-sha-256', 'scram-sha-512'] as const).includes(saslMechanism as SaslMechanism)) {
-      throw new ConfigError('KAFKA_SASL_MECHANISM must be one of: plain, scram-sha-256, scram-sha-512');
-    }
-    if (!saslUsername) throw new ConfigError('KAFKA_SASL_USERNAME is required when SASL is enabled');
-    if (!saslPassword) throw new ConfigError('KAFKA_SASL_PASSWORD is required when SASL is enabled');
-    sasl = {
-      mechanism: saslMechanism as SaslMechanism,
-      username: saslUsername,
-      password: saslPassword,
-    };
-  } else if (saslUsername || saslPassword) {
-    throw new ConfigError('KAFKA_SASL_MECHANISM is required when SASL credentials are provided');
+function readName(env: Env, name: string, fallback: string): string {
+  const value = readString(env, name, fallback);
+  if (!NAME_RE.test(value)) {
+    throw new ConfigError(`${name} must match [A-Za-z0-9._-] and be at most 128 characters`);
   }
+  return value;
+}
 
-  const topic = readString(env, 'KAFKA_TOPIC', 'triplanner.email.requests.v1');
-  const dlqTopic = readString(env, 'KAFKA_DLQ_TOPIC', `${topic}.dlq`);
+export function loadConfig(env: Env = process.env): AppConfig {
+  const topic = readName(env, 'BROKER_TOPIC', 'TripInvitation');
+  const consumer = readName(env, 'BROKER_CONSUMER', 'email-service');
 
   const provider = readEnum(env, 'EMAIL_PROVIDER', ['resend', 'sink'] as const, 'resend');
   const resendApiKey = readOptional(env, 'RESEND_API_KEY');
@@ -160,22 +116,15 @@ export function loadConfig(env: Env = process.env): AppConfig {
   }
 
   return {
-    kafka: {
-      brokers,
-      clientId: readString(env, 'KAFKA_CLIENT_ID', 'triplanner-email-service'),
-      groupId: readString(env, 'KAFKA_GROUP_ID', 'triplanner-email-service'),
+    broker: {
+      url: readUrl(env, 'BROKER_URL', 'http://127.0.0.1:8080'),
       topic,
-      dlqTopic,
-      ssl: readBool(env, 'KAFKA_SSL', false),
-      sslCaPath: readOptional(env, 'KAFKA_SSL_CA_PATH'),
-      sslRejectUnauthorized: readBool(env, 'KAFKA_SSL_REJECT_UNAUTHORIZED', true),
-      sasl,
-      ensureTopics: readBool(env, 'KAFKA_ENSURE_TOPICS', false),
-      partitions: readInt(env, 'KAFKA_PARTITIONS', 3, 1, 512),
-      replicationFactor: readInt(env, 'KAFKA_REPLICATION_FACTOR', 1, 1, 9),
-      concurrency: readInt(env, 'KAFKA_CONCURRENCY', 3, 1, 64),
-      connectionTimeoutMs: readInt(env, 'KAFKA_CONNECTION_TIMEOUT_MS', 10_000, 1_000, 120_000),
-      requestTimeoutMs: readInt(env, 'KAFKA_REQUEST_TIMEOUT_MS', 30_000, 1_000, 300_000),
+      consumer,
+      dlqTopic: readName(env, 'BROKER_DLQ_TOPIC', `${topic}.dlq`),
+      batchSize: readInt(env, 'BROKER_BATCH_SIZE', 10, 1, 100),
+      waitSeconds: readInt(env, 'BROKER_WAIT_SECONDS', 20, 0, 30),
+      requestTimeoutMs: readInt(env, 'BROKER_REQUEST_TIMEOUT_MS', 35_000, 1_000, 120_000),
+      retryDelayMs: readInt(env, 'BROKER_RETRY_DELAY_MS', 1_000, 100, 60_000),
     },
     email: {
       provider,

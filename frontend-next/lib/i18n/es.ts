@@ -212,6 +212,7 @@ export const es = {
   'members.offline': 'Desconectado',
   'members.onlineCount': '{n} en línea',
   'members.you': '(tú)',
+  'members.demoInvite': 'Demo',
   'members.roleAria': 'Rol de {name}',
   'members.removeAria': 'Quitar a {name}',
   'members.leave': 'Salir del viaje',

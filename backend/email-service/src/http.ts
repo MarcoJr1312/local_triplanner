@@ -11,7 +11,7 @@ export interface HealthState {
   ready: boolean;
   provider: string;
   providerReady: boolean;
-  kafkaReady: boolean;
+  brokerReady: boolean;
   reason?: string;
 }
 
@@ -113,7 +113,7 @@ export function startHttpServer({
         status: state.ready ? 'ready' : 'not_ready',
         provider: state.provider,
         providerReady: state.providerReady,
-        kafkaReady: state.kafkaReady,
+        brokerReady: state.brokerReady,
         ...(state.reason ? { reason: state.reason } : {}),
       });
       return;

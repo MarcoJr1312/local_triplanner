@@ -1,11 +1,8 @@
-// Kafka adapter. Delivery semantics are at-least-once: the offset is committed
-// after `eachMessage` resolves, so a crash between the provider call and the
-// commit can redeliver. Resend's Idempotency-Key (the event id) absorbs that.
+// HTTP broker consumer. One loop per email-service replica. The broker keeps
+// one offset per consumer name; a message is acknowledged only after a send,
+// duplicate or DLQ publish succeeds.
 
-import { readFileSync } from 'node:fs';
-import type { ConnectionOptions } from 'node:tls';
-import { CompressionTypes, Kafka, logLevel, type Consumer, type KafkaConfig, type Producer } from 'kafkajs';
-import type { KafkaSaslSettings, KafkaSettings } from './config.ts';
+import type { BrokerClient } from './broker.ts';
 import type { HandleEmailEventResult } from './handler.ts';
 import type { Logger } from './logger.ts';
 
@@ -14,12 +11,14 @@ export interface ConsumerState {
   reason?: string;
 }
 
-export interface StartEmailConsumerOptions {
-  kafka: KafkaSettings;
+export interface StartBrokerConsumerOptions {
+  client: BrokerClient;
+  topic: string;
+  dlqTopic: string;
   logger: Logger;
   handler: (raw: unknown) => Promise<HandleEmailEventResult>;
+  retryDelayMs: number;
   onStateChange?: (state: ConsumerState) => void;
-  onFatal?: (error: Error) => void;
 }
 
 export interface EmailConsumerHandle {
@@ -27,240 +26,110 @@ export interface EmailConsumerHandle {
   stop(): Promise<void>;
 }
 
-interface DlqInput {
-  originalTopic: string;
-  partition: number;
-  offset: string;
-  reason: string;
-  attempts: number;
-  eventId?: string;
-  raw: unknown;
+function sleep(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(done, ms);
+    const onAbort = () => done();
+    signal.addEventListener('abort', onAbort, { once: true });
+    function done() {
+      clearTimeout(timer);
+      signal.removeEventListener('abort', onAbort);
+      resolve();
+    }
+  });
 }
 
-function buildSsl(config: KafkaSettings): boolean | ConnectionOptions | undefined {
-  if (!config.ssl) return undefined;
-  const options: ConnectionOptions = { rejectUnauthorized: config.sslRejectUnauthorized };
-  if (config.sslCaPath) options.ca = [readFileSync(config.sslCaPath, 'utf8')];
-  return options;
-}
-
-function buildSasl(config: KafkaSaslSettings | undefined): KafkaConfig['sasl'] {
-  if (!config) return undefined;
-  switch (config.mechanism) {
-    case 'plain':
-      return { mechanism: 'plain', username: config.username, password: config.password };
-    case 'scram-sha-256':
-      return { mechanism: 'scram-sha-256', username: config.username, password: config.password };
-    case 'scram-sha-512':
-      return { mechanism: 'scram-sha-512', username: config.username, password: config.password };
-  }
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
-export async function startEmailConsumer({
-  kafka,
+export function startBrokerConsumer({
+  client,
+  topic,
+  dlqTopic,
   logger,
   handler,
+  retryDelayMs,
   onStateChange,
-  onFatal,
-}: StartEmailConsumerOptions): Promise<EmailConsumerHandle> {
-  const client = new Kafka({
-    clientId: kafka.clientId,
-    brokers: kafka.brokers,
-    ssl: buildSsl(kafka),
-    sasl: buildSasl(kafka.sasl),
-    connectionTimeout: kafka.connectionTimeoutMs,
-    requestTimeout: kafka.requestTimeoutMs,
-    logLevel: logLevel.NOTHING,
-    retry: { retries: 8 },
-  });
-
-  const producer: Producer = client.producer({ allowAutoTopicCreation: false });
-  const consumer: Consumer = client.consumer({
-    groupId: kafka.groupId,
-    sessionTimeout: 30_000,
-    heartbeatInterval: 3_000,
-    retry: { retries: 8 },
-  });
-
+}: StartBrokerConsumerOptions): EmailConsumerHandle {
   let ready = false;
   let stopping = false;
+  const abortController = new AbortController();
 
   const setState = (next: boolean, reason?: string): void => {
+    if (ready === next && (!reason || ready)) return;
     ready = next;
     onStateChange?.({ ready, ...(reason ? { reason } : {}) });
   };
 
-  const publishDlq = async (input: DlqInput): Promise<void> => {
-    const value = JSON.stringify({
-      failedAt: new Date().toISOString(),
-      originalTopic: input.originalTopic,
-      partition: input.partition,
-      offset: input.offset,
-      reason: input.reason,
-      attempts: input.attempts,
-      event: input.raw,
-    });
-    await producer.send({
-      topic: kafka.dlqTopic,
-      compression: CompressionTypes.GZIP,
-      messages: [
-        {
-          value,
-          headers: {
-            'x-original-topic': input.originalTopic,
-            'x-original-partition': String(input.partition),
-            'x-original-offset': input.offset,
-            'x-error': input.reason.slice(0, 500),
-            'x-attempts': String(input.attempts),
-            ...(input.eventId ? { 'x-event-id': input.eventId } : {}),
-          },
-        },
-      ],
-    });
-    logger.warn('email.dead_letter', {
-      eventId: input.eventId,
-      originalTopic: input.originalTopic,
-      partition: input.partition,
-      offset: input.offset,
-      reason: input.reason,
-    });
-  };
+  const processMessages = async (messages: Awaited<ReturnType<BrokerClient['fetch']>>): Promise<void> => {
+    for (const message of messages) {
+      if (stopping) return;
+      const result = await handler(message.value);
 
-  const handleMessage = async ({
-    topic,
-    partition,
-    message,
-  }: {
-    topic: string;
-    partition: number;
-    message: { value: Buffer | null; offset: string };
-  }): Promise<void> => {
-    const offset = message.offset;
-    if (!message.value) {
-      await publishDlq({
-        originalTopic: topic,
-        partition,
-        offset,
-        reason: 'empty message value',
-        attempts: 0,
-        raw: null,
-      });
-      return;
-    }
+      if (result.status === 'sent' || result.status === 'duplicate') {
+        await client.ack(message.offset);
+        logger.debug('broker.message.acked', {
+          offset: message.offset,
+          status: result.status,
+        });
+        continue;
+      }
 
-    const rawText = message.value.toString('utf8');
-    let raw: unknown;
-    try {
-      raw = JSON.parse(rawText);
-    } catch {
-      await publishDlq({
+      // Terminal message: publish the original envelope + failure metadata to
+      // the DLQ, then advance the offset. If the DLQ publish fails, the outer
+      // catch leaves the offset unacked so it is retried.
+      await client.publish(dlqTopic, message.key || `offset-${message.offset}`, {
+        failedAt: new Date().toISOString(),
         originalTopic: topic,
-        partition,
-        offset,
-        reason: 'invalid JSON',
-        attempts: 0,
-        raw: rawText,
-      });
-      return;
-    }
-
-    const result = await handler(raw);
-    if (result.status === 'dead-letter') {
-      await publishDlq({
-        originalTopic: topic,
-        partition,
-        offset,
+        offset: message.offset,
         reason: result.reason,
         attempts: result.attempts,
         eventId: result.eventId,
-        raw,
+        event: message.value,
+      });
+      await client.ack(message.offset);
+      logger.warn('broker.message.dead_lettered', {
+        offset: message.offset,
+        eventId: result.eventId,
+        reason: result.reason,
       });
     }
   };
 
-  if (kafka.ensureTopics) {
-    const admin = client.admin();
-    await admin.connect();
-    try {
-      const created = await admin.createTopics({
-        waitForLeaders: true,
-        topics: [
-          {
-            topic: kafka.topic,
-            numPartitions: kafka.partitions,
-            replicationFactor: kafka.replicationFactor,
-            configEntries: [{ name: 'compression.type', value: 'gzip' }],
-          },
-          {
-            topic: kafka.dlqTopic,
-            numPartitions: kafka.partitions,
-            replicationFactor: kafka.replicationFactor,
-            configEntries: [{ name: 'compression.type', value: 'gzip' }],
-          },
-        ],
+  const loop = async (): Promise<void> => {
+    while (!stopping) {
+      try {
+        const messages = await client.fetch(abortController.signal);
+        setState(true);
+        if (messages.length > 0) {
+          logger.info('broker.messages.received', { count: messages.length });
+          await processMessages(messages);
+        }
+      } catch (error) {
+        if (stopping) break;
+        setState(false, 'broker fetch failed');
+        logger.warn('broker.consumer.error', {
+          reason: error instanceof Error ? error.message : 'unknown error',
+        });
+        await sleep(retryDelayMs, abortController.signal);
+      }
+    }
+  };
+
+  const loopPromise = loop().catch((error: unknown) => {
+    if (!stopping) {
+      logger.error('broker.consumer.stopped', {
+        reason: error instanceof Error ? error.message : 'unknown error',
       });
-      logger.info('kafka.topics.ensured', { created, topic: kafka.topic, dlqTopic: kafka.dlqTopic });
-    } catch (error) {
-      // Topic-already-exists is the normal path after the first boot.
-      logger.debug('kafka.topics.ensure_failed', { reason: errorMessage(error) });
-    } finally {
-      await admin.disconnect().catch(() => {});
-    }
-  }
-
-  consumer.on(consumer.events.GROUP_JOIN, () => {
-    setState(true);
-    logger.info('kafka.consumer.ready', { topic: kafka.topic, groupId: kafka.groupId });
-  });
-  consumer.on(consumer.events.DISCONNECT, () => {
-    setState(false, 'consumer disconnected');
-  });
-  consumer.on(consumer.events.CRASH, (event) => {
-    setState(false, 'consumer crashed');
-    const reason = errorMessage(event.payload.error);
-    logger.error('kafka.consumer.crash', { reason, restart: event.payload.restart });
-    // KafkaJS does not restart after a non-retriable error. Staying alive but
-    // unready would silently stop email; fail fast so Kubernetes restarts the
-    // pod and the crash is visible. The usual cause is an undecodable batch:
-    // KafkaJS 2.2.x only decodes gzip, so the topic must enforce gzip.
-    if (!event.payload.restart && !stopping) {
-      onFatal?.(new Error(`kafka consumer crash: ${reason}`));
+      setState(false, 'consumer stopped');
     }
   });
-
-  await producer.connect();
-  await consumer.connect();
-  await consumer.subscribe({ topic: kafka.topic, fromBeginning: false });
-
-  // run() resolves only when the consumer stops; do not await it here.
-  void consumer
-    .run({
-      partitionsConsumedConcurrently: kafka.concurrency,
-      eachMessage: async ({ topic, partition, message }) => {
-        await handleMessage({ topic, partition, message });
-      },
-    })
-    .catch((error: unknown) => {
-      setState(false, 'consumer run failed');
-      logger.error('kafka.consumer.run_failed', { reason: errorMessage(error) });
-      if (!stopping) onFatal?.(error instanceof Error ? error : new Error(errorMessage(error)));
-    });
 
   return {
     isReady: () => ready,
     async stop() {
+      if (stopping) return;
       stopping = true;
+      abortController.abort();
+      await loopPromise;
       setState(false, 'shutting down');
-      await consumer.disconnect().catch((error: unknown) => {
-        logger.warn('kafka.consumer.disconnect_failed', { reason: errorMessage(error) });
-      });
-      await producer.disconnect().catch((error: unknown) => {
-        logger.warn('kafka.producer.disconnect_failed', { reason: errorMessage(error) });
-      });
     },
   };
 }

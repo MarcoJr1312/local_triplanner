@@ -1,10 +1,10 @@
 apiVersion: v2
 name: helm-triplanner
-description: Triplanner email microservice (Kafka consumer + BYOK settings)
+description: Triplanner demo email pipeline (Go HTTP broker + email consumer with BYOK)
 type: application
 
 # Chart version. Bump on chart changes.
-version: 0.1.0
+version: 0.2.0
 
-# Version of the deployed email service image.
+# Version of the deployed application images.
 appVersion: "0.1.0"

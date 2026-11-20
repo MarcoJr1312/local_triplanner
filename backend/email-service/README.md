@@ -1,43 +1,43 @@
 # Triplanner email service
 
-Kafka-driven email microservice. It is the only component that renders and
-delivers Triplanner email; the API publishes events and keeps serving the
+HTTP consumer for the Go demo broker. It renders and delivers Triplanner
+email; the API publishes `TripInvitation` messages and keeps serving the
 copyable join link when email is disabled.
 
-- Runtime: Bun + TypeScript, `kafkajs`
+- Runtime: Bun + TypeScript
+- Broker: `backend/kafka` (Go, HTTP topic/offset/ack + SQLite)
 - Provider: Resend (direct `fetch`, no SDK) or `sink` for local/demo
-- Contract: `triplanner.email.requests.v1` (see `docs/migrations/0001-email-service.md`)
+- Topic: `TripInvitation`; DLQ: `TripInvitation.dlq`
 - Probes: `GET /health`, `GET /ready` on `HEALTH_PORT` (default `4200`)
+- BYOK settings: `GET/POST /api/email/config` on the same port
 
-## Event flow
+## Flow
 
 ```
-API / outbox relay
-    -> triplanner.email.requests.v1
-        -> validate envelope
-        -> render es/en template
-        -> Resend (Idempotency-Key = event id)
-        -> retry transient failures (429, 5xx, network, 409 concurrent)
-        -> triplanner.email.requests.v1.dlq (invalid / exhausted)
+API sendTripInvite
+  -> POST /v1/topics/TripInvitation/messages
+      -> email-service long-polls GET ...?consumer=email-service&wait=20
+      -> validate -> render es/en
+      -> Resend (Idempotency-Key = event id) or sink
+      -> POST .../ack {offset}
+      -> terminal failure: POST TripInvitation.dlq/messages, then ack
 ```
 
-Delivery is at-least-once. The consumer commits an offset after the handler
-resolves; Resend deduplicates retries with the event id for 24 hours.
+Delivery is at-least-once. A message is acknowledged only after a send,
+duplicate skip, or successful DLQ publish; a crash replays it and Resend
+deduplicates by event id.
 
 ## Local run
 
-1. Start a single-node Kafka (Redpanda is the smallest option):
+1. Start the Go broker:
 
 ```bash
-docker run -d --name redpanda -p 9092:9092 \
-  redpandadata/redpanda:v24.2.18 \
-  redpanda start --overprovisioned --smp 1 --memory 1G --reserve-memory 0M \
-  --node-id 0 --check=false \
-  --kafka-addr PLAINTEXT://0.0.0.0:29092,OUTSIDE://0.0.0.0:9092 \
-  --advertise-kafka-addr PLAINTEXT://localhost:29092,OUTSIDE://localhost:9092
+cd backend/kafka
+docker build -f backend/kafka/Dockerfile -t triplanner/kafka .
+docker run --rm -p 8080:8080 -v triplanner-kafka-data:/data triplanner/kafka
 ```
 
-2. Configure and run the service:
+2. Run the email service:
 
 ```bash
 cd backend/email-service
@@ -46,37 +46,35 @@ bun install
 bun run start
 ```
 
-`.env.example` uses `EMAIL_PROVIDER=sink` and `KAFKA_ENSURE_TOPICS=true`, so no
-Resend key is needed and the request/DLQ topics are created on first boot.
+`.env.example` uses `EMAIL_PROVIDER=sink`, so no Resend key is needed.
 
-3. Publish a sample event:
+3. Publish a sample message:
 
 ```bash
-printf '%s\n' '{
-  "id": "evt-demo-1",
-  "type": "email.invite.v1",
-  "version": 1,
-  "occurredAt": "2026-11-19T10:00:00.000Z",
-  "source": "manual",
-  "payload": {
-    "to": "friend@example.com",
-    "tripName": "Toronto 2026",
-    "ownerName": "Marco",
-    "code": "abcDEF123_-x",
-    "joinUrl": "http://localhost:3000/join?trip=t1&code=abcDEF123_-x",
-    "role": "viewer",
-    "language": "es"
-  }
-}' | docker exec -i redpanda rpk topic produce triplanner.email.requests.v1 -k evt-demo-1 -z gzip
+curl -X POST http://localhost:8080/v1/topics/TripInvitation/messages \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "key": "evt-demo-1",
+    "value": {
+      "id": "evt-demo-1",
+      "type": "email.invite.v1",
+      "version": 1,
+      "occurredAt": "2026-11-20T10:00:00.000Z",
+      "source": "triplanner-api",
+      "payload": {
+        "to": "friend@example.com",
+        "tripName": "Toronto 2026",
+        "ownerName": "DemoUser",
+        "code": "abcDEF123_-x",
+        "joinUrl": "http://localhost:3000/join?trip=t1&code=abcDEF123_-x",
+        "role": "viewer",
+        "language": "es"
+      }
+    }
+  }'
 ```
 
-> **Compression:** KafkaJS 2.2.x only decodes gzip. Every producer must use
-> `gzip` (or no compression); `snappy`, `lz4` and `zstd` batches crash the
-> consumer. The topic config also sets `compression.type=gzip`, and the API
-> outbox relay must send `CompressionTypes.GZIP`. This is a client limitation,
-> tracked as an open decision in the migration doc.
-
-The service logs `email.sent` and the sink provider logs `email.sink.drop`
+The service logs `email.sent` (and `email.sink.drop` when provider is sink)
 without the full recipient address.
 
 ## Commands
@@ -88,9 +86,8 @@ docker build -f backend/email-service/Dockerfile -t triplanner/email-service .
 ```
 
 Tests cover the envelope contract, both template languages, the retry/DLQ
-policy, Resend error classification, config validation and the BYOK settings
-store/HTTP API. A Kafka integration smoke test is documented in
-`docs/migrations/0001-email-service.md`.
+policy, Resend error classification, config validation, broker client and BYOK
+settings.
 
 ## BYOK settings (recruiter-supplied key)
 
@@ -110,31 +107,31 @@ is not copied to disk; clearing the key while on Resend is rejected.
 
 The API proxies this endpoint through GraphQL (`getEmailSettings` /
 `updateEmailSettings`) and the Profile modal renders the form. The email
-service must be reachable only by the API pod; the endpoint is protected by the
-shared `INTERNAL_TOKEN`.
+service is internal; the endpoint is protected by the shared `INTERNAL_TOKEN`.
 
 ## Configuration
 
-Every variable maps to a Helm value; the full table lives in the migration doc.
-The important ones:
-
 | Variable | Default | Secret | Notes |
 |---|---|---|---|
-| `KAFKA_BROKERS` | — | no | Comma-separated bootstrap servers |
-| `KAFKA_TOPIC` | `triplanner.email.requests.v1` | no | Request topic |
-| `KAFKA_DLQ_TOPIC` | `<topic>.dlq` | no | Dead-letter topic |
-| `KAFKA_GROUP_ID` | `triplanner-email-service` | no | Consumer group |
-| `KAFKA_SSL` | `false` | no | Enable TLS |
-| `KAFKA_SASL_MECHANISM` | — | no | `plain`, `scram-sha-256`, `scram-sha-512` |
-| `KAFKA_SASL_USERNAME` | — | yes | From a Kubernetes Secret |
-| `KAFKA_SASL_PASSWORD` | — | yes | From a Kubernetes Secret |
+| `BROKER_URL` | `http://127.0.0.1:8080` | no | Go broker base URL |
+| `BROKER_TOPIC` | `TripInvitation` | no | Request topic |
+| `BROKER_CONSUMER` | `email-service` | no | Offset key |
+| `BROKER_DLQ_TOPIC` | `<topic>.dlq` | no | Dead-letter topic |
+| `BROKER_BATCH_SIZE` | `10` | no | Messages per fetch |
+| `BROKER_WAIT_SECONDS` | `20` | no | Long-poll seconds (0–30) |
+| `BROKER_REQUEST_TIMEOUT_MS` | `35000` | no | Must exceed wait |
+| `BROKER_RETRY_DELAY_MS` | `1000` | no | Backoff after broker errors |
 | `EMAIL_PROVIDER` | `resend` | no | Env default; runtime override wins |
 | `RESEND_API_KEY` | — | yes | Optional seed; BYOK key lives on the PVC |
 | `RESEND_FROM` | `Triplanner <onboarding@resend.dev>` | no | Verified sender |
 | `RESEND_REPLY_TO` | — | no | Optional reply-to |
+| `RESEND_ENDPOINT` | `https://api.resend.com/emails` | no | Provider endpoint |
+| `RESEND_TIMEOUT_MS` | `10000` | no | Provider request timeout |
 | `EMAIL_MAX_ATTEMPTS` | `5` | no | Per-message retry budget |
+| `EMAIL_RETRY_BASE_MS` | `500` | no | Retry backoff base |
 | `INTERNAL_TOKEN` | `dev-internal-token` | yes | Protects the settings API |
 | `EMAIL_SETTINGS_FILE` | `.data/email.json` | no | BYOK override path |
+| `APP_URL` | `http://localhost:3000` | no | Welcome CTA |
 | `HEALTH_PORT` | `4200` | no | Probe port |
 
 `EMAIL_PROVIDER` defaults to `resend` on purpose: a production deployment must

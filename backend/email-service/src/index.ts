@@ -1,16 +1,17 @@
 // Email microservice entrypoint.
 //
-//   Kafka topic  triplanner.email.requests.v1
+//   Broker topic TripInvitation
 //     -> validate/render/send with retries
 //     -> Resend (or sink in local mode)
-//     -> dead-letter topic after a non-retryable/exhausted failure
+//     -> DLQ topic on a terminal failure
 //
 // The HTTP server exposes /health, /ready and the internal BYOK settings API.
 
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DEFAULT_INTERNAL_TOKEN, loadConfig, ConfigError } from './config.ts';
-import { startEmailConsumer, type ConsumerState, type EmailConsumerHandle } from './consumer.ts';
+import { createBrokerClient } from './broker.ts';
+import { startBrokerConsumer, type ConsumerState, type EmailConsumerHandle } from './consumer.ts';
 import { startHttpServer, type HttpHandle } from './http.ts';
 import { handleEmailEvent } from './handler.ts';
 import { MemoryIdempotencyStore } from './idempotency.ts';
@@ -75,7 +76,17 @@ async function main(): Promise<void> {
     throw new Error(`email provider is not ready: ${initialProviderState.reason}`);
   }
 
-  let kafkaState: ConsumerState = { ready: false, reason: 'consumer starting' };
+  const broker = createBrokerClient({
+    baseUrl: config.broker.url,
+    topic: config.broker.topic,
+    consumer: config.broker.consumer,
+    dlqTopic: config.broker.dlqTopic,
+    batchSize: config.broker.batchSize,
+    waitSeconds: config.broker.waitSeconds,
+    requestTimeoutMs: config.broker.requestTimeoutMs,
+  });
+
+  let brokerState: ConsumerState = { ready: false, reason: 'consumer starting' };
   httpHandle = await startHttpServer({
     port: config.healthPort,
     logger,
@@ -84,14 +95,14 @@ async function main(): Promise<void> {
     getState: () => {
       const providerState = provider.ready();
       return {
-        ready: providerState.ok && kafkaState.ready,
+        ready: providerState.ok && brokerState.ready,
         provider: provider.name,
         providerReady: providerState.ok,
-        kafkaReady: kafkaState.ready,
+        brokerReady: brokerState.ready,
         ...(!providerState.ok
           ? { reason: providerState.reason }
-          : kafkaState.reason
-            ? { reason: kafkaState.reason }
+          : brokerState.reason
+            ? { reason: brokerState.reason }
             : {}),
       };
     },
@@ -106,18 +117,20 @@ async function main(): Promise<void> {
   logger.info('service.start', {
     provider: provider.name,
     settingsFile: config.settingsFile,
-    topic: config.kafka.topic,
-    dlqTopic: config.kafka.dlqTopic,
-    groupId: config.kafka.groupId,
-    brokerCount: config.kafka.brokers.length,
+    brokerUrl: config.broker.url,
+    topic: config.broker.topic,
+    dlqTopic: config.broker.dlqTopic,
+    consumer: config.broker.consumer,
     maxAttempts: config.email.maxAttempts,
-    compression: 'gzip-only',
   });
 
   const idempotency = new MemoryIdempotencyStore();
-  consumerHandle = await startEmailConsumer({
-    kafka: config.kafka,
+  consumerHandle = startBrokerConsumer({
+    client: broker,
+    topic: config.broker.topic,
+    dlqTopic: config.broker.dlqTopic,
     logger,
+    retryDelayMs: config.broker.retryDelayMs,
     handler: (raw) =>
       handleEmailEvent(raw, {
         provider,
@@ -128,11 +141,7 @@ async function main(): Promise<void> {
         render: (event) => renderEmail(event, { appUrl: config.appUrl }),
       }),
     onStateChange: (state) => {
-      kafkaState = state;
-    },
-    onFatal: (error) => {
-      logger.error('service.fatal', { reason: error.message });
-      void shutdown('fatal', 1);
+      brokerState = state;
     },
   });
 

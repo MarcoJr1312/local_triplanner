@@ -17,6 +17,7 @@ export interface Member {
   userId: string;
   displayName: string;
   email: string;
+  invitedEmail?: string | null;
   role: MemberRole;
   joinedAt?: string | null;
   color?: string | null;

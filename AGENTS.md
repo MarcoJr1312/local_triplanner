@@ -23,8 +23,9 @@ cd local_triplanner
 docker compose up --build
 ```
 
-and use the app at http://localhost:3000 with no Firebase, HasData, Resend or
-AWS account. Optional LLM providers are the only external integration.
+and use the app at http://localhost:3000 with no Firebase, HasData or AWS
+account. Optional LLM providers and the recruiter-supplied Resend key (BYOK) are
+the only external integrations.
 
 ## Target architecture
 
@@ -45,7 +46,14 @@ Runtime services: `web`, `api`, `agent`, `postgres`, `mongo`.
   `demo-friend`.
 - **No HasData** at runtime. A one-time ingestion script writes the committed
   Toronto dataset; search reads MongoDB only.
-- **No Resend** or email delivery. Invitations expose a copyable join link.
+- **Email is optional and off by default.** `EMAIL_MODE=disabled` keeps the
+  demo key-free; invitations expose a copyable join link. The recruiter can add
+  their own Resend key in Profile → Email delivery (BYOK); no key ships with the
+  repo or chart. The email service consumes `TripInvitation` from the Go demo
+  broker.
+- **Broker**: `backend/kafka` is a Go HTTP topic/offset/ack demo broker with
+  SQLite. It is not Kafka wire-compatible; gRPC is the next transport. The API
+  is the producer and the email service is the consumer.
 - **No AWS**: no Terraform, ECS, S3, DynamoDB, Secrets Manager or OIDC.
 - **No emulators**: no Firebase emulator, no SMTP catcher, no HasData mock.
 - **LLM providers are optional**: `LLM_PROVIDER=none` by default; `deepseek`,
@@ -79,6 +87,13 @@ auth and Dockerfiles.
 - CI/CD verified: 8/8 GitHub Actions runs passed; published images
   `marcojr13/triplanner-{web,api,agent}` (tags `latest`, `1.1`, `1.1.0`,
   `sha-e335779`) and the published stack passed the smoke test.
+- Email microservice: Resend/sink with BYOK settings, 0600 runtime overrides
+  on a PVC, GraphQL proxy and Profile UI; images `marcojr13/triplanner-email`.
+- Go broker: `backend/kafka` (HTTP topic/offset/ack + SQLite) with topic
+  `TripInvitation`; API producer, email consumer and DLQ `TripInvitation.dlq`.
+- Helm chart: deploys the Go broker + email service with PVCs, probes and
+  `triplanner-internal`; accepted on Docker Desktop (both pods ready, invite
+  consumed, BYOK persisted, DLQ verified).
 - Known limitation: macOS clean-clone QA is pending.
 Do not assume the target architecture is already implemented — check the
 current tree.

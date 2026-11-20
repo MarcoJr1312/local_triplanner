@@ -1,6 +1,11 @@
-Triplanner email service installed.
+Triplanner email pipeline installed.
 
-1. Check the rollout:
+Components:
+  - triplanner-kafka: Go HTTP broker (topic/offset/ack, SQLite)
+  - triplanner-email: email consumer + BYOK settings
+
+1. Check the rollouts:
+   kubectl -n {{ .Release.Namespace }} rollout status deployment/triplanner-kafka
    kubectl -n {{ .Release.Namespace }} rollout status deployment/triplanner-email
 
 2. Check the probes:
@@ -8,17 +13,18 @@ Triplanner email service installed.
    curl http://localhost:4200/health
    curl http://localhost:4200/ready
 
-3. Fetch email settings:
-   kubectl -n {{ .Release.Namespace }} exec deploy/triplanner-email -- \
-     curl -s http://localhost:{{ .Values.emailService.service.port }}/api/email/config
+3. Check the broker:
+   kubectl -n {{ .Release.Namespace }} port-forward svc/triplanner-kafka 8080:{{ .Values.broker.service.port }}
+   curl http://localhost:8080/health
+   curl http://localhost:8080/ready
 
 4. BYOK:
-   The service starts with provider={{ .Values.emailService.provider }}.
+   The email service starts with provider={{ .Values.emailService.provider }}.
    Open the app Profile -> Email delivery to add a Resend key.
    No Resend Secret is required for the recruiter demo.
 
 Required Secret:
    triplanner-internal / {{ .Values.emailService.internalToken.key }}
 
-Kafka bootstrap:
-   {{ join ", " .Values.kafka.brokers }}
+Broker topic:
+   {{ .Values.emailService.broker.topic }} (DLQ: {{ .Values.emailService.broker.dlqTopic }})

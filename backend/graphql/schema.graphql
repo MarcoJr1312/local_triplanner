@@ -79,6 +79,7 @@ type Member {
   userId: ID!
   displayName: String!
   email: String!
+  invitedEmail: String
   role: MemberRole!
   joinedAt: AWSDateTime!
 }

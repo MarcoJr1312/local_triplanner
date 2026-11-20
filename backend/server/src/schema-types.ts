@@ -168,6 +168,7 @@ export interface TripMember {
   userId: string;
   displayName: string | null;
   email: string | null;
+  invitedEmail: string | null;
   role: string;
 }
 

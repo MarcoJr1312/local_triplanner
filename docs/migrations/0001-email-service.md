@@ -1,5 +1,11 @@
 # 0001 — Email microservice (Resend over Kafka)
 
+> **Superseded transport (2026-11-20):** the Kafka/KafkaJS transport described
+> here was replaced by the Go HTTP broker in
+> [`0002-go-broker.md`](./0002-go-broker.md). The email templates, BYOK
+> settings, retries and DLQ behaviour still apply; Kafka-specific sections are
+> historical.
+
 | Field | Value |
 |---|---|
 | Status | M1 complete; M2 next |

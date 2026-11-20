@@ -4,6 +4,11 @@ This directory records each backend extraction. The goal is a repeatable,
 reviewable path from the current modular monolith to a small set of
 independently deployable services, without breaking the recruiter demo.
 
+Migrations:
+
+- [`0001-email-service.md`](./0001-email-service.md) — email consumer, BYOK
+- [`0002-go-broker.md`](./0002-go-broker.md) — Go HTTP broker + `TripInvitation`
+
 ## Branching (local only)
 
 `refactor/helm` is the integration branch for this phase. **Nothing is pushed to

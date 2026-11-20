@@ -53,6 +53,10 @@ CREATE TABLE IF NOT EXISTS trip_members (
   PRIMARY KEY (trip_id, user_id)
 );
 
+-- Preserve the address the recruiter typed, even if the demo user later edits
+-- their profile email. Nullable for owners/direct members.
+ALTER TABLE trip_members ADD COLUMN IF NOT EXISTS invited_email text;
+
 CREATE INDEX IF NOT EXISTS idx_trip_members_user ON trip_members(user_id);
 
 -- =========================== TRIP ITEMS ===========================

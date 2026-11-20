@@ -29,6 +29,7 @@ export interface TripMemberRow {
   user_id: string;
   role: string;
   joined_at: string | null;
+  invited_email: string | null;
 }
 
 export interface TripItemRow {
@@ -149,7 +150,9 @@ export async function setBudget(db: AsyncDb, tripId: string, totalBudget: number
 
 export async function listMembers(db: AsyncDb, tripId: string): Promise<TripMemberRow[]> {
   return db
-    .prepare('SELECT user_id, role, joined_at FROM trip_members WHERE trip_id = ? ORDER BY joined_at ASC')
+    .prepare(
+      'SELECT user_id, role, joined_at, invited_email FROM trip_members WHERE trip_id = ? ORDER BY joined_at ASC',
+    )
     .all<TripMemberRow>(tripId);
 }
 
@@ -168,6 +171,25 @@ export async function inviteMember(db: AsyncDb, tripId: string, userId: string, 
   await db
     .prepare('INSERT INTO trip_members (trip_id, user_id, role) VALUES (?, ?, ?) ON CONFLICT DO NOTHING')
     .run(tripId, userId, role);
+}
+
+// Join flow: preserve the address the recruiter typed, even if the demo user
+// later edits their profile email. Existing rows keep their first invited email.
+export async function addInvitedMember(
+  db: AsyncDb,
+  tripId: string,
+  userId: string,
+  role: string,
+  invitedEmail: string,
+): Promise<void> {
+  await db
+    .prepare(
+      `INSERT INTO trip_members (trip_id, user_id, role, invited_email)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT (trip_id, user_id) DO UPDATE
+       SET invited_email = COALESCE(trip_members.invited_email, EXCLUDED.invited_email)`,
+    )
+    .run(tripId, userId, role, invitedEmail);
 }
 
 export async function updateMemberRole(db: AsyncDb, tripId: string, userId: string, role: string): Promise<void> {

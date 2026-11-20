@@ -1,6 +1,5 @@
-# Triplanner email service — single-node recruiter profile.
-# The chart currently deploys the email microservice only; add web/api/agent
-# blocks as those services are extracted.
+# Triplanner email pipeline — single-node recruiter profile.
+# The chart deploys the Go demo broker and the email consumer.
 
 global:
   # URL the recruiter actually opens. Used for invite links (API) and the
@@ -12,36 +11,74 @@ fullnameOverride: ""
 
 imagePullSecrets: []
 
-# Shared Kafka settings. The API producer uses the same block later.
-kafka:
-  brokers:
-    - redpanda:9092 # replace with the broker Service in your cluster
-  tls:
-    enabled: false
-    existingSecret: ""
-    caKey: ca.crt
-    mountPath: /etc/kafka/ca
-    rejectUnauthorized: true
-  sasl:
-    enabled: false
-    mechanism: scram-sha-512
-    existingSecret: ""
-    usernameKey: KAFKA_SASL_USERNAME
-    passwordKey: KAFKA_SASL_PASSWORD
-
 images:
+  broker:
+    name: marcojr13/triplanner-kafka
+    tag: "0.1.0"
+    pullPolicy: IfNotPresent
   email:
     name: marcojr13/triplanner-email
     tag: "0.1.0"
     pullPolicy: IfNotPresent
+
+# Go HTTP broker. Topic/offset/ack; not the Kafka wire protocol.
+broker:
+  enabled: true
+  replicaCount: 1
+  service:
+    type: ClusterIP
+    port: 8080
+  persistence:
+    enabled: true
+    size: 1Gi
+    mountPath: /data
+    existingClaim: ""
+  podAnnotations: {}
+  podLabels: {}
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 100
+    runAsGroup: 101
+    fsGroup: 101
+    fsGroupChangePolicy: OnRootMismatch
+    seccompProfile:
+      type: RuntimeDefault
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop: ["ALL"]
+  resources:
+    requests:
+      cpu: 25m
+      memory: 64Mi
+    limits:
+      cpu: 250m
+      memory: 128Mi
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: http
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    failureThreshold: 3
+  readinessProbe:
+    httpGet:
+      path: /ready
+      port: http
+    initialDelaySeconds: 3
+    periodSeconds: 5
+    failureThreshold: 3
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
 
 emailService:
   enabled: true
   replicaCount: 1
 
   # Key-free demo: the service logs and drops messages until the recruiter adds
-  # a Resend key in Profile -> Email delivery. Never defaults to resend without
-  # a key, or the pod would crash-loop before the UI is available.
+  # a Resend key in Profile -> Email delivery.
   provider: sink
   logLevel: info
   shutdownTimeoutMs: 15000
@@ -50,7 +87,6 @@ emailService:
     type: ClusterIP
     port: 4200
 
-  # Runtime BYOK overrides (provider/key/from/reply-to), stored 0600 on the PVC.
   settingsFile: /app/.data/email.json
   persistence:
     enabled: true
@@ -62,27 +98,22 @@ emailService:
     existingSecret: triplanner-internal
     key: INTERNAL_TOKEN
 
-  kafka:
-    clientId: triplanner-email-service
-    groupId: triplanner-email-service
-    topic: triplanner.email.requests.v1
-    dlqTopic: triplanner.email.requests.v1.dlq
-    # Local demo: the service creates both topics on boot. Set false and let a
-    # KafkaTopic resource/operator own them in a managed profile.
-    ensureTopics: true
-    partitions: 3
-    replicationFactor: 1
-    concurrency: 3
-    connectionTimeoutMs: 10000
-    requestTimeoutMs: 30000
+  broker:
+    url: http://triplanner-kafka:8080
+    topic: TripInvitation
+    consumer: email-service
+    dlqTopic: TripInvitation.dlq
+    batchSize: 10
+    waitSeconds: 20
+    requestTimeoutMs: 35000
+    retryDelayMs: 1000
 
   resend:
     from: "Triplanner <onboarding@resend.dev>"
     replyTo: ""
     endpoint: https://api.resend.com/emails
     timeoutMs: 10000
-    # Optional seed/fallback. The app-entered key lives on the PVC. Leave empty
-    # for the key-free recruiter install.
+    # Optional seed/fallback. The app-entered key lives on the PVC.
     existingSecret: ""
     apiKeyKey: RESEND_API_KEY
 
@@ -92,9 +123,10 @@ emailService:
 
   podAnnotations: {}
   podLabels: {}
-
   podSecurityContext:
     runAsNonRoot: true
+    runAsUser: 100
+    runAsGroup: 101
     fsGroup: 101
     fsGroupChangePolicy: OnRootMismatch
     seccompProfile:
@@ -144,12 +176,13 @@ serviceAccount:
   annotations: {}
   name: ""
 
-# Opt-in. Default off because the API chart does not exist yet and some CNIs
-# block kubelet probes once an ingress policy is present.
 networkPolicy:
   enabled: false
 
 # Informational: the API deployment must receive these values when it lands.
 api:
+  broker:
+    url: http://triplanner-kafka:8080
+    topic: TripInvitation
   email:
     serviceUrl: http://triplanner-email:4200

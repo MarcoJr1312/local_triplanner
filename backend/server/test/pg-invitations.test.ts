@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { connectPg, deleteTrip, deleteUser, insertTrip, insertUser } from './helpers/pg.ts';
 import type { PgDb } from '../src/pg/db.ts';
 import { acceptInvitation, createInvitation, findInvitationByCode, isEmailMatch } from '../src/pg/invitations.ts';
+import { addInvitedMember, deleteTripCascade, listMembers } from '../src/pg/trips.ts';
 
 let db: PgDb | null = null;
 
@@ -67,5 +68,21 @@ describe('invitations on Postgres', () => {
 
     await deleteTrip(db, tripId);
     await deleteUser(db, userId);
+  });
+
+  test('preserves the invited email on the membership', async () => {
+    if (!db) return;
+    const ownerId = await insertUser(db);
+    const guestId = await insertUser(db);
+    const tripId = await insertTrip(db, ownerId);
+
+    await addInvitedMember(db, tripId, guestId, 'viewer', 'invited@example.com');
+    const members = await listMembers(db, tripId);
+    const guest = members.find((member) => member.user_id === guestId);
+    assert.equal(guest?.invited_email, 'invited@example.com');
+
+    await deleteTripCascade(db, tripId);
+    await deleteUser(db, ownerId);
+    await deleteUser(db, guestId);
   });
 });

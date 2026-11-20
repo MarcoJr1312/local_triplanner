@@ -27,7 +27,9 @@ function invite(overrides: Record<string, unknown> = {}) {
 describe('invite template', () => {
   test('renders Spanish copy and the join URL by default', () => {
     const email = invite();
-    assert.equal(email.subject, 'Marco te invita a "Toronto 2026" en Triplanner');
+    assert.equal(email.subject, 'Marco te invita a "Toronto 2026" · demo');
+    assert.ok(email.html.includes('Te invitaron a Toronto 2026'));
+    assert.ok(email.html.includes('Invitación demo'));
     assert.ok(email.html.includes('Unirme al viaje'));
     assert.ok(email.html.includes('https://triplanner.example.com/join'));
     assert.ok(email.text.includes('Tu código de invitación: abcDEF123_-x'));
@@ -35,7 +37,9 @@ describe('invite template', () => {
 
   test('renders English copy when the recipient language is en', () => {
     const email = invite({ language: 'en', role: 'editor' });
-    assert.equal(email.subject, 'Marco invited you to "Toronto 2026" on Triplanner');
+    assert.equal(email.subject, 'Marco invited you to "Toronto 2026" · demo');
+    assert.ok(email.html.includes('You were invited to Toronto 2026'));
+    assert.ok(email.html.includes('Demo invitation'));
     assert.ok(email.html.includes('Join the trip'));
     assert.ok(email.html.includes('Role: Editor'));
   });

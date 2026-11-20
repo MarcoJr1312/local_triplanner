@@ -8,7 +8,9 @@ Desktop.
 
 ## Controls in place
 
-- No Firebase, HasData, Resend or AWS runtime dependencies.
+- No Firebase, HasData or AWS runtime dependencies. Email delivery is optional:
+  the recruiter supplies a Resend key (BYOK) at runtime; the demo runs with
+  `EMAIL_PROVIDER=sink` and no provider key.
 - Demo authentication via `x-user-id`; the API and agent ports are not
   published, and only the web service is exposed.
 - PostgreSQL and MongoDB are bound to `127.0.0.1`, not `0.0.0.0`.

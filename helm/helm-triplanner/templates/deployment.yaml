@@ -47,50 +47,22 @@ spec:
           env:
             - name: HEALTH_PORT
               value: {{ .Values.emailService.service.port | quote }}
-            - name: KAFKA_BROKERS
-              value: {{ required "kafka.brokers must contain at least one broker" (join "," .Values.kafka.brokers) | quote }}
-            - name: KAFKA_CLIENT_ID
-              value: {{ .Values.emailService.kafka.clientId | quote }}
-            - name: KAFKA_GROUP_ID
-              value: {{ .Values.emailService.kafka.groupId | quote }}
-            - name: KAFKA_TOPIC
-              value: {{ .Values.emailService.kafka.topic | quote }}
-            - name: KAFKA_DLQ_TOPIC
-              value: {{ .Values.emailService.kafka.dlqTopic | quote }}
-            - name: KAFKA_ENSURE_TOPICS
-              value: {{ .Values.emailService.kafka.ensureTopics | quote }}
-            - name: KAFKA_PARTITIONS
-              value: {{ .Values.emailService.kafka.partitions | quote }}
-            - name: KAFKA_REPLICATION_FACTOR
-              value: {{ .Values.emailService.kafka.replicationFactor | quote }}
-            - name: KAFKA_CONCURRENCY
-              value: {{ .Values.emailService.kafka.concurrency | quote }}
-            - name: KAFKA_CONNECTION_TIMEOUT_MS
-              value: {{ .Values.emailService.kafka.connectionTimeoutMs | quote }}
-            - name: KAFKA_REQUEST_TIMEOUT_MS
-              value: {{ .Values.emailService.kafka.requestTimeoutMs | quote }}
-            - name: KAFKA_SSL
-              value: {{ .Values.kafka.tls.enabled | quote }}
-            {{- if .Values.kafka.tls.enabled }}
-            - name: KAFKA_SSL_CA_PATH
-              value: "{{ .Values.kafka.tls.mountPath }}/{{ .Values.kafka.tls.caKey }}"
-            - name: KAFKA_SSL_REJECT_UNAUTHORIZED
-              value: {{ .Values.kafka.tls.rejectUnauthorized | quote }}
-            {{- end }}
-            {{- if .Values.kafka.sasl.enabled }}
-            - name: KAFKA_SASL_MECHANISM
-              value: {{ .Values.kafka.sasl.mechanism | quote }}
-            - name: KAFKA_SASL_USERNAME
-              valueFrom:
-                secretKeyRef:
-                  name: {{ required "kafka.sasl.existingSecret is required when SASL is enabled" .Values.kafka.sasl.existingSecret }}
-                  key: {{ .Values.kafka.sasl.usernameKey }}
-            - name: KAFKA_SASL_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: {{ required "kafka.sasl.existingSecret is required when SASL is enabled" .Values.kafka.sasl.existingSecret }}
-                  key: {{ .Values.kafka.sasl.passwordKey }}
-            {{- end }}
+            - name: BROKER_URL
+              value: {{ .Values.emailService.broker.url | quote }}
+            - name: BROKER_TOPIC
+              value: {{ .Values.emailService.broker.topic | quote }}
+            - name: BROKER_CONSUMER
+              value: {{ .Values.emailService.broker.consumer | quote }}
+            - name: BROKER_DLQ_TOPIC
+              value: {{ .Values.emailService.broker.dlqTopic | quote }}
+            - name: BROKER_BATCH_SIZE
+              value: {{ .Values.emailService.broker.batchSize | quote }}
+            - name: BROKER_WAIT_SECONDS
+              value: {{ .Values.emailService.broker.waitSeconds | quote }}
+            - name: BROKER_REQUEST_TIMEOUT_MS
+              value: {{ .Values.emailService.broker.requestTimeoutMs | quote }}
+            - name: BROKER_RETRY_DELAY_MS
+              value: {{ .Values.emailService.broker.retryDelayMs | quote }}
             - name: EMAIL_PROVIDER
               value: {{ .Values.emailService.provider | quote }}
             - name: EMAIL_SETTINGS_FILE
@@ -130,11 +102,6 @@ spec:
               mountPath: {{ .Values.emailService.persistence.mountPath | default "/app/.data" }}
             - name: tmp
               mountPath: /tmp
-            {{- if .Values.kafka.tls.enabled }}
-            - name: kafka-ca
-              mountPath: {{ .Values.kafka.tls.mountPath }}
-              readOnly: true
-            {{- end }}
           livenessProbe:
             {{- toYaml .Values.emailService.livenessProbe | nindent 12 }}
           readinessProbe:
@@ -153,14 +120,6 @@ spec:
           {{- end }}
         - name: tmp
           emptyDir: {}
-        {{- if .Values.kafka.tls.enabled }}
-        - name: kafka-ca
-          secret:
-            secretName: {{ required "kafka.tls.existingSecret is required when TLS is enabled" .Values.kafka.tls.existingSecret }}
-            items:
-              - key: {{ .Values.kafka.tls.caKey }}
-                path: {{ .Values.kafka.tls.caKey }}
-        {{- end }}
       {{- with .Values.emailService.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

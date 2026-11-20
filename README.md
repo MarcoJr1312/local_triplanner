@@ -13,9 +13,10 @@ The product UI is **English by default**, with an **es/en** switch in the
 profile settings.
 
 > **Status:** **v1.2.2** - one-command Docker Compose demo plus per-service
-> CI/CD and multi-arch Docker Hub publishing. The cloud dependencies (Firebase,
-> HasData, Resend, AWS) are removed from the runtime; place search reads a local
-> MongoDB catalogue seeded with 186 real Toronto places.
+> CI/CD and multi-arch Docker Hub publishing. Firebase, HasData and AWS are
+> removed from the runtime; place search reads a local MongoDB catalogue seeded
+> with 186 real Toronto places. Email is optional: the recruiter can add a
+> Resend key in Profile → Email delivery (BYOK), or keep the copyable join link.
 
 ## Documentation
 
@@ -34,7 +35,11 @@ profile settings.
   (collaborator). No Firebase, no password, no external account.
 - **Trips and itineraries** — day-by-day plans, categories, costs and budgets.
 - **Collaboration** — invitations produce a copyable join link; the second demo
-  identity can join the trip. No email is sent in this demo.
+  identity can join the trip. Email is optional: add a Resend key in Profile →
+  Email delivery, otherwise no email is sent.
+- **Async email** — `TripInvitation` messages flow from the API through the Go
+  demo broker to the email service; members show the invited email with a demo
+  badge.
 - **Places** — catalogue-only search over the seeded Toronto data in MongoDB.
 - **Uploads** — avatars, covers and attachments on local disk.
 - **AI agent** — deterministic demo mode by default, optional DeepSeek /
@@ -50,7 +55,8 @@ Browser
 web (Next.js 15)
   ├─ /api/graphql ──▶ api (Bun + graphql-yoga :4000)
   │                     ├─▶ postgres:5432 (relational + pgvector)
-  │                     └─▶ mongo:27017 (locations)
+  │                     ├─▶ mongo:27017 (locations)
+  │                     └─▶ broker :8080 (Go) ──▶ email :4200 ──▶ Resend/sink
   ├─ /api/agent/* ──▶ agent (FastAPI :4100)
   │                     ├─▶ postgres (pgvector embeddings)
   │                     └─▶ optional LLM provider
@@ -149,10 +155,11 @@ uv run uvicorn tripsuggest.main:app --host 127.0.0.1 --port 4100
 
 ## Invitations
 
-There is no email provider in this demo. Open a trip → **Invite**, create the
-invitation, copy the link, and open it in an incognito window. The second demo
-identity joins the trip. The invite form is prefilled with
-`friend@triplanner.local`.
+Open a trip → **Invite**, create the invitation, and either copy the link or let
+the email pipeline deliver it. The demo starts with `EMAIL_PROVIDER=sink`, so
+no email is sent until the recruiter adds a Resend key in **Profile → Email
+delivery**. The invite form is prefilled with `friend@example.com`; the invited
+email is preserved on the membership and shown with a **Demo** badge.
 
 ## Configuration
 

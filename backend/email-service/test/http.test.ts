@@ -44,7 +44,7 @@ describe('email service HTTP surface', () => {
         ready: true,
         provider: 'sink',
         providerReady: true,
-        kafkaReady: true,
+        brokerReady: true,
       }),
     });
     base = `http://127.0.0.1:${handle.port}`;

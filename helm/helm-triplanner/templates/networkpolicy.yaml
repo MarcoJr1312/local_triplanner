@@ -15,8 +15,6 @@ spec:
     - Ingress
     - Egress
   ingress:
-    # The BYOK settings proxy is the only intended caller. Add the API chart's
-    # pod label here once it exists.
     - from:
         - podSelector:
             matchLabels:
@@ -25,20 +23,54 @@ spec:
         - port: {{ .Values.emailService.service.port }}
           protocol: TCP
   egress:
-    # Kafka bootstrap and broker ports.
-    - ports:
-        - port: 9092
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: triplanner-kafka
+      ports:
+        - port: {{ .Values.broker.service.port }}
           protocol: TCP
-        - port: 9093
-          protocol: TCP
-    # DNS.
     - ports:
         - port: 53
           protocol: UDP
         - port: 53
           protocol: TCP
-    # Resend API.
     - ports:
         - port: 443
+          protocol: TCP
+{{- end }}
+{{- if and .Values.broker.enabled .Values.networkPolicy.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: triplanner-kafka
+  labels:
+    app.kubernetes.io/name: triplanner-kafka
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: triplanner-kafka
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: triplanner-email
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: triplanner-api
+      ports:
+        - port: {{ .Values.broker.service.port }}
+          protocol: TCP
+  egress:
+    - ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
           protocol: TCP
 {{- end }}

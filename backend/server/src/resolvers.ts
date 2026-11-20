@@ -35,6 +35,7 @@ import { createInvitation, findInvitationByCode, acceptInvitation } from './pg/i
 import { isEmailMatch, isInviteCodeValid } from './invitations.ts';
 import { decodeAvatarDataUrl } from './pg/profile.ts';
 import { AGENT_BASE_URL, INTERNAL_TOKEN } from './env.ts';
+import { brokerPublisher } from './broker.ts';
 import {
   emailSettingsClient,
   EmailSettingsError,
@@ -42,6 +43,7 @@ import {
   type UpdateEmailSettingsInput,
 } from './email-settings.ts';
 import {
+  addInvitedMember,
   addItem as addItemRow,
   computeTripStats,
   createTrip as createTripRow,
@@ -94,6 +96,7 @@ interface MemberRow {
   user_id: string;
   display_name: string | null;
   email: string | null;
+  invited_email: string | null;
   role: string;
   joined_at: string | null;
   color: string | null;
@@ -104,6 +107,7 @@ interface MemberGql {
   userId: string;
   displayName: string | null;
   email: string | null;
+  invitedEmail: string | null;
   role: string;
   joinedAt: string | null;
   color: string | null;
@@ -283,6 +287,7 @@ const toMember = (row: MemberRow): MemberGql => ({
   userId: row.user_id,
   displayName: row.display_name,
   email: row.email,
+  invitedEmail: row.invited_email,
   role: row.role,
   joinedAt: row.joined_at,
   color: row.color,
@@ -459,7 +464,7 @@ async function buildTrip(db: AsyncDb, tripRow: TripFullRow, currentUserId: strin
 async function listMembersWithUser(db: AsyncDb, tripId: string): Promise<MemberRow[]> {
   return db
     .prepare(
-      `SELECT m.user_id, m.role, m.joined_at, u.display_name, u.email, u.color, u.avatar_url
+      `SELECT m.user_id, m.role, m.joined_at, m.invited_email, u.display_name, u.email, u.color, u.avatar_url
        FROM trip_members m
        JOIN users u ON u.id = m.user_id
        WHERE m.trip_id = ?
@@ -945,7 +950,7 @@ export const resolvers: {
         throw gqlError('INVALID_INVITE_ROLE', 'Rol de invitaciÃ³n no vÃ¡lido');
       }
       const inviteRole = requestedRole as 'editor' | 'viewer';
-      await tripOrThrow(ctx.db, tripId);
+      const trip = await tripOrThrow(ctx.db, tripId);
       const myRole = await getMemberRole(ctx.db, tripId, ctx.currentUserId);
       if (myRole !== 'owner' && myRole !== 'editor') {
         throw gqlError('FORBIDDEN_INVITE', 'Solo el propietario o un editor puede invitar');
@@ -958,6 +963,34 @@ export const resolvers: {
         createdBy: ctx.currentUserId,
       });
       const joinUrl = buildJoinUrl(tripId, invitation.code);
+      const inviter = await ctx.db
+        .prepare('SELECT display_name, language FROM users WHERE id = ?')
+        .get<{ display_name: string | null; language: string | null }>(ctx.currentUserId);
+      try {
+        await brokerPublisher.publish({
+          id: invitation.id,
+          type: 'email.invite.v1',
+          version: 1,
+          occurredAt: new Date().toISOString(),
+          source: 'triplanner-api',
+          payload: {
+            to: invitation.email,
+            tripName: trip.name,
+            ownerName: inviter?.display_name?.trim() || 'DemoUser',
+            code: invitation.code,
+            joinUrl,
+            role: inviteRole,
+            language: inviter?.language === 'en' ? 'en' : 'es',
+            demo: true,
+          },
+        });
+      } catch (error) {
+        // The invite remains usable through the copyable link if the broker is down.
+        console.error('[invite] broker publish failed', {
+          invitationId: invitation.id,
+          reason: error instanceof Error ? error.message : 'unknown error',
+        });
+      }
       publishTrip(ctx, tripId, 'inviteSent', { tripId, email: invitation.email }, ctx.currentUserId);
       return {
         invitationId: invitation.id,
@@ -976,9 +1009,13 @@ export const resolvers: {
       if (invitation.status !== 'pending') throw gqlError('INVITE_ALREADY_USED', 'Esta invitaciÃ³n ya fue usada');
       if (!isEmailMatch(invitation, email)) throw gqlError('INVITE_EMAIL_MISMATCH', 'El email no coincide con la invitaciÃ³n');
 
-      await ctx.db
-        .prepare('INSERT INTO trip_members (trip_id, user_id, role) VALUES (?, ?, ?) ON CONFLICT DO NOTHING')
-        .run(invitation.trip_id, ctx.currentUserId, invitation.role);
+      await addInvitedMember(
+        ctx.db,
+        invitation.trip_id,
+        ctx.currentUserId,
+        invitation.role,
+        invitation.email,
+      );
       await ctx.db.prepare('UPDATE users SET email = ? WHERE id = ?').run(invitation.email, ctx.currentUserId);
       await acceptInvitation(ctx.db, invitation.id);
       publishTrip(
