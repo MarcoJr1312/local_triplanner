@@ -140,6 +140,9 @@ emailService:
 - Both run as non-root with `runAsUser: 100`, `runAsGroup: 101` and
   `fsGroup: 101` (the Alpine app user); Kubernetes cannot verify a named,
   non-numeric image user without the numeric IDs.
+- Templates are grouped by service:
+  `templates/broker/broker-*.yaml` and `templates/email/email-*.yaml`; only
+  `_helpers.tpl`, `NOTES.txt` and `serviceaccount.yaml` stay shared at the root.
 - `triplanner-internal` Secret supplies `INTERNAL_TOKEN` for the BYOK API.
 - The API deployment, when added, must receive `BROKER_URL`,
   `BROKER_TOPIC`, `EMAIL_SERVICE_URL` and the same `INTERNAL_TOKEN`.
