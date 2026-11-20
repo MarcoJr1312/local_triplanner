@@ -35,7 +35,12 @@ import { createInvitation, findInvitationByCode, acceptInvitation } from './pg/i
 import { isEmailMatch, isInviteCodeValid } from './invitations.ts';
 import { decodeAvatarDataUrl } from './pg/profile.ts';
 import { AGENT_BASE_URL, INTERNAL_TOKEN } from './env.ts';
-import { emailSettingsClient, EmailSettingsError, type UpdateEmailSettingsInput } from './email-settings.ts';
+import {
+  emailSettingsClient,
+  EmailSettingsError,
+  type EmailSettingsGql,
+  type UpdateEmailSettingsInput,
+} from './email-settings.ts';
 import {
   addItem as addItemRow,
   computeTripStats,
@@ -358,6 +363,16 @@ const LLM_DEMO_SETTINGS: LlmSettingsGql = {
   demo: true,
 };
 
+// The email service is optional in the recruiter demo. Keep the profile modal
+// usable when it is not deployed; saving will surface a clear error.
+const EMAIL_SETTINGS_UNAVAILABLE: EmailSettingsGql = {
+  provider: 'sink',
+  from: '',
+  replyTo: '',
+  hasKey: false,
+  ready: false,
+};
+
 // The agent owns the provider runtime. GET is public; writes are protected by
 // the shared internal token. The API key never travels back to the browser.
 async function agentLlmConfig(
@@ -599,6 +614,9 @@ export const resolvers: {
       try {
         return await emailSettingsClient.get();
       } catch (error) {
+        if (error instanceof EmailSettingsError && error.code === 'EMAIL_SETTINGS_FAILED') {
+          return EMAIL_SETTINGS_UNAVAILABLE;
+        }
         throw emailSettingsError(error, 'No se pudo leer la configuración de email.');
       }
     },

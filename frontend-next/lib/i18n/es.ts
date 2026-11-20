@@ -380,6 +380,7 @@ export const es = {
   'settings.llm.saved': 'Ajustes de IA guardados',
   'settings.email.section': 'Envío de emails',
   'settings.email.hint': 'Añade tu propia clave de Resend para enviar invitaciones y recordatorios. La clave se guarda solo en el volumen local del servicio de email y nunca vuelve al navegador.',
+  'settings.email.unavailable': 'El servicio de email no está disponible. Las invitaciones seguirán usando el enlace copiable.',
   'settings.email.provider': 'Proveedor',
   'settings.email.providerSink': 'Demo (sin envío)',
   'settings.email.providerResend': 'Resend',

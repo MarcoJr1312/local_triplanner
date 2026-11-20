@@ -382,6 +382,7 @@ export const en: typeof es = {
   'settings.llm.saved': 'AI settings saved',
   'settings.email.section': 'Email delivery',
   'settings.email.hint': 'Add your own Resend key to send invitations and reminders. The key is stored only in the local email-service volume and is never sent back to the browser.',
+  'settings.email.unavailable': 'The email service is unavailable. Invitations will still use the copyable link.',
   'settings.email.provider': 'Provider',
   'settings.email.providerSink': 'Demo (no delivery)',
   'settings.email.providerResend': 'Resend',

@@ -121,8 +121,7 @@ export default function ProfileModal({ open, onClose }: ProfileModalProps) {
       })
       .catch(() => {
         if (!cancelled) {
-          setEmailSettings({ provider: 'sink', from: '', replyTo: '', hasKey: false, ready: true });
-          setEmailError(t('errors.EMAIL_SETTINGS_FAILED'));
+          setEmailSettings({ provider: 'sink', from: '', replyTo: '', hasKey: false, ready: false });
         }
       });
     return () => {
@@ -612,6 +611,11 @@ export default function ProfileModal({ open, onClose }: ProfileModalProps) {
           {emailOpen && (
             <div id="profile-email-body" className="mt-3 space-y-3">
               <p className="text-xs text-muted-foreground">{t('settings.email.hint')}</p>
+              {emailSettings && !emailSettings.ready && (
+                <p className="text-xs text-amber-700 dark:text-amber-300">
+                  {t('settings.email.unavailable')}
+                </p>
+              )}
               {emailSettings === null ? (
                 <div className="flex items-center justify-center py-4">
                   <LoaderCircle className="h-5 w-5 animate-spin text-muted-foreground" />
