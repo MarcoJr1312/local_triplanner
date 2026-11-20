@@ -1,5 +1,10 @@
 # Triplanner email pipeline — single-node recruiter profile.
 # The chart deploys the Go demo broker and the email consumer.
+#
+# Every manifest renders `metadata.namespace: {{ .Release.Namespace }}`.
+# First create the namespace, then install with the same -n:
+#   kubectl create namespace triplanner
+#   helm install triplanner ./helm/helm-triplanner -n triplanner
 
 global:
   # URL the recruiter actually opens. Used for invite links (API) and the
@@ -47,7 +52,7 @@ broker:
     allowPrivilegeEscalation: false
     readOnlyRootFilesystem: true
     capabilities:
-      drop: ["ALL"]
+      drop: [ "ALL" ]
   resources:
     requests:
       cpu: 25m
@@ -73,6 +78,7 @@ broker:
   tolerations: []
   affinity: {}
 
+# Email service configuration values.
 emailService:
   enabled: true
   replicaCount: 1
@@ -135,7 +141,7 @@ emailService:
     allowPrivilegeEscalation: false
     readOnlyRootFilesystem: true
     capabilities:
-      drop: ["ALL"]
+      drop: [ "ALL" ]
 
   resources:
     requests:

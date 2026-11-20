@@ -31,6 +31,13 @@ level because they are shared.
 
 ## Install
 
+First create the namespace; every manifest is rendered into it via
+`.Release.Namespace` (or run Helm with `--create-namespace`):
+
+```bash
+kubectl create namespace triplanner
+```
+
 Prerequisites:
 
 - A default StorageClass for the two PVCs.

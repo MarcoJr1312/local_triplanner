@@ -3,6 +3,7 @@ apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
   name: triplanner-email
+  namespace: {{ .Release.Namespace }}
   labels:
     app.kubernetes.io/name: triplanner-email
     app.kubernetes.io/instance: {{ .Release.Name }}

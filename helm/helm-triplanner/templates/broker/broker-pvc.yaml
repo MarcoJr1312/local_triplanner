@@ -3,6 +3,7 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: triplanner-kafka-data
+  namespace: {{ .Release.Namespace }}
   labels:
     app.kubernetes.io/name: triplanner-kafka
     app.kubernetes.io/instance: {{ .Release.Name }}

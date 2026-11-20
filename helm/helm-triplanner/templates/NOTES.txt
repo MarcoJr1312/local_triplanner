@@ -1,5 +1,9 @@
 Triplanner email pipeline installed.
 
+Namespace: {{ .Release.Namespace }}
+Create it before installing:
+  kubectl create namespace {{ .Release.Namespace }}
+
 Components:
   - triplanner-kafka: Go HTTP broker (topic/offset/ack, SQLite)
   - triplanner-email: email consumer + BYOK settings

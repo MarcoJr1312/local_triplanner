@@ -143,6 +143,9 @@ emailService:
 - Templates are grouped by service:
   `templates/broker/broker-*.yaml` and `templates/email/email-*.yaml`; only
   `_helpers.tpl`, `NOTES.txt` and `serviceaccount.yaml` stay shared at the root.
+- Every manifest sets `metadata.namespace: {{ .Release.Namespace }}`. Create
+  `triplanner` first and install with `-n triplanner` (or use Helm’s
+  `--create-namespace`).
 - `triplanner-internal` Secret supplies `INTERNAL_TOKEN` for the BYOK API.
 - The API deployment, when added, must receive `BROKER_URL`,
   `BROKER_TOPIC`, `EMAIL_SERVICE_URL` and the same `INTERNAL_TOKEN`.
