@@ -158,7 +158,7 @@ uv run uvicorn tripsuggest.main:app --host 127.0.0.1 --port 4100
 Open a trip → **Invite**, create the invitation, and either copy the link or let
 the email pipeline deliver it. The demo starts with `EMAIL_PROVIDER=sink`, so
 no email is sent until the recruiter adds a Resend key in **Profile → Email
-delivery**. The invite form is prefilled with `friend@example.com`; the invited
+delivery**. The invite form is prefilled with `friend@triplanner.local`; the invited
 email is preserved on the membership and shown with a **Demo** badge.
 
 ## Configuration
