@@ -1,6 +1,8 @@
 # Run the published Docker Hub images (no local build):
 #   DOCKERHUB_USERNAME=youruser IMAGE_TAG=latest docker compose -f deploy/docker-compose.hub.yml up -d
 # The source-build stack lives in deploy/docker-compose.yml.
+name: local_triplanner
+
 services:
   postgres:
     image: pgvector/pgvector:pg17
