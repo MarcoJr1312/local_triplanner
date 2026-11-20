@@ -777,9 +777,9 @@ The API requires a signed-in user, proxies to the email service with
 (`EMAIL_SETTINGS_FAILED`, `EMAIL_CONFIG_INVALID`). The browser never receives
 the key; it only receives `hasKey`.
 
-UI: a new **Email delivery** section in `ProfileModal`, next to the existing
-LLM settings: provider (`sink` demo / `resend`), API key (password field,
-blank keeps the saved key), from address and reply-to. Saving shows a toast and
+UI: a new **Email delivery** card on the `/settings` page (formerly the profile
+modal), next to the existing LLM settings: provider (`sink` demo / `resend`),
+API key (password field, blank keeps the saved key), from address and reply-to. Saving shows a toast and
 updates the badge. This is the same interaction the recruiter already knows
 from the LLM provider.
 
@@ -796,7 +796,7 @@ only allows the API pod to reach port 4200.
 | M0 Contract | done | This doc, topic/envelope, ownership | Reviewed; no code | — |
 | M1 Service runtime | **done** | `backend/email-service`, templates, provider, consumer, probes, image, 43 tests | `bun test`, `tsc`, image build, local Kafka smoke | Scale to 0; no producer yet |
 | M2 Invitation producer | next | Outbox DDL, `enqueueEmail`, relay, transaction, flags, Postgres tests | Invite writes one row + one Kafka event; Kafka down leaves row pending; invite still returns link; replay works | `EMAIL_MODE=disabled` |
-| M2b BYOK settings | in progress (backend/UI done) | Settings store, internal config API, GraphQL proxy, ProfileModal section, PVC + Service + `INTERNAL_TOKEN` | Recruiter saves a Resend key from the app; key never returns to the browser; survives a pod restart; no email key in values | Clear key; switch provider to `sink` |
+| M2b BYOK settings | in progress (backend/UI done) | Settings store, internal config API, GraphQL proxy, `/settings` Email delivery card, PVC + Service + `INTERNAL_TOKEN` | Recruiter saves a Resend key from the app; key never returns to the browser; survives a pod restart; no email key in values | Clear key; switch provider to `sink` |
 | M3 Reminders + hardening | pending | Sweep→outbox transaction, DLQ replay script, metrics, load test | Reminder event per member once; poison message lands in DLQ; single replica exactly once (two-replica check optional) | `REMINDERS_ENABLED=0` |
 | M4 Helm integration | pending (Marco) | Deployment, Service, Secret refs, probes, netpol, topics; HPA/PDB only in the hosted profile | `helm template` + `kubectl rollout status`; one pod ready; `/ready` 200; test invite delivered | `helm rollback` |
 | M5 Cutover | pending | Enable `EMAIL_MODE=outbox`, send real invite, watch logs/DLQ | Resend id present; UI link still works; DLQ 0 | Set `EMAIL_MODE=disabled` |
@@ -852,7 +852,7 @@ only allows the API pod to reach port 4200.
   `clearKey` returned `provider=sink, hasKey=false`. No real Resend delivery was
   attempted (fake key).
 - With the email service stopped, `getEmailSettings` returned
-  `{provider: sink, ready: false}` instead of failing the Profile modal; the
+  `{provider: sink, ready: false}` instead of failing the settings page; the
   full server suite still passed (64/64).
 - Helm wiring (PVC, Service, shared `INTERNAL_TOKEN`, NetworkPolicy) remains
   M4; the values contract is in §9.2/§9.7.

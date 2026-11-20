@@ -48,7 +48,7 @@ Runtime services: `web`, `api`, `agent`, `postgres`, `mongo`.
   Toronto dataset; search reads MongoDB only.
 - **Email is optional and off by default.** `EMAIL_MODE=disabled` keeps the
   demo key-free; invitations expose a copyable join link. The recruiter can add
-  their own Resend key in Profile → Email delivery (BYOK); no key ships with the
+  their own Resend key in Settings → Email delivery (BYOK); no key ships with the
   repo or chart. The email service consumes `TripInvitation` from the Go demo
   broker.
 - **Broker**: `backend/kafka` is a Go HTTP topic/offset/ack demo broker with

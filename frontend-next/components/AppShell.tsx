@@ -7,7 +7,6 @@ import { Bell, CalendarDays, Compass, LogOut, Map, Search, Settings } from 'luci
 import type { ReactNode } from 'react';
 import { useI18n } from '@/lib/i18n';
 import { useAuth } from '@/hooks/useAuth';
-import ProfileModal from './ProfileModal';
 import ThemeToggle from './ThemeToggle';
 import Modal from './Modal';
 
@@ -16,7 +15,6 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const { user, signOut } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
-  const [showProfile, setShowProfile] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
 
@@ -34,7 +32,9 @@ export default function AppShell({ children }: { children: ReactNode }) {
           ? t('premium.nav.calendar')
           : pathname === '/search'
             ? t('premium.nav.search')
-            : 'Triplanner';
+            : pathname === '/settings'
+              ? t('settings.pageTitle')
+              : 'Triplanner';
 
   const isActive = (href: string) =>
     href === '/' ? pathname === '/' : pathname.startsWith(href);
@@ -67,14 +67,13 @@ export default function AppShell({ children }: { children: ReactNode }) {
           >
             <Search className="icon" />
           </Link>
-          <button
-            type="button"
-            className="rail-btn"
-            onClick={() => setShowProfile(true)}
+          <Link
+            href="/settings"
+            className={`rail-btn${isActive('/settings') ? ' active' : ''}`}
             aria-label={t('premium.nav.settings')}
           >
             <Settings className="icon" />
-          </button>
+          </Link>
         </nav>
         <div className="rail-bottom">
           <button
@@ -85,14 +84,13 @@ export default function AppShell({ children }: { children: ReactNode }) {
           >
             <Bell className="icon-sm" />
           </button>
-          <button
-            type="button"
+          <Link
+            href="/settings"
             className="rail-avatar"
-            onClick={() => setShowProfile(true)}
             aria-label={t('profile.editAria')}
           >
             {user?.displayName?.trim().charAt(0).toUpperCase() || 'D'}
-          </button>
+          </Link>
         </div>
       </aside>
 
@@ -116,20 +114,18 @@ export default function AppShell({ children }: { children: ReactNode }) {
           >
             <LogOut className="icon-sm" />
           </button>
-          <button
-            type="button"
+          <Link
+            href="/settings"
             className="rail-avatar"
             style={{ width: 34, height: 34 }}
-            onClick={() => setShowProfile(true)}
             aria-label={t('profile.editAria')}
           >
             {user?.displayName?.trim().charAt(0).toUpperCase() || 'D'}
-          </button>
+          </Link>
         </header>
         <main className="content">{children}</main>
       </div>
 
-      <ProfileModal open={showProfile} onClose={() => setShowProfile(false)} />
       <Modal
         open={showNotifications}
         onClose={() => setShowNotifications(false)}

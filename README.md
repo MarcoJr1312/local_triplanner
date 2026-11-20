@@ -16,7 +16,7 @@ profile settings.
 > CI/CD and multi-arch Docker Hub publishing. Firebase, HasData and AWS are
 > removed from the runtime; place search reads a local MongoDB catalogue seeded
 > with 186 real Toronto places. Email is optional: the recruiter can add a
-> Resend key in Profile → Email delivery (BYOK), or keep the copyable join link.
+> Resend key in Settings → Email delivery (BYOK), or keep the copyable join link.
 
 ## Documentation
 
@@ -35,7 +35,7 @@ profile settings.
   (collaborator). No Firebase, no password, no external account.
 - **Trips and itineraries** — day-by-day plans, categories, costs and budgets.
 - **Collaboration** — invitations produce a copyable join link; the second demo
-  identity can join the trip. Email is optional: add a Resend key in Profile →
+  identity can join the trip. Email is optional: add a Resend key in Settings →
   Email delivery, otherwise no email is sent.
 - **Async email** — `TripInvitation` messages flow from the API through the Go
   demo broker to the email service; members show the invited email with a demo
@@ -160,7 +160,7 @@ uv run uvicorn tripsuggest.main:app --host 127.0.0.1 --port 4100
 
 Open a trip → **Invite**, create the invitation, and either copy the link or let
 the email pipeline deliver it. The demo starts with `EMAIL_PROVIDER=sink`, so
-no email is sent until the recruiter adds a Resend key in **Profile → Email
+no email is sent until the recruiter adds a Resend key in **Settings → Email
 delivery**. The invite form is prefilled with `friend@triplanner.local`; the invited
 email is preserved on the membership and shown with a **Demo** badge.
 
@@ -195,7 +195,7 @@ email is preserved on the membership and shown with a **Demo** badge.
 
 The default `LLM_PROVIDER=none` uses deterministic answers from the local
 catalogue and shows an **AI demo mode** badge. A recruiter can configure a
-provider from the app: open **Profile / Settings** (gear icon) → **AI provider**,
+provider from the app: open **Settings** (gear icon) → **AI provider**,
 choose DeepSeek, OpenAI, Anthropic or a local Ollama, and paste the API token.
 The token is stored only in the agent volume (`/app/.data/llm.json`), is never
 returned to the browser, and new AI requests use the saved provider without a
