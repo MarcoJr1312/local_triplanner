@@ -3,10 +3,10 @@
 ## First checks
 
 ```bash
-docker compose ps
-docker compose logs -f api
-docker compose logs -f web
-docker compose logs -f agent
+docker compose -f deploy/docker-compose.yml ps
+docker compose -f deploy/docker-compose.yml logs -f api
+docker compose -f deploy/docker-compose.yml logs -f web
+docker compose -f deploy/docker-compose.yml logs -f agent
 ```
 
 All five services should be `healthy`: `web`, `api`, `agent`, `postgres`,
@@ -17,7 +17,7 @@ All five services should be `healthy`: `web`, `api`, `agent`, `postgres`,
 Start Docker Desktop and wait for the whale icon. Then:
 
 ```bash
-docker compose up -d
+docker compose -f deploy/docker-compose.yml up -d
 ```
 
 ## Port already in use
@@ -32,7 +32,7 @@ POSTGRES_PORT=55432
 MONGO_PORT=27018
 ```
 
-Then `docker compose up -d`. Open the URL with the new `WEB_PORT`.
+Then `docker compose -f deploy/docker-compose.yml up -d`. Open the URL with the new `WEB_PORT`.
 
 ## First build is slow
 
@@ -40,7 +40,7 @@ The first build compiles Next.js and installs Python dependencies. Later
 builds use Docker layer cache. To rebuild from scratch:
 
 ```bash
-docker compose build --no-cache
+docker compose -f deploy/docker-compose.yml build --no-cache
 ```
 
 ## `web` is unhealthy
@@ -48,8 +48,8 @@ docker compose build --no-cache
 Usually the API/agent is not healthy yet, or an env value is wrong.
 
 ```bash
-docker compose logs web --tail 100
-docker compose ps
+docker compose -f deploy/docker-compose.yml logs web --tail 100
+docker compose -f deploy/docker-compose.yml ps
 ```
 
 The web container expects:
@@ -63,18 +63,18 @@ These are set by `docker-compose.yml`; do not replace them with `localhost`.
 ## `api` is unhealthy
 
 ```bash
-docker compose logs api --tail 100
+docker compose -f deploy/docker-compose.yml logs api --tail 100
 ```
 
 Common causes:
 
-- Postgres/Mongo not healthy yet: wait and re-run `docker compose ps`.
+- Postgres/Mongo not healthy yet: wait and re-run `docker compose -f deploy/docker-compose.yml ps`.
 - Migration/seed failed: check the log for `Seed OK` or a stack trace.
 - A stale volume from an older schema:
 
 ```bash
-docker compose down -v
-docker compose up --build
+docker compose -f deploy/docker-compose.yml down -v
+docker compose -f deploy/docker-compose.yml up --build
 ```
 
 ## Search returns no places
@@ -82,7 +82,7 @@ docker compose up --build
 1. Check the seed log:
 
 ```bash
-docker compose logs api | grep "Seed OK"
+docker compose -f deploy/docker-compose.yml logs api | grep "Seed OK"
 ```
 
 Expected: `1 destinos, 186 actividades, 80 imágenes`.
@@ -98,21 +98,21 @@ Expected: `187` (1 destination + 186 places).
 3. Reset if needed:
 
 ```bash
-docker compose down -v
-docker compose up -d
+docker compose -f deploy/docker-compose.yml down -v
+docker compose -f deploy/docker-compose.yml up -d
 ```
 
 ## Seed images return 404
 
 ```bash
-docker compose logs api | grep "imágenes"
-docker compose exec api ls /app/uploads/seed | head
+docker compose -f deploy/docker-compose.yml logs api | grep "imágenes"
+docker compose -f deploy/docker-compose.yml exec api ls /app/uploads/seed | head
 ```
 
 If the folder is empty, re-run the seed:
 
 ```bash
-docker compose exec api bun run db:seed
+docker compose -f deploy/docker-compose.yml exec api bun run db:seed
 ```
 
 The seed copies `backend/db/seed-images/` into the uploads volume.
@@ -137,7 +137,7 @@ If you configured a provider, check:
 - `LLM_API_KEY` is set for DeepSeek/OpenAI/Anthropic.
 - `LLM_MODEL` matches the provider.
 - For Ollama on the host: `LLM_BASE_URL=http://host.docker.internal:11434/v1`.
-- Rebuild/restart the agent: `docker compose up -d --build agent web`.
+- Rebuild/restart the agent: `docker compose -f deploy/docker-compose.yml up -d --build agent web`.
 
 ## No invitation email
 
@@ -160,14 +160,14 @@ The base images (`pgvector/pgvector`, `mongo`, `node`, `python`, `oven/bun`) hav
 arm64 variants. If a build fails after switching architectures:
 
 ```bash
-docker compose build --no-cache
+docker compose -f deploy/docker-compose.yml build --no-cache
 ```
 
 ## Reset everything
 
 ```bash
-docker compose down -v
-docker compose up --build
+docker compose -f deploy/docker-compose.yml down -v
+docker compose -f deploy/docker-compose.yml up --build
 ```
 
 This deletes the Postgres, MongoDB and uploads volumes. The seed recreates the

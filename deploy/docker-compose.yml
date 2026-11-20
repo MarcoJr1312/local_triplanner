@@ -1,7 +1,8 @@
 # Triplanner local recruiter demo.
-# Start:  docker compose up --build
-# Stop:   docker compose down          (keeps volumes)
-# Reset:  docker compose down -v       (drops data, demo-grade)
+# Run from the repository root:
+#   docker compose -f deploy/docker-compose.yml up --build
+# Stop:  docker compose -f deploy/docker-compose.yml down
+# Reset: docker compose -f deploy/docker-compose.yml down -v
 services:
   postgres:
     image: pgvector/pgvector:pg17
@@ -38,7 +39,7 @@ services:
 
   api:
     build:
-      context: .
+      context: ..
       dockerfile: backend/server/Dockerfile
     container_name: local_triplanner-api
     environment:
@@ -62,7 +63,7 @@ services:
 
   agent:
     build:
-      context: .
+      context: ..
       dockerfile: backend/agent-service/Dockerfile
     container_name: local_triplanner-agent
     environment:
@@ -85,7 +86,7 @@ services:
 
   web:
     build:
-      context: .
+      context: ..
       dockerfile: frontend-next/Dockerfile
     container_name: local_triplanner-web
     environment:

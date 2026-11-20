@@ -20,7 +20,7 @@ A recruiter with Docker Desktop only can run:
 ```bash
 git clone <repo>
 cd local_triplanner
-docker compose up --build
+docker compose -f deploy/docker-compose.yml up --build
 ```
 
 and use the app at http://localhost:3000 with no Firebase, HasData or AWS
@@ -77,13 +77,13 @@ auth and Dockerfiles.
 - M3 done (`d8211de`): 186 real Toronto places and 80 local images seeded from
   HasData; the demo trip mixes sight, food, activity and nightlife.
 - M4 done: full Compose stack (web, api, agent, Postgres, MongoDB) is healthy;
-  `docker compose up --build` boots and seeds the demo in one command.
+  `docker compose -f deploy/docker-compose.yml up --build` boots and seeds the demo in one command.
 - M5 done (`a283eff`): optional LLM providers, deterministic demo AI and the
   AI demo-mode badge.
 - M6 done (`0a84de3`): tour, troubleshooting, smoke scripts, CI, Windows
   clean-clone QA and the `v1.0.0` tag.
 - CI/CD upgrade (`v1.1.0`): per-service workflows in `.github/workflows/`,
-  multi-arch Docker Hub images and `docker-compose.hub.yml`.
+  multi-arch Docker Hub images and `deploy/docker-compose.hub.yml`.
 - CI/CD verified: 8/8 GitHub Actions runs passed; published images
   `marcojr13/triplanner-{web,api,agent}` (tags `latest`, `1.1`, `1.1.0`,
   `sha-e335779`) and the published stack passed the smoke test.
@@ -111,9 +111,9 @@ current tree.
 ## Local commands
 
 ```bash
-docker compose up --build        # full demo
-docker compose down              # stop, keep volumes
-docker compose down -v           # reset data
+docker compose -f deploy/docker-compose.yml up --build        # full demo
+docker compose -f deploy/docker-compose.yml down              # stop, keep volumes
+docker compose -f deploy/docker-compose.yml down -v           # reset data
 cd backend/server && bun test      # API tests (needs Postgres/Mongo)
 cd backend/server && bunx tsc --noEmit
 cd frontend-next && bun test

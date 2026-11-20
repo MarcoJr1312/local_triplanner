@@ -87,7 +87,10 @@ the client.
 │   ├── db/                 Postgres schema + seed data
 │   ├── graphql/            base schema
 │   └── .env.example        backend configuration template
-├── docker-compose.yml      web + api + agent + Postgres + MongoDB
+├── deploy/
+│   ├── docker-compose.yml             web + api + agent + Postgres + MongoDB
+│   ├── docker-compose.hub.yml         published images
+│   └── docker-compose.local-cluster.yml  local app + cluster broker/email
 └── AGENTS.md               working agreement for AI agents
 ```
 
@@ -98,7 +101,7 @@ the client.
 ```bash
 git clone https://github.com/MarcoJr1312/local_triplanner.git
 cd local_triplanner
-docker compose up --build
+docker compose -f deploy/docker-compose.yml up --build
 ```
 
 Open http://localhost:3000/login and choose **Demo (owner)** or **Demo Friend**.
@@ -106,7 +109,7 @@ Open http://localhost:3000/login and choose **Demo (owner)** or **Demo Friend**.
 The first build takes a few minutes. All five services become healthy:
 
 ```bash
-docker compose ps
+docker compose -f deploy/docker-compose.yml ps
 ```
 
 | Service | Purpose |
@@ -139,7 +142,7 @@ docker compose logs -f api
 Requires Bun, uv/Python 3.12 and Docker for the data stores.
 
 ```bash
-docker compose up -d postgres mongo
+docker compose -f deploy/docker-compose.yml up -d postgres mongo
 cp backend/.env.example backend/.env
 
 # API :4000
@@ -228,7 +231,7 @@ LLM_BASE_URL=http://host.docker.internal:11434/v1
 Then:
 
 ```bash
-docker compose up -d --build agent web
+docker compose -f deploy/docker-compose.yml up -d --build agent web
 ```
 
 ## CI/CD and Docker Hub
@@ -251,7 +254,7 @@ Published images: `marcojr13/triplanner-{web,api,agent}` with release tags
 without building:
 
 ```bash
-docker compose -f docker-compose.hub.yml up -d
+docker compose -f deploy/docker-compose.hub.yml up -d
 ```
 
 The file defaults to `DOCKERHUB_USERNAME=marcojr13` and `IMAGE_TAG=latest`.
@@ -259,7 +262,7 @@ Override them for a fork or a pinned version:
 
 ```bash
 DOCKERHUB_USERNAME=youruser IMAGE_TAG=1.2.2 \
-  docker compose -f docker-compose.hub.yml up -d
+  docker compose -f deploy/docker-compose.hub.yml up -d
 ```
 
 See [docs/CICD.md](docs/CICD.md) for setup, tags and release flow.

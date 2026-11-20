@@ -3,8 +3,8 @@
 This is the fastest path through the recruiter demo. The stack must be running:
 
 ```bash
-docker compose up --build
-docker compose ps
+docker compose -f deploy/docker-compose.yml up --build
+docker compose -f deploy/docker-compose.yml ps
 ```
 
 All five services should show `healthy`.
@@ -90,9 +90,9 @@ Open an activity:
 ## 8. Reset
 
 ```bash
-docker compose down       # stop, keep data
-docker compose down -v    # reset data; next start re-seeds
+docker compose -f deploy/docker-compose.yml down       # stop, keep data
+docker compose -f deploy/docker-compose.yml down -v    # reset data; next start re-seeds
 ```
 
-The next `docker compose up -d` recreates the Toronto catalogue, the demo users
+The next `docker compose -f deploy/docker-compose.yml up -d` recreates the Toronto catalogue, the demo users
 and the three-day trip.

@@ -94,7 +94,7 @@ All published images are multi-arch: `linux/amd64` and `linux/arm64`.
 ## Run the published images
 
 ```bash
-docker compose -f docker-compose.hub.yml up -d
+docker compose -f deploy/docker-compose.hub.yml up -d
 ```
 
 The file defaults to `DOCKERHUB_USERNAME=marcojr13` and `IMAGE_TAG=latest`.
@@ -102,7 +102,7 @@ Override them for a fork or a pinned version:
 
 ```bash
 DOCKERHUB_USERNAME=youruser IMAGE_TAG=1.2.2 \
-  docker compose -f docker-compose.hub.yml up -d
+  docker compose -f deploy/docker-compose.hub.yml up -d
 ```
 
 Open http://localhost:3000/login.
@@ -122,7 +122,7 @@ The API container runs migrations and the idempotent seed on every start, so a
 fresh volume is ready in one command.
 
 > Container names are fixed (`local_triplanner-*`). Stop the source-build stack
-> (`docker compose down`) before starting the Docker Hub stack.
+> (`docker compose -f deploy/docker-compose.yml down`) before starting the Docker Hub stack.
 
 ## Release flow
 
