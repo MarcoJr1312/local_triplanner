@@ -14,7 +14,7 @@ All five services should show `healthy`.
 Open http://localhost:3000/login and choose **Demo (owner)**.
 
 The UI starts in English. Switch to Spanish at any time in
-**Profile → Language**.
+**Settings → Language**.
 
 You should land on the trips dashboard with the seeded trip
 **“Fin de semana en Toronto”** (Dec 4–6, 2026).
@@ -60,7 +60,7 @@ member list update.
 
 ## 5. Upload something
 
-Open the profile menu and upload an avatar, or open an activity and attach a
+Open the settings page from the gear icon and upload an avatar, or open an activity and attach a
 PDF/image. Uploads live in the `uploads` Docker volume and survive restarts.
 
 ## 6. Try the AI panel
@@ -75,7 +75,7 @@ Open **AI suggestions**:
 
 To enable a real provider, see the “LLM providers” section in the root README.
 
-Configure a real provider from **Profile → AI provider**: choose the provider,
+Configure a real provider from **Settings → AI provider**: choose the provider,
 paste the token and optionally set the model and base URL. The token is stored
 in the local agent volume and is never returned to the browser. Environment
 variables remain the fallback defaults.
