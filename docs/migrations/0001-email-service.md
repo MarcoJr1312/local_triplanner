@@ -63,7 +63,7 @@ web ──> api (GraphQL, Bun)
           └── outbox relay ──> Kafka topic triplanner.email.requests.v1
                                       │
                                       ▼
-                              email-service (2+ replicas)
+                              email-service (1 replica on the recruiter node)
                                       ├── Resend (HTTPS 443)
                                       └── DLQ topic triplanner.email.requests.v1.dlq
 ```
@@ -108,7 +108,7 @@ source: triplanner-api
     "tripName": "Toronto 2026",
     "ownerName": "Marco",
     "code": "abcDEF123_-x",
-    "joinUrl": "https://triplanner.example.com/join?trip=t1&code=abcDEF123_-x",
+    "joinUrl": "http://localhost:3000/join?trip=t1&code=abcDEF123_-x",
     "role": "viewer",
     "language": "es"
   }
@@ -304,7 +304,7 @@ src/
 | `KAFKA_SASL_USERNAME` | with SASL | — | yes | `kafka.sasl.existingSecret` |
 | `KAFKA_SASL_PASSWORD` | with SASL | — | yes | `kafka.sasl.existingSecret` |
 | `KAFKA_ENSURE_TOPICS` | no | `false` | no | `emailService.kafka.ensureTopics` |
-| `KAFKA_PARTITIONS` | no | `6` | no | `emailService.kafka.partitions` |
+| `KAFKA_PARTITIONS` | no | `3` | no | `emailService.kafka.partitions` |
 | `KAFKA_REPLICATION_FACTOR` | no | `1` | no | `emailService.kafka.replicationFactor` |
 | `KAFKA_CONCURRENCY` | no | `3` | no | `emailService.kafka.concurrency` |
 | `KAFKA_CONNECTION_TIMEOUT_MS` | no | `10000` | no | `emailService.kafka.connectionTimeoutMs` |
@@ -333,41 +333,41 @@ API producer (M2):
 
 ### 9.2 values.yaml contract
 
-Shared infrastructure (consumed by API and email service):
+The primary target is a **single-node recruiter install**: the recruiter's
+computer is the Kubernetes node, every workload runs one replica, and there is
+no high-availability assumption. A hosted/HA profile is shown afterwards for
+completeness; it is not the default.
+
+#### 9.2.1 Recruiter single-node profile (default)
 
 ```yaml
 global:
-  appUrl: https://triplanner.example.com
+  # This must be the URL the recruiter actually opens. With
+  # `kubectl port-forward svc/web 3000:3000` that is localhost:3000.
+  # For a NodePort use http://localhost:30080 (or the chosen port).
+  # For an Ingress use its host. Do not use a fake example.com domain.
+  appUrl: http://localhost:3000
 
 kafka:
   brokers:
-    - kafka-bootstrap.kafka.svc.cluster.local:9093
+    - kafka:9092              # in-cluster single broker (Redpanda/Strimzi)
   tls:
-    enabled: true
-    existingSecret: triplanner-kafka-tls
-    caKey: ca.crt
-    mountPath: /etc/kafka/ca
-    rejectUnauthorized: true
+    enabled: false            # local single node: plaintext inside the pod network
   sasl:
-    enabled: true
-    mechanism: scram-sha-512
-    existingSecret: triplanner-kafka-credentials
-    usernameKey: KAFKA_SASL_USERNAME
-    passwordKey: KAFKA_SASL_PASSWORD
-```
+    enabled: false
 
-Email workload:
-
-```yaml
 emailService:
   enabled: true
   image:
     repository: marcojr13/triplanner-email
     tag: "0.1.0"
     pullPolicy: IfNotPresent
-  replicaCount: 2
+  replicaCount: 1
   containerPort: 4200
-  provider: resend
+
+  # Key-free recruiter demo: the pipeline runs, messages are logged and dropped.
+  # Set provider: resend and create the Secret to deliver real mail.
+  provider: sink
   logLevel: info
   shutdownTimeoutMs: 15000
 
@@ -376,18 +376,23 @@ emailService:
     groupId: triplanner-email-service
     topic: triplanner.email.requests.v1
     dlqTopic: triplanner.email.requests.v1.dlq
-    ensureTopics: false       # chart/operator owns topics
+    # Single-node demo: let the service create both topics on first boot.
+    # Set false and create KafkaTopic resources if the chart owns topics.
+    ensureTopics: true
+    partitions: 3
+    replicationFactor: 1
     concurrency: 3
     connectionTimeoutMs: 10000
     requestTimeoutMs: 30000
 
   resend:
-    from: "Triplanner <viajes@tudominio.com>"
+    from: "Triplanner <onboarding@resend.dev>"
     replyTo: ""
     endpoint: https://api.resend.com/emails
     timeoutMs: 10000
     existingSecret: triplanner-email
     apiKeyKey: RESEND_API_KEY
+    # Only mounted when provider: resend.
 
   retry:
     maxAttempts: 5
@@ -418,32 +423,90 @@ emailService:
     requests: { cpu: 50m, memory: 128Mi }
     limits: { cpu: 500m, memory: 256Mi }
 
+  # One node, one replica: no HPA and no PDB. A PDB with minAvailable: 1
+  # would block node drains and `helm upgrade` rollouts.
   autoscaling:
-    enabled: true
-    minReplicas: 2
-    maxReplicas: 6        # useful ceiling = topic partitions
-    targetCPUUtilizationPercentage: 70
-
+    enabled: false
   podDisruptionBudget:
-    enabled: true
-    minAvailable: 1
+    enabled: false
 
   networkPolicy:
     enabled: true
 ```
 
-API producer block:
+API producer block for the same profile:
 
 ```yaml
 api:
   email:
-    mode: outbox          # disabled | outbox
+    # `disabled` keeps today's key-free copyable-link behaviour.
+    # Flip to `outbox` when M2 lands to exercise the Kafka pipeline; with
+    # emailService.provider=sink the event is consumed and logged, not sent.
+    mode: disabled
     outboxPollMs: 1000
     outboxBatchSize: 50
     kafka:
       clientId: triplanner-api
   reminders:
     enabled: false
+```
+
+Notes:
+
+- **`global.appUrl` is the only value that must match the recruiter's browser.**
+  It is what the API puts in `joinUrl` and what the email service uses for the
+  welcome CTA. If the URL is wrong, the invite link is wrong even though the
+  email is delivered.
+- One API replica is enough; the outbox relay still uses `FOR UPDATE SKIP
+  LOCKED`, so the same code works if the profile is scaled later.
+- `ensureTopics: true` is a deliberate local-demo convenience. In a managed
+  profile the chart/operator owns topics and the value is `false`.
+- With `provider: sink`, do not create or mount `triplanner-email`; the chart
+  should only add the `RESEND_API_KEY` env when `provider: resend`.
+- A single-node Kafka with `replicationFactor: 1` has no redundancy. Use a PVC
+  for the broker if events must survive a node/pod restart; the API outbox
+  still retains unsent invitations while Kafka is down.
+
+#### 9.2.2 Hosted / HA profile (optional)
+
+Use this only when the chart is deployed to a multi-node cluster. It is the
+same service; only values change:
+
+```yaml
+global:
+  appUrl: https://triplanner.example.com
+
+kafka:
+  brokers:
+    - kafka-bootstrap.kafka.svc.cluster.local:9093
+  tls:
+    enabled: true
+    existingSecret: triplanner-kafka-tls
+    caKey: ca.crt
+    mountPath: /etc/kafka/ca
+    rejectUnauthorized: true
+  sasl:
+    enabled: true
+    mechanism: scram-sha-512
+    existingSecret: triplanner-kafka-credentials
+    usernameKey: KAFKA_SASL_USERNAME
+    passwordKey: KAFKA_SASL_PASSWORD
+
+emailService:
+  replicaCount: 2
+  provider: resend
+  kafka:
+    ensureTopics: false       # operator/chart owns topics
+    partitions: 6
+    replicationFactor: 3
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 6            # useful ceiling = topic partitions
+    targetCPUUtilizationPercentage: 70
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
 ```
 
 ### 9.3 Deployment env mapping
@@ -454,10 +517,15 @@ The chart must translate values to env, not mount a config file:
 env:
   - name: KAFKA_BROKERS
     value: {{ join "," .Values.kafka.brokers | quote }}
+  - name: EMAIL_PROVIDER
+    value: {{ .Values.emailService.provider | quote }}
   - name: KAFKA_SSL
     value: {{ .Values.kafka.tls.enabled | quote }}
+  {{- if .Values.kafka.tls.enabled }}
   - name: KAFKA_SSL_CA_PATH
     value: "{{ .Values.kafka.tls.mountPath }}/{{ .Values.kafka.tls.caKey }}"
+  {{- end }}
+  {{- if .Values.kafka.sasl.enabled }}
   - name: KAFKA_SASL_MECHANISM
     value: {{ .Values.kafka.sasl.mechanism | quote }}
   - name: KAFKA_SASL_USERNAME
@@ -470,26 +538,36 @@ env:
       secretKeyRef:
         name: {{ .Values.kafka.sasl.existingSecret }}
         key: {{ .Values.kafka.sasl.passwordKey }}
+  {{- end }}
+  {{- if eq .Values.emailService.provider "resend" }}
   - name: RESEND_API_KEY
     valueFrom:
       secretKeyRef:
         name: {{ .Values.emailService.resend.existingSecret }}
         key: {{ .Values.emailService.resend.apiKeyKey }}
-  - name: EMAIL_PROVIDER
-    value: {{ .Values.emailService.provider | quote }}
+  {{- end }}
 ```
 
-If `kafka.tls.enabled=false`, omit the CA mount. If
-`kafka.sasl.enabled=false`, omit the SASL env block.
+In the single-node profile both `kafka.tls.enabled` and `kafka.sasl.enabled` are
+false, so the CA mount and Kafka Secret refs disappear from the rendered
+Deployment. With `provider: sink`, the Resend key is not referenced at all.
 
 ### 9.4 Secrets
 
-Create outside the chart (or with External Secrets / Sealed Secrets):
+**Single-node recruiter profile:** `provider: sink` and plaintext Kafka need
+**no Secrets at all**. That is the key-free demo path.
+
+Only create the Resend Secret when you want real delivery:
 
 ```bash
 kubectl -n triplanner create secret generic triplanner-email \
   --from-literal=RESEND_API_KEY='re_...'
+```
 
+The hosted profile additionally needs Kafka credentials and, if TLS is enabled,
+the CA:
+
+```bash
 kubectl -n triplanner create secret generic triplanner-kafka-credentials \
   --from-literal=KAFKA_SASL_USERNAME='...' \
   --from-literal=KAFKA_SASL_PASSWORD='...'
@@ -498,23 +576,31 @@ kubectl -n triplanner create secret generic triplanner-kafka-tls \
   --from-file=ca.crt=ca.pem
 ```
 
+Create them outside the chart, or with External Secrets / Sealed Secrets.
+
 Never put these values in `values.yaml`, a ConfigMap, an image layer or a log.
 
 ### 9.5 Topics
 
-The chart/operator creates the topics (Strimzi `KafkaTopic`, Redpanda
-`Topic`, or a Helm post-install Job):
+**Recruiter single-node profile:** `KAFKA_ENSURE_TOPICS=true` lets the email
+service create both topics on first boot with:
 
 | Config | Requests | DLQ |
 |---|---|---|
-| Partitions | 6 | 6 |
-| Replication factor | 3 | 3 |
-| `min.insync.replicas` | 2 | 2 |
+| Partitions | 3 | 3 |
+| Replication factor | 1 | 1 |
+| `min.insync.replicas` | 1 | 1 |
 | `retention.ms` | 604800000 (7d) | 2592000000 (30d) |
 | `compression.type` | gzip | gzip |
 
-`KAFKA_ENSURE_TOPICS=false` in Kubernetes. The service can create topics only
-for local development.
+**Hosted profile:** create the topics with Strimzi `KafkaTopic`, Redpanda
+`Topic`, or a Helm post-install Job, set `KAFKA_ENSURE_TOPICS=false`, and use
+3/3/2 with 6 partitions. The service should not create topics in a managed
+cluster.
+
+> `compression.type=gzip` is a hint, not a guarantee: it does not recompress a
+> snappy/lz4/zstd batch produced by another client. Producer configuration is
+> the actual enforcement point (see R1).
 
 ### 9.6 Network policy
 
@@ -531,8 +617,8 @@ for local development.
 | M0 Contract | done | This doc, topic/envelope, ownership | Reviewed; no code | — |
 | M1 Service runtime | **done** | `backend/email-service`, templates, provider, consumer, probes, image, 43 tests | `bun test`, `tsc`, image build, local Kafka smoke | Scale to 0; no producer yet |
 | M2 Invitation producer | next | Outbox DDL, `enqueueEmail`, relay, transaction, flags, Postgres tests | Invite writes one row + one Kafka event; Kafka down leaves row pending; invite still returns link; replay works | `EMAIL_MODE=disabled` |
-| M3 Reminders + hardening | pending | Sweep→outbox transaction, DLQ replay script, metrics, load test | Reminder event per member once; poison message lands in DLQ; 2 replicas no duplicates | `REMINDERS_ENABLED=0` |
-| M4 Helm integration | pending (Marco) | Deployment, Service, Secret refs, PDB, HPA, netpol, topics | `helm template` + `kubectl rollout status`; `/ready` 200; test invite delivered | `helm rollback` |
+| M3 Reminders + hardening | pending | Sweep→outbox transaction, DLQ replay script, metrics, load test | Reminder event per member once; poison message lands in DLQ; single replica exactly once (two-replica check optional) | `REMINDERS_ENABLED=0` |
+| M4 Helm integration | pending (Marco) | Deployment, Service, Secret refs, probes, netpol, topics; HPA/PDB only in the hosted profile | `helm template` + `kubectl rollout status`; one pod ready; `/ready` 200; test invite delivered | `helm rollback` |
 | M5 Cutover | pending | Enable `EMAIL_MODE=outbox`, send real invite, watch logs/DLQ | Resend id present; UI link still works; DLQ 0 | Set `EMAIL_MODE=disabled` |
 | M6 Decommission | pending | Remove dead code/flags that are no longer needed; keep `disabled` mode for demo | Grep shows one sender; demo still key-free | Revert commit |
 
@@ -596,8 +682,10 @@ Alerts:
 
 ## 13. Security and privacy
 
-- Kafka payloads contain email addresses and invite codes: enable TLS, SASL,
-  topic ACLs and encryption at rest; restrict DLQ read access.
+- Kafka payloads contain email addresses and invite codes. The single-node
+  profile keeps Kafka plaintext inside the pod network and relies on namespace
+  isolation; the hosted profile enables TLS, SASL, topic ACLs and encryption at
+  rest. Restrict DLQ read access in both cases.
 - DLQ retention is 30 days by default; shorten it if policy requires.
 - The email service runs as non-root, read-only root filesystem, all
   capabilities dropped, seccomp `RuntimeDefault`.
@@ -620,6 +708,7 @@ Alerts:
 | R7 | PII in Kafka and DLQ | Privacy exposure | ACLs, TLS, retention, restricted DLQ access |
 | R8 | AGENTS.md still says "No Resend" | Reviewers may reject the change | Proposed amendment below; demo stays key-free |
 | R9 | Helm chart is still scaffold | Values are a contract, not deployed | Marco owns M4; backend provides the image and env contract |
+| R10 | **Single node = single failure domain** | Kafka RF 1 has no redundancy; a node restart can lose in-flight events if the broker uses ephemeral storage; one email pod means delivery pauses during restarts | Use a PVC for the broker, keep the API outbox as the durable source for unsent invitations, accept best-effort demo delivery, and do not promise HA in the recruiter profile |
 
 ## 15. Proposed AGENTS.md amendment
 

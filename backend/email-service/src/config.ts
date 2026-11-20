@@ -165,7 +165,7 @@ export function loadConfig(env: Env = process.env): AppConfig {
       sslRejectUnauthorized: readBool(env, 'KAFKA_SSL_REJECT_UNAUTHORIZED', true),
       sasl,
       ensureTopics: readBool(env, 'KAFKA_ENSURE_TOPICS', false),
-      partitions: readInt(env, 'KAFKA_PARTITIONS', 6, 1, 512),
+      partitions: readInt(env, 'KAFKA_PARTITIONS', 3, 1, 512),
       replicationFactor: readInt(env, 'KAFKA_REPLICATION_FACTOR', 1, 1, 9),
       concurrency: readInt(env, 'KAFKA_CONCURRENCY', 3, 1, 64),
       connectionTimeoutMs: readInt(env, 'KAFKA_CONNECTION_TIMEOUT_MS', 10_000, 1_000, 120_000),

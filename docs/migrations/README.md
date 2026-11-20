@@ -56,7 +56,7 @@ block per service for workload settings:
 
 ```yaml
 global:
-  appUrl: https://triplanner.example.com
+  appUrl: http://localhost:3000   # the URL the recruiter actually opens
 
 kafka:                 # shared by api (producer) and email (consumer)
   brokers: []
@@ -66,19 +66,25 @@ kafka:                 # shared by api (producer) and email (consumer)
 emailService:
   enabled: true
   image: { repository: ..., tag: ..., pullPolicy: ... }
-  replicaCount: 2
+  replicaCount: 1      # recruiter node = single replica
   resources: {}
   podSecurityContext: {}
   securityContext: {}
   livenessProbe: {}
   readinessProbe: {}
-  autoscaling: {}
-  podDisruptionBudget: {}
+  autoscaling: { enabled: false }
+  podDisruptionBudget: { enabled: false }
   networkPolicy: {}
   nodeSelector: {}
   tolerations: []
   affinity: {}
 ```
+
+The default profile is a **single-node recruiter install**: one replica per
+workload, no HPA/PDB, plaintext Kafka inside the pod network, and
+`appUrl=http://localhost:3000` (or the NodePort/Ingress URL the recruiter
+opens). A hosted profile can raise replicas and enable TLS/SASL; it is an
+override, not the baseline.
 
 Rules:
 
