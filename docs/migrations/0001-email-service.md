@@ -839,6 +839,12 @@ only allows the API pod to reach port 4200.
   5 email-settings tests); `tsc` clean; GraphQL schema builds with
   `getEmailSettings`/`updateEmailSettings`.
 - `frontend-next`: `next build` passes with the Email delivery Profile section.
+- End-to-end smoke (real API + email service + Postgres + MongoDB + Redpanda):
+  `updateEmailSettings` saved a Resend key, the GraphQL response returned
+  `hasKey: true` with the key absent, the service logs contained no key, the
+  settings file persisted it, a pod restart reloaded `provider=resend`, and
+  `clearKey` returned `provider=sink, hasKey=false`. No real Resend delivery was
+  attempted (fake key).
 - Helm wiring (PVC, Service, shared `INTERNAL_TOKEN`, NetworkPolicy) remains
   M4; the values contract is in §9.2/§9.7.
 
