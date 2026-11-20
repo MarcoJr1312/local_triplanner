@@ -832,9 +832,9 @@ only allows the API pod to reach port 4200.
 
 ### M2b evidence (2026-11-19)
 
-- `backend/email-service`: **58 tests pass, 0 fail**; `bunx tsc --noEmit` clean.
+- `backend/email-service`: **59 tests pass, 0 fail**; `bunx tsc --noEmit` clean.
   New coverage: settings precedence/key shadowing/`0600`, config endpoint auth,
-  no key echo, sink↔Resend switch without restart.
+  no key echo, sink↔Resend switch without restart, field-type validation.
 - `backend/server`: **64 tests pass** against local Postgres + MongoDB (including
   5 email-settings tests); `tsc` clean; GraphQL schema builds with
   `getEmailSettings`/`updateEmailSettings`.
