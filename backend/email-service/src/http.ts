@@ -135,11 +135,24 @@ export function startHttpServer({
         if (!isRecord(body)) {
           throw new HttpError(400, 'EMAIL_CONFIG_INVALID', 'body must be an object');
         }
+        if (typeof body.provider !== 'string') {
+          throw new HttpError(400, 'EMAIL_CONFIG_INVALID', 'provider must be a string');
+        }
+        const stringField = (value: unknown, field: string): string | undefined => {
+          if (value === undefined || value === null) return undefined;
+          if (typeof value !== 'string') {
+            throw new HttpError(400, 'EMAIL_CONFIG_INVALID', `${field} must be a string`);
+          }
+          return value;
+        };
+        if (body.clearKey !== undefined && typeof body.clearKey !== 'boolean') {
+          throw new HttpError(400, 'EMAIL_CONFIG_INVALID', 'clearKey must be a boolean');
+        }
         const saved = settings.update({
-          provider: typeof body.provider === 'string' ? body.provider : '',
-          apiKey: typeof body.apiKey === 'string' ? body.apiKey : undefined,
-          from: typeof body.from === 'string' ? body.from : undefined,
-          replyTo: typeof body.replyTo === 'string' ? body.replyTo : undefined,
+          provider: body.provider,
+          apiKey: stringField(body.apiKey, 'apiKey'),
+          from: stringField(body.from, 'from'),
+          replyTo: stringField(body.replyTo, 'replyTo'),
           clearKey: body.clearKey === true,
         });
         json(res, 200, saved);

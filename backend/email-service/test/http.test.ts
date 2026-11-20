@@ -118,4 +118,15 @@ describe('email service HTTP surface', () => {
     const body = (await res.json()) as { error?: { code?: string } };
     assert.equal(body.error?.code, 'EMAIL_CONFIG_INVALID');
   });
+
+  test('POST /api/email/config rejects non-string key fields', async () => {
+    const res = await fetch(`${base}/api/email/config`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-internal-token': 'test-token' },
+      body: JSON.stringify({ provider: 'resend', apiKey: 123 }),
+    });
+    assert.equal(res.status, 400);
+    const body = (await res.json()) as { error?: { code?: string } };
+    assert.equal(body.error?.code, 'EMAIL_CONFIG_INVALID');
+  });
 });
