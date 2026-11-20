@@ -35,6 +35,7 @@ import { createInvitation, findInvitationByCode, acceptInvitation } from './pg/i
 import { isEmailMatch, isInviteCodeValid } from './invitations.ts';
 import { decodeAvatarDataUrl } from './pg/profile.ts';
 import { AGENT_BASE_URL, INTERNAL_TOKEN } from './env.ts';
+import { emailSettingsClient, EmailSettingsError, type UpdateEmailSettingsInput } from './email-settings.ts';
 import {
   addItem as addItemRow,
   computeTripStats,
@@ -296,6 +297,11 @@ function slugEmail(displayName: string | null | undefined): string {
 
 function gqlError(code: string, message: string): GraphQLError {
   return new GraphQLError(message, { extensions: { code } });
+}
+
+function emailSettingsError(error: unknown, fallback: string): GraphQLError {
+  if (error instanceof EmailSettingsError) return gqlError(error.code, error.message);
+  return gqlError('EMAIL_SETTINGS_FAILED', fallback);
 }
 
 const nowIso = (): string => new Date().toISOString();
@@ -585,6 +591,15 @@ export const resolvers: {
         return await agentLlmConfig();
       } catch {
         return LLM_DEMO_SETTINGS;
+      }
+    },
+
+    getEmailSettings: async (_, __, ctx) => {
+      await requireCurrentUser(ctx.db, ctx.currentUserId);
+      try {
+        return await emailSettingsClient.get();
+      } catch (error) {
+        throw emailSettingsError(error, 'No se pudo leer la configuración de email.');
       }
     },
   },
@@ -1087,6 +1102,16 @@ export const resolvers: {
           'LLM_SETTINGS_FAILED',
           e instanceof Error ? e.message : 'No se pudo guardar la configuración del proveedor.',
         );
+      }
+    },
+
+    updateEmailSettings: async (_, args, ctx) => {
+      const { input } = args as Args<{ input: UpdateEmailSettingsInput }>;
+      await requireCurrentUser(ctx.db, ctx.currentUserId);
+      try {
+        return await emailSettingsClient.update(input);
+      } catch (error) {
+        throw emailSettingsError(error, 'No se pudo guardar la configuración de email.');
       }
     },
 

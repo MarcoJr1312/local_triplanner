@@ -5,9 +5,13 @@
 // variables sourced from Kubernetes Secrets; they are never read from files
 // inside the repository.
 
+import path from 'node:path';
+
 export type EmailProviderName = 'resend' | 'sink';
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 export type SaslMechanism = 'plain' | 'scram-sha-256' | 'scram-sha-512';
+
+export const DEFAULT_INTERNAL_TOKEN = 'dev-internal-token';
 
 export interface KafkaSaslSettings {
   mechanism: SaslMechanism;
@@ -51,6 +55,8 @@ export interface AppConfig {
   healthPort: number;
   logLevel: LogLevel;
   shutdownTimeoutMs: number;
+  internalToken: string;
+  settingsFile: string;
 }
 
 export class ConfigError extends Error {
@@ -185,5 +191,7 @@ export function loadConfig(env: Env = process.env): AppConfig {
     healthPort: readInt(env, 'HEALTH_PORT', 4200, 1, 65_535),
     logLevel: readEnum(env, 'LOG_LEVEL', ['debug', 'info', 'warn', 'error'] as const, 'info'),
     shutdownTimeoutMs: readInt(env, 'SHUTDOWN_TIMEOUT_MS', 15_000, 1_000, 120_000),
+    internalToken: readString(env, 'INTERNAL_TOKEN', DEFAULT_INTERNAL_TOKEN),
+    settingsFile: readString(env, 'EMAIL_SETTINGS_FILE', path.resolve(process.cwd(), '.data', 'email.json')),
   };
 }

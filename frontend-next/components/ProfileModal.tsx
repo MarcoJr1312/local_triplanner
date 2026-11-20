@@ -3,11 +3,11 @@
 // Modal de edicion de perfil: nombre + foto (subir/cambiar/quitar).
 
 import { useEffect, useRef, useState } from 'react';
-import { Bot, Camera, ChevronDown, LoaderCircle, Plus, Trash2 } from 'lucide-react';
+import { Bot, Camera, ChevronDown, LoaderCircle, Mail, Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, localizeApiError } from '@/lib/api';
 import { useI18n, type Locale } from '@/lib/i18n';
-import type { LlmSettings } from '@/lib/types';
+import type { EmailSettings, LlmSettings } from '@/lib/types';
 import { useAuth } from '@/hooks/useAuth';
 import Avatar from './Avatar';
 import Modal from './Modal';
@@ -49,6 +49,14 @@ export default function ProfileModal({ open, onClose }: ProfileModalProps) {
   const [llmOpen, setLlmOpen] = useState(true);
   const [llmSaving, setLlmSaving] = useState(false);
   const [llmError, setLlmError] = useState<string | null>(null);
+  const [emailSettings, setEmailSettings] = useState<EmailSettings | null>(null);
+  const [emailProvider, setEmailProvider] = useState('sink');
+  const [emailKey, setEmailKey] = useState('');
+  const [emailFrom, setEmailFrom] = useState('');
+  const [emailReplyTo, setEmailReplyTo] = useState('');
+  const [emailOpen, setEmailOpen] = useState(true);
+  const [emailSaving, setEmailSaving] = useState(false);
+  const [emailError, setEmailError] = useState<string | null>(null);
 
   // Cargar intereses cada vez que se abre el modal (el picker se monta cuando
   // ya hay datos, así su estado inicial siempre está prellenado).
@@ -95,6 +103,33 @@ export default function ProfileModal({ open, onClose }: ProfileModalProps) {
     };
   }, [open]);
 
+  // Cargar la configuración BYOK de email. La clave nunca vuelve del servidor.
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    setEmailSettings(null);
+    setEmailKey('');
+    setEmailError(null);
+    api
+      .getEmailSettings()
+      .then((settings) => {
+        if (cancelled) return;
+        setEmailSettings(settings);
+        setEmailProvider(settings.provider);
+        setEmailFrom(settings.from);
+        setEmailReplyTo(settings.replyTo);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setEmailSettings({ provider: 'sink', from: '', replyTo: '', hasKey: false, ready: true });
+          setEmailError(t('errors.EMAIL_SETTINGS_FAILED'));
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+
   // Sincronizar estado al abrir.
   const [wasOpen, setWasOpen] = useState(false);
   if (open && !wasOpen) {
@@ -112,6 +147,11 @@ export default function ProfileModal({ open, onClose }: ProfileModalProps) {
     setLlmModel('');
     setLlmBaseUrl('');
     setLlmError(null);
+    setEmailProvider('sink');
+    setEmailKey('');
+    setEmailFrom('');
+    setEmailReplyTo('');
+    setEmailError(null);
   } else if (!open && wasOpen) {
     setWasOpen(false);
   }
@@ -204,6 +244,42 @@ export default function ProfileModal({ open, onClose }: ProfileModalProps) {
       setLlmError(localizeApiError(err, t));
     } finally {
       setLlmSaving(false);
+    }
+  };
+
+  const emailNeedsKey = emailProvider === 'resend';
+  const emailHasSavedKey = Boolean(emailSettings?.hasKey);
+  const emailCanSave = !emailSaving && (!emailNeedsKey || emailKey.trim().length > 0 || emailHasSavedKey);
+
+  const handleSaveEmail = async () => {
+    setEmailError(null);
+    if (emailNeedsKey && !emailKey.trim() && !emailHasSavedKey) {
+      setEmailError(t('settings.email.keyRequired'));
+      return;
+    }
+    if (emailNeedsKey && !emailFrom.trim()) {
+      setEmailError(t('settings.email.fromRequired'));
+      return;
+    }
+    setEmailSaving(true);
+    try {
+      const saved = await api.updateEmailSettings({
+        provider: emailProvider,
+        apiKey: emailKey.trim() || null,
+        from: emailFrom.trim(),
+        replyTo: emailReplyTo.trim(),
+        clearKey: emailProvider === 'sink',
+      });
+      setEmailSettings(saved);
+      setEmailProvider(saved.provider);
+      setEmailFrom(saved.from);
+      setEmailReplyTo(saved.replyTo);
+      setEmailKey('');
+      toast.success(t('settings.email.saved'));
+    } catch (err) {
+      setEmailError(localizeApiError(err, t));
+    } finally {
+      setEmailSaving(false);
     }
   };
 
@@ -495,6 +571,143 @@ export default function ProfileModal({ open, onClose }: ProfileModalProps) {
                         <Bot className="h-3.5 w-3.5" />
                       )}
                       {llmSaving ? t('common.saving') : t('settings.llm.save')}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </section>
+
+        <section className="border-t border-border pt-4">
+          <button
+            type="button"
+            onClick={() => setEmailOpen((v) => !v)}
+            aria-expanded={emailOpen}
+            aria-controls="profile-email-body"
+            className="flex w-full items-center gap-2 py-1 text-left"
+          >
+            <Mail className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <h3 className="text-sm font-semibold tracking-tight text-foreground">
+              {t('settings.email.section')}
+            </h3>
+            {emailSettings && (
+              <span
+                className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                  emailSettings.provider === 'sink'
+                    ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300'
+                    : 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+                }`}
+              >
+                {emailSettings.provider === 'sink'
+                  ? t('settings.email.demoBadge')
+                  : t('settings.email.activeBadge')}
+              </span>
+            )}
+            <ChevronDown
+              className={`ml-auto h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 ${emailOpen ? 'rotate-180' : ''}`}
+            />
+          </button>
+
+          {emailOpen && (
+            <div id="profile-email-body" className="mt-3 space-y-3">
+              <p className="text-xs text-muted-foreground">{t('settings.email.hint')}</p>
+              {emailSettings === null ? (
+                <div className="flex items-center justify-center py-4">
+                  <LoaderCircle className="h-5 w-5 animate-spin text-muted-foreground" />
+                </div>
+              ) : (
+                <>
+                  <div className="field">
+                    <label htmlFor="email-provider">{t('settings.email.provider')}</label>
+                    <Select
+                      value={emailProvider}
+                      onValueChange={(value) => {
+                        if (value !== emailProvider) setEmailKey('');
+                        setEmailProvider(value);
+                        setEmailError(null);
+                      }}
+                    >
+                      <SelectTrigger id="email-provider" className="input">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="sink">{t('settings.email.providerSink')}</SelectItem>
+                        <SelectItem value="resend">{t('settings.email.providerResend')}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {emailNeedsKey && (
+                    <>
+                      <div className="field">
+                        <label htmlFor="email-key">{t('settings.email.key')}</label>
+                        <input
+                          id="email-key"
+                          type="password"
+                          value={emailKey}
+                          onChange={(e) => setEmailKey(e.target.value)}
+                          placeholder={
+                            emailHasSavedKey
+                              ? t('settings.email.keySavedPlaceholder')
+                              : t('settings.email.keyPlaceholder')
+                          }
+                          autoComplete="off"
+                          spellCheck={false}
+                          className="input"
+                        />
+                        <p className="text-xs text-muted">
+                          {emailHasSavedKey ? t('settings.email.keySaved') : t('settings.email.keyHint')}
+                        </p>
+                      </div>
+
+                      <div className="field">
+                        <label htmlFor="email-from">{t('settings.email.from')}</label>
+                        <input
+                          id="email-from"
+                          value={emailFrom}
+                          onChange={(e) => setEmailFrom(e.target.value)}
+                          placeholder={t('settings.email.fromPlaceholder')}
+                          className="input"
+                        />
+                        <p className="text-xs text-muted">{t('settings.email.fromHint')}</p>
+                      </div>
+
+                      <div className="field">
+                        <label htmlFor="email-reply-to">{t('settings.email.replyTo')}</label>
+                        <input
+                          id="email-reply-to"
+                          value={emailReplyTo}
+                          onChange={(e) => setEmailReplyTo(e.target.value)}
+                          placeholder={t('settings.email.replyToPlaceholder')}
+                          className="input"
+                        />
+                      </div>
+                    </>
+                  )}
+
+                  {emailError && (
+                    <p className="text-sm text-rose-600 dark:text-rose-400">{emailError}</p>
+                  )}
+
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-xs text-muted-foreground">
+                      {emailSettings.provider === 'sink'
+                        ? t('settings.email.demoStatus')
+                        : t('settings.email.activeStatus')}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleSaveEmail}
+                      disabled={!emailCanSave}
+                      className="btn btn-primary btn-sm"
+                    >
+                      {emailSaving ? (
+                        <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Mail className="h-3.5 w-3.5" />
+                      )}
+                      {emailSaving ? t('common.saving') : t('settings.email.save')}
                     </button>
                   </div>
                 </>

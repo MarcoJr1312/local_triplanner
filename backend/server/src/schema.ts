@@ -24,6 +24,7 @@ extend type Query {
   suggestionChats(tripId: ID!, day: String): [SuggestionChat!]!
   getMyInterests: [String!]!
   getLlmSettings: LlmSettings!
+  getEmailSettings: EmailSettings!
 }
 
 type TripPreview {
@@ -46,6 +47,7 @@ extend type Mutation {
   setItemReminder(itemId: ID!, enabled: Boolean!): TripItem!
   setMyInterests(terms: [String!]!): [String!]!
   updateLlmSettings(input: UpdateLlmSettingsInput!): LlmSettings!
+  updateEmailSettings(input: UpdateEmailSettingsInput!): EmailSettings!
 }
 
 extend input CreateTripInput {
@@ -168,6 +170,22 @@ input UpdateLlmSettingsInput {
   apiKey: String
   model: String
   baseUrl: String
+  clearKey: Boolean
+}
+
+type EmailSettings {
+  provider: String!
+  from: String!
+  replyTo: String!
+  hasKey: Boolean!
+  ready: Boolean!
+}
+
+input UpdateEmailSettingsInput {
+  provider: String!
+  apiKey: String
+  from: String
+  replyTo: String
   clearKey: Boolean
 }
 

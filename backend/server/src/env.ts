@@ -25,6 +25,9 @@ export const PORT = Number(process.env.LOCAL_PORT ?? 4000);
 // ---- Servicio agente (FastAPI, :4100) ----
 export const AGENT_BASE_URL = (process.env.AGENT_BASE_URL ?? 'http://127.0.0.1:4100').replace(/\/+$/, '');
 
+// ---- Servicio de email (Kafka consumer + BYOK settings, :4200) ----
+export const EMAIL_SERVICE_URL = (process.env.EMAIL_SERVICE_URL ?? 'http://127.0.0.1:4200').replace(/\/+$/, '');
+
 // ---- Token interno (endpoints REST /internal/*) ----
 export const INTERNAL_TOKEN = process.env.INTERNAL_TOKEN ?? 'dev-internal-token';
 

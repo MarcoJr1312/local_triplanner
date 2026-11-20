@@ -88,8 +88,30 @@ docker build -f backend/email-service/Dockerfile -t triplanner/email-service .
 ```
 
 Tests cover the envelope contract, both template languages, the retry/DLQ
-policy, Resend error classification and config validation. A Kafka integration
-smoke test is documented in `docs/migrations/0001-email-service.md`.
+policy, Resend error classification, config validation and the BYOK settings
+store/HTTP API. A Kafka integration smoke test is documented in
+`docs/migrations/0001-email-service.md`.
+
+## BYOK settings (recruiter-supplied key)
+
+The recruiter can switch from `sink` to Resend from the app; no key is baked
+into the image or chart. The service exposes a small internal API:
+
+```http
+GET  /api/email/config
+POST /api/email/config    X-Internal-Token: <INTERNAL_TOKEN>
+```
+
+`GET` returns `{provider, from, replyTo, hasKey, ready}` and never the key.
+`POST` accepts `{provider, apiKey, from, replyTo, clearKey}` and persists the
+runtime override at `EMAIL_SETTINGS_FILE` (default `.data/email.json`, mode
+`0600`). Precedence is **runtime override > env**. A key supplied only by env
+is not copied to disk; clearing the key while on Resend is rejected.
+
+The API proxies this endpoint through GraphQL (`getEmailSettings` /
+`updateEmailSettings`) and the Profile modal renders the form. The email
+service must be reachable only by the API pod; the endpoint is protected by the
+shared `INTERNAL_TOKEN`.
 
 ## Configuration
 
@@ -106,12 +128,15 @@ The important ones:
 | `KAFKA_SASL_MECHANISM` | — | no | `plain`, `scram-sha-256`, `scram-sha-512` |
 | `KAFKA_SASL_USERNAME` | — | yes | From a Kubernetes Secret |
 | `KAFKA_SASL_PASSWORD` | — | yes | From a Kubernetes Secret |
-| `EMAIL_PROVIDER` | `resend` | no | `resend` or `sink` |
-| `RESEND_API_KEY` | — | yes | Required when provider is `resend` |
+| `EMAIL_PROVIDER` | `resend` | no | Env default; runtime override wins |
+| `RESEND_API_KEY` | — | yes | Optional seed; BYOK key lives on the PVC |
 | `RESEND_FROM` | `Triplanner <onboarding@resend.dev>` | no | Verified sender |
 | `RESEND_REPLY_TO` | — | no | Optional reply-to |
 | `EMAIL_MAX_ATTEMPTS` | `5` | no | Per-message retry budget |
+| `INTERNAL_TOKEN` | `dev-internal-token` | yes | Protects the settings API |
+| `EMAIL_SETTINGS_FILE` | `.data/email.json` | no | BYOK override path |
 | `HEALTH_PORT` | `4200` | no | Probe port |
 
 `EMAIL_PROVIDER` defaults to `resend` on purpose: a production deployment must
-not silently drop mail. Local/demo environments set `sink` explicitly.
+not silently drop mail. Local/demo environments set `sink` explicitly; the
+recruiter switches to `resend` from the app after saving a key.

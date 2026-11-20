@@ -790,7 +790,7 @@ only allows the API pod to reach port 4200.
 | M0 Contract | done | This doc, topic/envelope, ownership | Reviewed; no code | — |
 | M1 Service runtime | **done** | `backend/email-service`, templates, provider, consumer, probes, image, 43 tests | `bun test`, `tsc`, image build, local Kafka smoke | Scale to 0; no producer yet |
 | M2 Invitation producer | next | Outbox DDL, `enqueueEmail`, relay, transaction, flags, Postgres tests | Invite writes one row + one Kafka event; Kafka down leaves row pending; invite still returns link; replay works | `EMAIL_MODE=disabled` |
-| M2b BYOK settings | pending | Settings store, internal config API, GraphQL proxy, ProfileModal section, PVC + Service + `INTERNAL_TOKEN` | Recruiter saves a Resend key from the app; key never returns to the browser; survives a pod restart; no email key in values | Clear key; switch provider to `sink` |
+| M2b BYOK settings | in progress (backend/UI done) | Settings store, internal config API, GraphQL proxy, ProfileModal section, PVC + Service + `INTERNAL_TOKEN` | Recruiter saves a Resend key from the app; key never returns to the browser; survives a pod restart; no email key in values | Clear key; switch provider to `sink` |
 | M3 Reminders + hardening | pending | Sweep→outbox transaction, DLQ replay script, metrics, load test | Reminder event per member once; poison message lands in DLQ; single replica exactly once (two-replica check optional) | `REMINDERS_ENABLED=0` |
 | M4 Helm integration | pending (Marco) | Deployment, Service, Secret refs, probes, netpol, topics; HPA/PDB only in the hosted profile | `helm template` + `kubectl rollout status`; one pod ready; `/ready` 200; test invite delivered | `helm rollback` |
 | M5 Cutover | pending | Enable `EMAIL_MODE=outbox`, send real invite, watch logs/DLQ | Resend id present; UI link still works; DLQ 0 | Set `EMAIL_MODE=disabled` |
@@ -829,6 +829,17 @@ only allows the API pod to reach port 4200.
 - Negative test: a snappy batch crashed KafkaJS with
   `Snappy compression not implemented`; this is why R1 is a release blocker
   for any producer not under our control.
+
+### M2b evidence (2026-11-19)
+
+- `backend/email-service`: **58 tests pass, 0 fail**; `bunx tsc --noEmit` clean.
+  New coverage: settings precedence/key shadowing/`0600`, config endpoint auth,
+  no key echo, sink↔Resend switch without restart.
+- `backend/server`: **5 email-settings tests pass**; `tsc` clean; GraphQL
+  schema builds with `getEmailSettings`/`updateEmailSettings`.
+- `frontend-next`: `tsc --noEmit` clean with the Email delivery Profile section.
+- Helm wiring (PVC, Service, shared `INTERNAL_TOKEN`, NetworkPolicy) remains
+  M4; the values contract is in §9.2/§9.7.
 
 ## 12. Observability
 

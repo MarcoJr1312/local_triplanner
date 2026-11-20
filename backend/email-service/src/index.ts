@@ -5,17 +5,18 @@
 //     -> Resend (or sink in local mode)
 //     -> dead-letter topic after a non-retryable/exhausted failure
 //
-// The HTTP server exists only for /health and /ready probes.
+// The HTTP server exposes /health, /ready and the internal BYOK settings API.
 
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { loadConfig, ConfigError } from './config.ts';
+import { DEFAULT_INTERNAL_TOKEN, loadConfig, ConfigError } from './config.ts';
 import { startEmailConsumer, type ConsumerState, type EmailConsumerHandle } from './consumer.ts';
-import { startHealthServer, type HealthHandle } from './health.ts';
+import { startHttpServer, type HttpHandle } from './http.ts';
 import { handleEmailEvent } from './handler.ts';
 import { MemoryIdempotencyStore } from './idempotency.ts';
 import { createLogger, type Logger } from './logger.ts';
-import { createEmailProvider } from './providers/index.ts';
+import { createSettingsProvider } from './providers/index.ts';
+import { EmailSettingsStore } from './settings.ts';
 import { renderEmail } from './templates/index.ts';
 
 const ENV_PATH = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '.env');
@@ -29,7 +30,7 @@ let logger: Logger = createLogger('info');
 let shuttingDown = false;
 let shutdownTimeoutMs = 15_000;
 let consumerHandle: EmailConsumerHandle | undefined;
-let healthHandle: HealthHandle | undefined;
+let httpHandle: HttpHandle | undefined;
 
 async function shutdown(signal: string, exitCode = 0): Promise<void> {
   if (shuttingDown) return;
@@ -43,7 +44,7 @@ async function shutdown(signal: string, exitCode = 0): Promise<void> {
   force.unref();
 
   await consumerHandle?.stop();
-  await healthHandle?.close().catch(() => {});
+  await httpHandle?.close().catch(() => {});
   clearTimeout(force);
 
   logger.info('service.shutdown.done', { exitCode });
@@ -55,27 +56,56 @@ async function main(): Promise<void> {
   logger = createLogger(config.logLevel);
   shutdownTimeoutMs = config.shutdownTimeoutMs;
 
-  const provider = createEmailProvider(config.email, logger);
-  const providerState = provider.ready();
-  if (!providerState.ok) {
-    throw new Error(`email provider is not ready: ${providerState.reason}`);
+  const settings = new EmailSettingsStore({
+    filePath: config.settingsFile,
+    defaults: {
+      provider: config.email.provider,
+      apiKey: config.email.resendApiKey ?? '',
+      from: config.email.from,
+      replyTo: config.email.replyTo ?? '',
+    },
+    logger,
+  });
+  const provider = createSettingsProvider(settings, logger, {
+    endpoint: config.email.resendEndpoint,
+    timeoutMs: config.email.timeoutMs,
+  });
+  const initialProviderState = provider.ready();
+  if (!initialProviderState.ok) {
+    throw new Error(`email provider is not ready: ${initialProviderState.reason}`);
   }
 
   let kafkaState: ConsumerState = { ready: false, reason: 'consumer starting' };
-  healthHandle = await startHealthServer({
+  httpHandle = await startHttpServer({
     port: config.healthPort,
     logger,
-    getState: () => ({
-      ready: providerState.ok && kafkaState.ready,
-      provider: provider.name,
-      providerReady: providerState.ok,
-      kafkaReady: kafkaState.ready,
-      ...(kafkaState.reason ? { reason: kafkaState.reason } : {}),
-    }),
+    settings,
+    internalToken: config.internalToken,
+    getState: () => {
+      const providerState = provider.ready();
+      return {
+        ready: providerState.ok && kafkaState.ready,
+        provider: provider.name,
+        providerReady: providerState.ok,
+        kafkaReady: kafkaState.ready,
+        ...(!providerState.ok
+          ? { reason: providerState.reason }
+          : kafkaState.reason
+            ? { reason: kafkaState.reason }
+            : {}),
+      };
+    },
   });
+
+  if (config.internalToken === DEFAULT_INTERNAL_TOKEN) {
+    logger.warn('service.internal_token.default', {
+      message: 'INTERNAL_TOKEN is the development default; set it from a Secret in Kubernetes',
+    });
+  }
 
   logger.info('service.start', {
     provider: provider.name,
+    settingsFile: config.settingsFile,
     topic: config.kafka.topic,
     dlqTopic: config.kafka.dlqTopic,
     groupId: config.kafka.groupId,
@@ -125,6 +155,6 @@ process.on('unhandledRejection', (reason) => {
 main().catch((error: unknown) => {
   if (error instanceof ConfigError) logger.error('service.config_error', { reason: error.message });
   else logger.error('service.start_failed', { reason: error instanceof Error ? error.message : String(error) });
-  void healthHandle?.close().catch(() => {});
+  void httpHandle?.close().catch(() => {});
   process.exit(1);
 });

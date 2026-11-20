@@ -23,3 +23,4 @@ export function createEmailProvider(config: AppConfig['email'], logger: Logger):
 
 export type { EmailProvider } from './types.ts';
 export { EmailProviderError } from './types.ts';
+export { createSettingsProvider } from './router.ts';
