@@ -835,9 +835,10 @@ only allows the API pod to reach port 4200.
 - `backend/email-service`: **58 tests pass, 0 fail**; `bunx tsc --noEmit` clean.
   New coverage: settings precedence/key shadowing/`0600`, config endpoint auth,
   no key echo, sink↔Resend switch without restart.
-- `backend/server`: **5 email-settings tests pass**; `tsc` clean; GraphQL
-  schema builds with `getEmailSettings`/`updateEmailSettings`.
-- `frontend-next`: `tsc --noEmit` clean with the Email delivery Profile section.
+- `backend/server`: **64 tests pass** against local Postgres + MongoDB (including
+  5 email-settings tests); `tsc` clean; GraphQL schema builds with
+  `getEmailSettings`/`updateEmailSettings`.
+- `frontend-next`: `next build` passes with the Email delivery Profile section.
 - Helm wiring (PVC, Service, shared `INTERNAL_TOKEN`, NetworkPolicy) remains
   M4; the values contract is in §9.2/§9.7.
 
