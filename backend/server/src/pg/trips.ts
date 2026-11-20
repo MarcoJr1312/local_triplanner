@@ -187,7 +187,7 @@ export async function addInvitedMember(
       `INSERT INTO trip_members (trip_id, user_id, role, invited_email)
        VALUES (?, ?, ?, ?)
        ON CONFLICT (trip_id, user_id) DO UPDATE
-       SET invited_email = COALESCE(trip_members.invited_email, EXCLUDED.invited_email)`,
+       SET invited_email = EXCLUDED.invited_email`,
     )
     .run(tripId, userId, role, invitedEmail);
 }

@@ -164,6 +164,10 @@ no email is sent until the recruiter adds a Resend key in **Settings → Email
 delivery**. The invite form is prefilled with `friend@triplanner.local`; the invited
 email is preserved on the membership and shown with a **Demo** badge.
 
+If you enter your own email, configure Resend in Settings, and click the link in
+the email, the signed-in demo user accepts automatically and the member row
+shows your email. The copyable link keeps the confirmation button.
+
 ## Configuration
 
 ### Backend (`backend/.env`)

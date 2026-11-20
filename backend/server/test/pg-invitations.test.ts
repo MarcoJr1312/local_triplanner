@@ -81,6 +81,10 @@ describe('invitations on Postgres', () => {
     const guest = members.find((member) => member.user_id === guestId);
     assert.equal(guest?.invited_email, 'invited@example.com');
 
+    await addInvitedMember(db, tripId, guestId, 'viewer', 'new-invite@example.com');
+    const updated = (await listMembers(db, tripId)).find((member) => member.user_id === guestId);
+    assert.equal(updated?.invited_email, 'new-invite@example.com');
+
     await deleteTripCascade(db, tripId);
     await deleteUser(db, ownerId);
     await deleteUser(db, guestId);

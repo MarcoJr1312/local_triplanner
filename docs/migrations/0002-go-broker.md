@@ -42,6 +42,15 @@ The API still returns `code` + `joinUrl` immediately. If the broker is down,
 the invitation remains usable through the copyable link; the publish failure is
 logged without the recipient address.
 
+The **email** event uses a slightly different link from the copyable UI link:
+
+- Email: `/join?...&auto=1`; opening it while signed in as a demo user accepts
+  the invitation automatically and keeps that identity (the recruiter stays
+  Demo).
+- Copyable UI link: `/join?...`; it keeps the confirmation button.
+- Acceptance sets `trip_members.invited_email`; it does not rewrite the demo
+  user's profile email.
+
 ## 3. Broker API
 
 Base URL: `http://triplanner-kafka:8080`.
@@ -106,9 +115,8 @@ the inviter’s `users.language` (default `es`).
 
 - `trip_members.invited_email` is nullable and set when `joinTripWithCode`
   accepts an invitation.
-- The existing `UPDATE users SET email = invitation.email` remains for demo
-  compatibility; `invited_email` preserves the recruiter-entered address even
-  if the demo user later edits their profile.
+- Acceptance sets `invited_email`; it does not rewrite `users.email`, so the
+  recruiter stays Demo and the invited address appears on the member row.
 - `Member.invitedEmail` is exposed in GraphQL.
 - `MembersPanel` displays `invitedEmail ?? email` and a small **Demo** badge
   when the membership came from an invitation.

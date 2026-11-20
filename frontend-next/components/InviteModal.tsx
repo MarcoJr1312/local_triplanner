@@ -111,7 +111,7 @@ export default function InviteModal({ open, tripId, tripName, onClose }: InviteM
             <CheckCircle2 className="mx-auto mb-3 h-10 w-10 text-emerald-500 dark:text-emerald-400" />
             <p className="text-sm font-medium text-foreground">{t('invite.sentTo', { email })}</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              {t('invite.willReceive', { trip: tripName })}
+              {t('invite.willReceive', { trip: tripName, email })}
             </p>
           </div>
           <div className="mt-4 rounded-xl border border-border bg-muted/40 p-3">

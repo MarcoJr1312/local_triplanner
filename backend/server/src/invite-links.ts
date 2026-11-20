@@ -3,8 +3,9 @@
 
 import { APP_URL } from './env.ts';
 
-export function buildJoinUrl(tripId: string, code: string): string {
+export function buildJoinUrl(tripId: string, code: string, options?: { autoAccept?: boolean }): string {
   const base = APP_URL.replace(/\/+$/, '');
   const params = new URLSearchParams({ trip: tripId, code });
+  if (options?.autoAccept) params.set('auto', '1');
   return `${base}/join?${params.toString()}`;
 }

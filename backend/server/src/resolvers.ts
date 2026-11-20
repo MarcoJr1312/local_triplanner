@@ -963,6 +963,7 @@ export const resolvers: {
         createdBy: ctx.currentUserId,
       });
       const joinUrl = buildJoinUrl(tripId, invitation.code);
+      const emailJoinUrl = buildJoinUrl(tripId, invitation.code, { autoAccept: true });
       const inviter = await ctx.db
         .prepare('SELECT display_name, language FROM users WHERE id = ?')
         .get<{ display_name: string | null; language: string | null }>(ctx.currentUserId);
@@ -978,7 +979,7 @@ export const resolvers: {
             tripName: trip.name,
             ownerName: inviter?.display_name?.trim() || 'DemoUser',
             code: invitation.code,
-            joinUrl,
+            joinUrl: emailJoinUrl,
             role: inviteRole,
             language: inviter?.language === 'en' ? 'en' : 'es',
             demo: true,
@@ -1016,7 +1017,6 @@ export const resolvers: {
         invitation.role,
         invitation.email,
       );
-      await ctx.db.prepare('UPDATE users SET email = ? WHERE id = ?').run(invitation.email, ctx.currentUserId);
       await acceptInvitation(ctx.db, invitation.id);
       publishTrip(
         ctx,
