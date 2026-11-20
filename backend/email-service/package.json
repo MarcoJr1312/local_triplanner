@@ -1,0 +1,20 @@
+{
+  "name": "triplanner-email-service",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Kafka-driven email microservice for Triplanner. Renders templates and delivers through Resend.",
+  "scripts": {
+    "start": "bun src/index.ts",
+    "dev": "bun --watch src/index.ts",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "kafkajs": "^2.2.4"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "typescript": "^7.0.2"
+  }
+}
