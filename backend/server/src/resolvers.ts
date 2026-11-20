@@ -316,6 +316,8 @@ function emailSettingsError(error: unknown, fallback: string): GraphQLError {
 
 const nowIso = (): string => new Date().toISOString();
 
+const DEMO_FRIEND_ID = 'demo-friend';
+
 function normalizeTimeZone(value: string | null | undefined): string {
   const tz = value?.trim();
   if (!tz) return 'UTC';
@@ -1003,17 +1005,33 @@ export const resolvers: {
     },
 
     joinTripWithCode: async (_, args, ctx) => {
-      const { code, email } = args as Args<{ code: string; email: string }>;
+      const { code, email, memberId } = args as Args<{
+        code: string;
+        email: string;
+        memberId?: string | null;
+      }>;
       if (!isInviteCodeValid(code)) throw gqlError('INVALID_INVITE_CODE', 'CÃ³digo de invitaciÃ³n no vÃ¡lido');
       const invitation = await findInvitationByCode(ctx.db, code);
       if (!invitation) throw gqlError('INVITE_CODE_NOT_FOUND', 'CÃ³digo de invitaciÃ³n no encontrado');
       if (invitation.status !== 'pending') throw gqlError('INVITE_ALREADY_USED', 'Esta invitaciÃ³n ya fue usada');
       if (!isEmailMatch(invitation, email)) throw gqlError('INVITE_EMAIL_MISMATCH', 'El email no coincide con la invitaciÃ³n');
 
+      // Email invitations target the seeded Demo Friend, so clicking the email
+      // link does not attach the invited address to the root Demo owner. The
+      // session stays on the current user either way.
+      const targetUserId = (memberId ?? '').trim() || ctx.currentUserId;
+      if (targetUserId !== ctx.currentUserId && targetUserId !== DEMO_FRIEND_ID) {
+        throw gqlError('FORBIDDEN_MEMBER', 'No puedes aceptar la invitacion para ese usuario.');
+      }
+      if (targetUserId !== ctx.currentUserId) {
+        const target = await ctx.db.prepare('SELECT 1 AS ok FROM users WHERE id = ?').get(targetUserId);
+        if (!target) throw gqlError('MEMBER_NOT_FOUND', 'El miembro demo no existe.');
+      }
+
       await addInvitedMember(
         ctx.db,
         invitation.trip_id,
-        ctx.currentUserId,
+        targetUserId,
         invitation.role,
         invitation.email,
       );

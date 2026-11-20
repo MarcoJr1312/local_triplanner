@@ -165,8 +165,9 @@ delivery**. The invite form is prefilled with `friend@triplanner.local`; the inv
 email is preserved on the membership and shown with a **Demo** badge.
 
 If you enter your own email, configure Resend in Settings, and click the link in
-the email, the signed-in demo user accepts automatically and the member row
-shows your email. The copyable link keeps the confirmation button.
+the email, the invitation is accepted for **Demo Friend**; the root Demo owner
+stays untouched and the Demo Friend member row shows your email. The copyable
+link keeps the confirmation button.
 
 ## Configuration
 

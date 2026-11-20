@@ -115,8 +115,11 @@ the inviter’s `users.language` (default `es`).
 
 - `trip_members.invited_email` is nullable and set when `joinTripWithCode`
   accepts an invitation.
-- Acceptance sets `invited_email`; it does not rewrite `users.email`, so the
-  recruiter stays Demo and the invited address appears on the member row.
+- The join UI accepts on behalf of the seeded **Demo Friend**
+  (`memberId=demo-friend`), even when the recruiter is signed in as the root
+  Demo owner. The root membership is not touched.
+- Acceptance does not rewrite `users.email`; the invited address lives on the
+  Demo Friend membership.
 - `Member.invitedEmail` is exposed in GraphQL.
 - `MembersPanel` displays `invitedEmail ?? email` and a small **Demo** badge
   when the membership came from an invitation.

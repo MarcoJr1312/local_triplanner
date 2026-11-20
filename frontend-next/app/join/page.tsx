@@ -77,7 +77,7 @@ export default function JoinPage() {
       // Keep the current demo identity (the recruiter stays Demo). Only an
       // unauthenticated visitor falls back to the second demo identity.
       if (!user) await signInDemo(DEMO_FRIEND_ID);
-      const trip = await api.joinTripWithCode(code, emailToUse);
+      const trip = await api.joinTripWithCode(code, emailToUse, DEMO_FRIEND_ID);
       afterJoin(trip.id);
     } catch (err) {
       const codeErr = err instanceof ApiError ? err.code : undefined;

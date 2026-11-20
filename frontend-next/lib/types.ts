@@ -295,7 +295,7 @@ export interface TriplannerApi {
 
   sendTripInvite(tripId: ID, email: string, role?: 'viewer' | 'editor'): Promise<InviteResult>;
   getTripByCode(code: string): Promise<TripPreview | null>;
-  joinTripWithCode(code: string, email: string): Promise<Trip>;
+  joinTripWithCode(code: string, email: string, memberId?: ID): Promise<Trip>;
   getMyProfile(): Promise<UserProfile | null>;
   updateMyProfile(input: UpdateMyProfileInput): Promise<UserProfile>;
   addItemAttachment(tripId: ID, itemId: ID, input: AddItemAttachmentInput, viewerIds: ID[]): Promise<Attachment>;

@@ -352,7 +352,7 @@ const LIST_PRESENCE = `query($tripId: ID!) { listPresence(tripId: $tripId) { use
 const FIND_USER_BY_EMAIL = `query($email: String!) { findUserByEmail(email: $email) { userId email displayName } }`;
 const GET_TRIP_BY_CODE = `query($code: String!) { getTripByCode(code: $code) { id name destinationName ownerName invitedEmail } }`;
 const SEND_TRIP_INVITE = `mutation($tripId: ID!, $email: String!, $role: String!) { sendTripInvite(tripId: $tripId, email: $email, role: $role) { invitationId status email code joinUrl } }`;
-const JOIN_TRIP_WITH_CODE = `mutation($code: String!, $email: String!) { joinTripWithCode(code: $code, email: $email) { ${TRIP_FIELDS} } }`;
+const JOIN_TRIP_WITH_CODE = `mutation($code: String!, $email: String!, $memberId: ID) { joinTripWithCode(code: $code, email: $email, memberId: $memberId) { ${TRIP_FIELDS} } }`;
 const GET_MY_PROFILE = `query { getMyProfile { userId email displayName color avatarUrl language } }`;
 const UPDATE_MY_PROFILE = `mutation($input: UpdateMyProfileInput!) { updateMyProfile(input: $input) { userId email displayName color avatarUrl language } }`;
 const ADD_ITEM_ATTACHMENT = `mutation($tripId: ID, $itemId: ID!, $input: AddItemAttachmentInput!, $viewerIds: [String!]) { addItemAttachment(tripId: $tripId, itemId: $itemId, input: $input, viewerIds: $viewerIds) { id fileName mimeType sizeBytes url createdAt uploadedByName viewerIds visibility createdBy } }`;
@@ -574,8 +574,8 @@ export const api: TriplannerApi = {
     return data.getTripByCode;
   },
 
-  async joinTripWithCode(code: string, email: string): Promise<Trip> {
-    const data = await gql<{ joinTripWithCode: Trip }>(JOIN_TRIP_WITH_CODE, { code, email });
+  async joinTripWithCode(code: string, email: string, memberId?: string): Promise<Trip> {
+    const data = await gql<{ joinTripWithCode: Trip }>(JOIN_TRIP_WITH_CODE, { code, email, memberId });
     notify();
     return data.joinTripWithCode;
   },

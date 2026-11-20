@@ -37,7 +37,7 @@ type TripPreview {
 
 extend type Mutation {
   sendTripInvite(tripId: ID!, email: String!, role: String): InviteResult
-  joinTripWithCode(code: String!, email: String!): Trip
+  joinTripWithCode(code: String!, email: String!, memberId: ID): Trip
   updateMyProfile(input: UpdateMyProfileInput!): UserProfile!
   addItemAttachment(tripId: ID, itemId: ID!, input: AddItemAttachmentInput!, viewerIds: [String!]): Attachment!
   updateAttachmentViewers(attachmentId: ID!, viewerIds: [String!]): Attachment!
