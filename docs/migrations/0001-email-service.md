@@ -845,6 +845,9 @@ only allows the API pod to reach port 4200.
   settings file persisted it, a pod restart reloaded `provider=resend`, and
   `clearKey` returned `provider=sink, hasKey=false`. No real Resend delivery was
   attempted (fake key).
+- With the email service stopped, `getEmailSettings` returned
+  `{provider: sink, ready: false}` instead of failing the Profile modal; the
+  full server suite still passed (64/64).
 - Helm wiring (PVC, Service, shared `INTERNAL_TOKEN`, NetworkPolicy) remains
   M4; the values contract is in §9.2/§9.7.
 
