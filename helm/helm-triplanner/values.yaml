@@ -28,7 +28,7 @@ images:
     pullPolicy: IfNotPresent
   locations:
     name: marcojr13/triplanner-locations
-    tag: "0.1.0"
+    tag: "0.2.1"
     pullPolicy: IfNotPresent
 
 # MongoDB 7 StatefulSet for the locations catalogue. Single node, no auth:
@@ -40,6 +40,17 @@ mongo:
     repository: mongo
     tag: "7"
     pullPolicy: IfNotPresent
+  auth:
+    enabled: true
+    # DEMO ONLY. These values are rendered into a Kubernetes Secret so the
+    # demo remains self-contained. In production, set existingSecret to a
+    # Secret managed by HashiCorp Vault, External Secrets, Sealed Secrets or
+    # your platform's secret manager. Never commit real credentials here.
+    username: triplanner
+    password: triplanner-demo
+    existingSecret: ""
+    usernameKey: MONGO_ROOT_USERNAME
+    passwordKey: MONGO_ROOT_PASSWORD
   service:
     port: 27017
   persistence:
@@ -308,11 +319,29 @@ locationsService:
     type: ClusterIP
     port: 4300
   mongo:
-    url: mongodb://triplanner-mongo:27017/triplanner
+    # Optional full URL override; normally leave empty and use host/database
+    # plus the Secret-backed MONGODB_USERNAME/MONGODB_PASSWORD.
+    url: ""
+    host: triplanner-mongo:27017
+    database: triplanner
+    authSource: admin
     collection: locations
   seed:
     enabled: true
     dataPath: /app/db/toronto-locations.json
+  settingsFile: /app/.data/locations.json
+  persistence:
+    enabled: true
+    size: 64Mi
+    mountPath: /app/.data
+    existingClaim: ""
+  hasdata:
+    apiBase: https://api.hasdata.com/scrape/google-maps
+    # Cached HasData rows expire after 5 days (Mongo TTL index).
+    cacheTtlHours: 120
+    timeoutMs: 8000
+    hl: en
+    gl: ca
   internalToken:
     existingSecret: triplanner-internal
     key: INTERNAL_TOKEN

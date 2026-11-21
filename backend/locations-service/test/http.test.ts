@@ -3,6 +3,7 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHandler, type SeedState } from '../src/http.ts';
+import type { LocationsSettingsProvider, PublicLocationsSettings } from '../src/settings.ts';
 import type { LocationCatalogue, LocationRow, SearchOptions, UpsertLocationInput } from '../src/catalogue/types.ts';
 
 function row(partial: Partial<LocationRow> & { id: string; name: string }): LocationRow {
@@ -85,6 +86,10 @@ class FakeCatalogue implements LocationCatalogue {
     return [...this.places];
   }
 
+  async countPlaces(): Promise<number> {
+    return this.places.length;
+  }
+
   async upsert(loc: UpsertLocationInput): Promise<LocationRow> {
     const existing = this.places.find((item) => item.id === loc.id);
     const priceLevel = typeof loc.price_level === 'number' ? loc.price_level : (existing?.price_level ?? null);
@@ -108,8 +113,33 @@ class FakeCatalogue implements LocationCatalogue {
   async close(): Promise<void> {}
 }
 
+class FakeSettings implements LocationsSettingsProvider {
+  provider: 'preloaded' | 'hasdata' = 'preloaded';
+  apiKey = '';
+
+  get() {
+    return { provider: this.provider, apiKey: this.apiKey };
+  }
+
+  public(): PublicLocationsSettings {
+    return {
+      provider: this.provider,
+      hasKey: this.apiKey.length > 0,
+      ready: this.provider === 'preloaded' || this.apiKey.length > 0,
+    };
+  }
+
+  update(input: { provider: string; apiKey?: string | null; clearKey?: boolean | null }): PublicLocationsSettings {
+    this.provider = input.provider === 'hasdata' ? 'hasdata' : 'preloaded';
+    if (input.clearKey) this.apiKey = '';
+    else if (input.apiKey) this.apiKey = input.apiKey;
+    return this.public();
+  }
+}
+
 function makeHandler(overrides: { seedState?: Partial<SeedState>; seed?: () => Promise<number> } = {}) {
   const catalogue = new FakeCatalogue();
+  const settings = new FakeSettings();
   const seedState: SeedState = {
     enabled: true,
     seeded: true,
@@ -119,11 +149,12 @@ function makeHandler(overrides: { seedState?: Partial<SeedState>; seed?: () => P
   };
   const handler = createHandler({
     catalogue,
+    settings,
     verifyToken: (token) => token === 'secret',
     seed: overrides.seed,
     seedState,
   });
-  return { handler, catalogue, seedState };
+  return { handler, catalogue, settings, seedState };
 }
 
 function req(path: string, init: RequestInit = {}): Request {
@@ -139,7 +170,13 @@ describe('locations HTTP surface', () => {
     assert.equal((await handler(new Request('http://localhost/health'))).status, 200);
     const ready = await handler(new Request('http://localhost/ready'));
     assert.equal(ready.status, 200);
-    assert.deepEqual(await ready.json(), { status: 'ready', mongo: 'ok', seeded: true, places: 3 });
+    assert.deepEqual(await ready.json(), {
+      status: 'ready',
+      mongo: 'ok',
+      seeded: true,
+      places: 3,
+      provider: 'preloaded',
+    });
   });
 
   test('ready is 503 when Mongo is down or the seed is incomplete', async () => {
@@ -240,6 +277,53 @@ describe('locations HTTP surface', () => {
     assert.equal(calls, 1);
     assert.equal(enabled.seedState.seeded, true);
     assert.equal(enabled.seedState.count, 42);
+  });
+
+  test('settings config is public for reads and guarded for writes', async () => {
+    const { handler } = makeHandler();
+
+    const read = await handler(new Request('http://localhost/api/locations/config'));
+    assert.equal(read.status, 200);
+    const readBody = (await read.json()) as {
+      provider: string;
+      hasKey: boolean;
+      cachedPlaces: number;
+    };
+    assert.equal(readBody.provider, 'preloaded');
+    assert.equal(readBody.hasKey, false);
+    assert.equal(readBody.cachedPlaces, 3);
+
+    const unauthorized = await handler(
+      new Request('http://localhost/api/locations/config', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ provider: 'hasdata', apiKey: 'hd_secret' }),
+      }),
+    );
+    assert.equal(unauthorized.status, 401);
+
+    const saved = await handler(
+      req('/api/locations/config', {
+        method: 'POST',
+        body: JSON.stringify({ provider: 'hasdata', apiKey: 'hd_secret' }),
+      }),
+    );
+    assert.equal(saved.status, 200);
+    const savedText = await saved.text();
+    assert.equal(savedText.includes('hd_secret'), false);
+    const savedBody = JSON.parse(savedText) as { provider: string; hasKey: boolean };
+    assert.equal(savedBody.provider, 'hasdata');
+    assert.equal(savedBody.hasKey, true);
+
+    const cleared = await handler(
+      req('/api/locations/config', {
+        method: 'POST',
+        body: JSON.stringify({ provider: 'preloaded', clearKey: true }),
+      }),
+    );
+    const clearedBody = (await cleared.json()) as { provider: string; hasKey: boolean };
+    assert.equal(clearedBody.provider, 'preloaded');
+    assert.equal(clearedBody.hasKey, false);
   });
 
   test('unknown routes return 404', async () => {

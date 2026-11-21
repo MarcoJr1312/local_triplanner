@@ -77,6 +77,12 @@ export class MongoLocationCatalogue implements LocationCatalogue {
     await this.collection.createIndex({ parent_id: 1 }, { sparse: true });
     await this.collection.createIndex({ name_lower: 1 });
     await this.collection.createIndex({ category: 1 }, { sparse: true });
+    // HasData cache rows carry an `expires_at` Date; preloaded rows have null
+    // and are never removed. TTL monitor runs about once per minute.
+    await this.collection.createIndex(
+      { expires_at: 1 },
+      { name: 'expires_at_ttl', expireAfterSeconds: 0, sparse: true },
+    );
   }
 
   async ping(): Promise<void> {
@@ -106,7 +112,12 @@ export class MongoLocationCatalogue implements LocationCatalogue {
     const source = { ...(existing ?? {}), ...loc, id } as Record<string, unknown>;
     source.created_at = existing?.created_at ?? now;
     source.last_updated = loc.last_updated ?? now;
-    source.expires_at = null;
+    source.expires_at =
+      loc.expires_at !== undefined
+        ? loc.expires_at
+          ? new Date(loc.expires_at)
+          : null
+        : (existing?.expires_at ?? null);
     source.name_lower = String(source.name ?? '').toLowerCase();
 
     const doc = Object.fromEntries(
@@ -163,6 +174,10 @@ export class MongoLocationCatalogue implements LocationCatalogue {
       .limit(500)
       .toArray();
     return docs.map(toRow).filter((row): row is LocationRow => row !== null);
+  }
+
+  async countPlaces(): Promise<number> {
+    return this.collection.countDocuments({ category: { $exists: true, $ne: null } });
   }
 
   async clear(): Promise<void> {

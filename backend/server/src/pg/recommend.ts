@@ -42,7 +42,7 @@ export async function buildSuggestions(
   if (!trip?.destination_id) return [];
 
   const rows = (await catalogue.listByParent(trip.destination_id))
-    .filter((loc) => loc.source === 'seed')
+    .filter((loc) => loc.source === 'seed' || loc.source === 'hasdata')
     .sort(
       (a, b) =>
         (b.rating ?? 0) - (a.rating ?? 0) ||

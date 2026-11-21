@@ -30,7 +30,7 @@ export interface LocationRow {
   parent_id: string | null;
   last_updated: string | null;
   created_at?: string | null;
-  expires_at?: number | null;
+  expires_at?: string | Date | null;
 }
 
 export interface UpsertLocationInput {
@@ -60,6 +60,7 @@ export interface UpsertLocationInput {
   duration_hours?: number | null;
   parent_id?: string | null;
   last_updated?: string | null;
+  expires_at?: string | Date | null;
 }
 
 export interface SearchOptions {
@@ -77,6 +78,8 @@ export interface LocationCatalogue {
   listDestinations(): Promise<LocationRow[]>;
   listByParent(parentId: string, limit?: number): Promise<LocationRow[]>;
   listPlaces(): Promise<LocationRow[]>;
+  /** Number of place rows (destinations excluded). */
+  countPlaces(): Promise<number>;
   upsert(loc: UpsertLocationInput): Promise<LocationRow>;
   clear(): Promise<void>;
   close(): Promise<void>;

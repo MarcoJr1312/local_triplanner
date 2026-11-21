@@ -26,6 +26,8 @@ import type {
   UpdateLlmSettingsInput,
   EmailSettings,
   UpdateEmailSettingsInput,
+  LocationsSettings,
+  UpdateLocationsSettingsInput,
 } from './types';
 import type { TriplannerApi } from './types';
 import { es } from './i18n/es';
@@ -389,6 +391,10 @@ const EMAIL_SETTINGS_FIELDS = `provider from replyTo hasKey ready`;
 const GET_EMAIL_SETTINGS = `query { getEmailSettings { ${EMAIL_SETTINGS_FIELDS} } }`;
 const UPDATE_EMAIL_SETTINGS = `mutation($input: UpdateEmailSettingsInput!) { updateEmailSettings(input: $input) { ${EMAIL_SETTINGS_FIELDS} } }`;
 
+const LOCATIONS_SETTINGS_FIELDS = `provider hasKey ready cachedPlaces`;
+const GET_LOCATIONS_SETTINGS = `query { getLocationsSettings { ${LOCATIONS_SETTINGS_FIELDS} } }`;
+const UPDATE_LOCATIONS_SETTINGS = `mutation($input: UpdateLocationsSettingsInput!) { updateLocationsSettings(input: $input) { ${LOCATIONS_SETTINGS_FIELDS} } }`;
+
 // Endpoint determinista del agente (sin LLM): puntúa los lugares del destino
 // contra los intereses del usuario. Va por el proxy /api/agent/* igual que el
 // chat de sugerencias y usa las MISMAS cabeceras de auth.
@@ -732,6 +738,19 @@ export const api: TriplannerApi = {
   async updateEmailSettings(input: UpdateEmailSettingsInput): Promise<EmailSettings> {
     const data = await gql<{ updateEmailSettings: EmailSettings }>(UPDATE_EMAIL_SETTINGS, { input });
     return data.updateEmailSettings;
+  },
+
+  async getLocationsSettings(): Promise<LocationsSettings> {
+    const data = await gql<{ getLocationsSettings: LocationsSettings }>(GET_LOCATIONS_SETTINGS);
+    return data.getLocationsSettings;
+  },
+
+  async updateLocationsSettings(input: UpdateLocationsSettingsInput): Promise<LocationsSettings> {
+    const data = await gql<{ updateLocationsSettings: LocationsSettings }>(
+      UPDATE_LOCATIONS_SETTINGS,
+      { input },
+    );
+    return data.updateLocationsSettings;
   },
 
   async autoSuggest(tripId: string, offset = 0, limit = 10): Promise<AutoSuggestResult> {

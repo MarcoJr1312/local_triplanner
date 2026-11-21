@@ -37,6 +37,10 @@ spec:
       ports:
         - port: {{ .Values.mongo.service.port }}
           protocol: TCP
+    # Optional HasData BYOK provider.
+    - ports:
+        - port: 443
+          protocol: TCP
     - ports:
         - port: 53
           protocol: UDP

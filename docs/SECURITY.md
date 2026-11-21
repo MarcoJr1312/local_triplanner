@@ -8,12 +8,19 @@ Desktop.
 
 ## Controls in place
 
-- No Firebase, HasData or AWS runtime dependencies. Email delivery is optional:
-  the recruiter supplies a Resend key (BYOK) at runtime; the demo runs with
-  `EMAIL_PROVIDER=sink` and no provider key.
+- No Firebase or AWS runtime dependencies. HasData is an optional BYOK
+  provider: the default is the committed Toronto catalogue; a recruiter key is
+  stored on the locations PVC and cached results expire after 5 days. Email
+  delivery is optional: the recruiter supplies a Resend key (BYOK) at runtime;
+  the demo runs with `EMAIL_PROVIDER=sink` and no provider key.
 - Demo authentication via `x-user-id`; the API and agent ports are not
   published, and only the web service is exposed.
 - PostgreSQL and MongoDB are bound to `127.0.0.1`, not `0.0.0.0`.
+- MongoDB authentication is enabled. The demo root credentials are rendered
+  into a Kubernetes Secret from `values.yaml`; the locations service reads them
+  through `secretKeyRef`. In production use `mongo.auth.existingSecret`
+  (HashiCorp Vault, External Secrets, Sealed Secrets) and never commit real
+  credentials.
 - Membership checks on every trip read and mutation.
 - Attachment URLs are HMAC-SHA256 signed, expire after 15 minutes, and are
   compared in constant time.
@@ -21,9 +28,11 @@ Desktop.
   the same-origin web proxy.
 - Containers run as non-root users and have healthchecks.
 - JavaScript and Python dependencies are installed from frozen lockfiles.
-- `.env` files, local uploads and the agent settings volume are gitignored.
-- The LLM token is stored only in the agent volume and is never returned to the
-  browser.
+- `.env` files, local uploads, the agent settings volume and the locations
+  settings volume are gitignored.
+- The LLM token is stored only in the agent volume, the Resend key only on the
+  email PVC, and the HasData key only on the locations PVC; none is returned to
+  the browser.
 
 ## Scan results — 2026-11-14
 
@@ -78,9 +87,14 @@ release stack.
 ## Accepted risks
 
 - **Demo auth:** `x-user-id` is intentionally not a production identity system.
-- **Local development credentials:** `triplanner/triplanner`,
-  `dev-internal-token` and `dev-attachment-secret` are defaults for a local
-  demo. Override them in `.env` before exposing the stack to a network.
+- **Local development credentials:** `triplanner/triplanner` (Compose),
+  `triplanner/triplanner-demo` (Helm), `dev-internal-token` and
+  `dev-attachment-secret` are defaults for a local demo. Override them in
+  `.env` / `values.yaml` before exposing the stack to a network. The Helm demo
+  Mongo password is intentionally in Git; treat it as a demo-only value.
+- **Secret base64 is not encryption:** the Mongo Secret uses `data` with
+  base64-encoded values for Kubernetes compatibility. Enable encryption at rest
+  and use Vault/External Secrets outside the demo.
 - **Base-image CVEs without an upstream fix:** rebuild regularly and update the
   base images when patches land.
 - **Mutable GitHub Action tags:** pin to SHAs if the repository becomes a

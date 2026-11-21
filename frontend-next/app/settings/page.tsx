@@ -7,6 +7,7 @@ import RequireAuth from '@/components/RequireAuth';
 import AccountSettingsCard from '@/components/settings/AccountSettingsCard';
 import LlmSettingsCard from '@/components/settings/LlmSettingsCard';
 import EmailSettingsCard from '@/components/settings/EmailSettingsCard';
+import LocationsSettingsCard from '@/components/settings/LocationsSettingsCard';
 import { useI18n } from '@/lib/i18n';
 
 function SettingsContent() {
@@ -40,6 +41,7 @@ function SettingsContent() {
           </div>
           <LlmSettingsCard />
           <EmailSettingsCard />
+          <LocationsSettingsCard />
         </div>
       </div>
     </AppShell>

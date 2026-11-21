@@ -43,8 +43,18 @@ RBAC:
    Open the app Profile -> Email delivery to add a Resend key.
    No Resend Secret is required for the recruiter demo.
 
+   Places data starts with the committed catalogue. Add a HasData key in
+   Settings -> Places data to use live search; results are cached in MongoDB
+   for 5 days.
+
 Required Secret:
    triplanner-internal / {{ .Values.emailService.internalToken.key }}
+   {{- if and .Values.mongo.auth.enabled (not .Values.mongo.auth.existingSecret) }}
+   {{ include "helm-triplanner.mongoSecretName" . }} (demo Mongo credentials;
+   use existingSecret with Vault/External Secrets in production)
+   {{- else if .Values.mongo.auth.enabled }}
+   {{ include "helm-triplanner.mongoSecretName" . }} (existing Secret)
+   {{- end }}
 
 Broker topic:
    {{ .Values.emailService.broker.topic }} (DLQ: {{ .Values.emailService.broker.dlqTopic }})

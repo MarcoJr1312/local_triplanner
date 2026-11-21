@@ -9,8 +9,8 @@ docker compose -f deploy/docker-compose.yml logs -f web
 docker compose -f deploy/docker-compose.yml logs -f agent
 ```
 
-All five services should be `healthy`: `web`, `api`, `agent`, `postgres`,
-`mongo`.
+All six services should be `healthy`: `web`, `api`, `locations`, `agent`,
+`postgres`, `mongo`.
 
 ## Docker Desktop is not running
 
@@ -85,17 +85,39 @@ docker compose -f deploy/docker-compose.yml up --build
 docker compose -f deploy/docker-compose.yml logs api | grep "Seed OK"
 ```
 
-Expected: `1 destinos, 186 actividades, 80 imágenes`.
+Expected: `Seed OK — Postgres listo; catálogo en locations-service, 80 imágenes`.
 
-2. Check MongoDB:
+2. Check MongoDB (authenticated):
 
 ```bash
-docker exec local_triplanner-mongo mongosh triplanner --quiet --eval "db.locations.countDocuments()"
+docker exec local_triplanner-mongo mongosh \
+  "mongodb://triplanner:triplanner@localhost:27017/triplanner?authSource=admin" \
+  --quiet --eval "db.locations.countDocuments()"
 ```
 
-Expected: `187` (1 destination + 186 places).
+Expected: `187` (1 destination + 186 places). Use `MONGO_USERNAME` /
+`MONGO_PASSWORD` from `.env` if you changed the demo defaults.
 
-3. Reset if needed:
+3. Check the locations settings and provider:
+
+```bash
+docker exec local_triplanner-locations curl -s http://localhost:4300/ready
+docker exec local_triplanner-locations curl -s http://localhost:4300/api/locations/config
+```
+
+`provider=preloaded` is the key-free default. `provider=hasdata` means a
+HasData key is saved; remove it in Settings → Places data to return to the
+committed catalogue.
+
+4. If Mongo was created before auth was enabled, create the root user once or
+reset the volume:
+
+```bash
+docker compose -f deploy/docker-compose.yml down -v
+docker compose -f deploy/docker-compose.yml up -d
+```
+
+5. Reset if needed:
 
 ```bash
 docker compose -f deploy/docker-compose.yml down -v
@@ -170,5 +192,5 @@ docker compose -f deploy/docker-compose.yml down -v
 docker compose -f deploy/docker-compose.yml up --build
 ```
 
-This deletes the Postgres, MongoDB and uploads volumes. The seed recreates the
-demo on the next start.
+This deletes the Postgres, MongoDB, locations settings and uploads volumes.
+The seed recreates the demo on the next start.

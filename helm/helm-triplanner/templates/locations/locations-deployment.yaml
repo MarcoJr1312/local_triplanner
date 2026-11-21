@@ -48,20 +48,55 @@ spec:
           env:
             - name: PORT
               value: {{ .Values.locationsService.service.port | quote }}
+            {{- if .Values.locationsService.mongo.url }}
             - name: MONGODB_URL
               value: {{ .Values.locationsService.mongo.url | quote }}
+            {{- else }}
+            - name: MONGODB_HOST
+              value: {{ .Values.locationsService.mongo.host | quote }}
+            - name: MONGODB_DB
+              value: {{ .Values.locationsService.mongo.database | quote }}
+            - name: MONGODB_AUTH_SOURCE
+              value: {{ .Values.locationsService.mongo.authSource | quote }}
+            {{- if .Values.mongo.auth.enabled }}
+            - name: MONGODB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "helm-triplanner.mongoSecretName" . }}
+                  key: {{ .Values.mongo.auth.usernameKey }}
+            - name: MONGODB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "helm-triplanner.mongoSecretName" . }}
+                  key: {{ .Values.mongo.auth.passwordKey }}
+            {{- end }}
+            {{- end }}
             - name: MONGODB_COLLECTION
               value: {{ .Values.locationsService.mongo.collection | quote }}
             - name: SEED_CATALOGUE
               value: {{ .Values.locationsService.seed.enabled | quote }}
             - name: SEED_DATA_PATH
               value: {{ .Values.locationsService.seed.dataPath | quote }}
+            - name: SETTINGS_FILE
+              value: {{ .Values.locationsService.settingsFile | quote }}
+            - name: HASDATA_API_BASE
+              value: {{ .Values.locationsService.hasdata.apiBase | quote }}
+            - name: HASDATA_CACHE_TTL_HOURS
+              value: {{ .Values.locationsService.hasdata.cacheTtlHours | quote }}
+            - name: HASDATA_TIMEOUT_MS
+              value: {{ .Values.locationsService.hasdata.timeoutMs | quote }}
+            - name: HASDATA_HL
+              value: {{ .Values.locationsService.hasdata.hl | quote }}
+            - name: HASDATA_GL
+              value: {{ .Values.locationsService.hasdata.gl | quote }}
             - name: INTERNAL_TOKEN
               valueFrom:
                 secretKeyRef:
                   name: {{ .Values.locationsService.internalToken.existingSecret }}
                   key: {{ .Values.locationsService.internalToken.key }}
           volumeMounts:
+            - name: locations-settings
+              mountPath: {{ .Values.locationsService.persistence.mountPath }}
             - name: tmp
               mountPath: /tmp
           livenessProbe:
@@ -108,6 +143,13 @@ spec:
             {{- toYaml .Values.locationsService.rbacProxy.securityContext | nindent 12 }}
         {{- end }}
       volumes:
+        - name: locations-settings
+          {{- if .Values.locationsService.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ .Values.locationsService.persistence.existingClaim | default "triplanner-locations-settings" }}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
         - name: tmp
           emptyDir: {}
         {{- if .Values.locationsService.rbacProxy.enabled }}

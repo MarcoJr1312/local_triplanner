@@ -25,6 +25,7 @@ extend type Query {
   getMyInterests: [String!]!
   getLlmSettings: LlmSettings!
   getEmailSettings: EmailSettings!
+  getLocationsSettings: LocationsSettings!
 }
 
 type TripPreview {
@@ -48,6 +49,7 @@ extend type Mutation {
   setMyInterests(terms: [String!]!): [String!]!
   updateLlmSettings(input: UpdateLlmSettingsInput!): LlmSettings!
   updateEmailSettings(input: UpdateEmailSettingsInput!): EmailSettings!
+  updateLocationsSettings(input: UpdateLocationsSettingsInput!): LocationsSettings!
 }
 
 extend input CreateTripInput {
@@ -186,6 +188,19 @@ input UpdateEmailSettingsInput {
   apiKey: String
   from: String
   replyTo: String
+  clearKey: Boolean
+}
+
+type LocationsSettings {
+  provider: String!
+  hasKey: Boolean!
+  ready: Boolean!
+  cachedPlaces: Int!
+}
+
+input UpdateLocationsSettingsInput {
+  provider: String!
+  apiKey: String
   clearKey: Boolean
 }
 

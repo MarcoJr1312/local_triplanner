@@ -65,3 +65,7 @@ needs Kubernetes API permissions in the current design.
 {{- define "helm-triplanner.locationsServiceAccountName" -}}
 {{- default (printf "%s-locations" (include "helm-triplanner.fullname" .)) .Values.locationsService.serviceAccount.name }}
 {{- end }}
+
+{{- define "helm-triplanner.mongoSecretName" -}}
+{{- default "triplanner-mongo-credentials" .Values.mongo.auth.existingSecret }}
+{{- end }}

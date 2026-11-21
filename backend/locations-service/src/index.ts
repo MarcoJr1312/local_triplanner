@@ -2,9 +2,18 @@
 // comprometido y expone /health, /ready y /internal/v1/*.
 
 import { MongoLocationCatalogue } from './catalogue/mongo.ts';
+import { CatalogueService } from './catalogue/service.ts';
+import { HasDataClient } from './hasdata.ts';
+import { LocationsSettingsStore } from './settings.ts';
 import { createHandler, type SeedState } from './http.ts';
 import { seedFromFile } from './seed.ts';
 import {
+  HASDATA_API_BASE,
+  HASDATA_API_KEY,
+  HASDATA_CACHE_TTL_MS,
+  HASDATA_GL,
+  HASDATA_HL,
+  HASDATA_TIMEOUT_MS,
   INTERNAL_TOKEN,
   isUsingDefaultInternalToken,
   MONGODB_COLLECTION,
@@ -15,6 +24,7 @@ import {
   SEED_CATALOGUE,
   SEED_DATA_PATH,
   SEED_STARTUP_TIMEOUT_MS,
+  SETTINGS_FILE,
   verifyInternalToken,
 } from './env.ts';
 
@@ -58,6 +68,30 @@ if (isUsingDefaultInternalToken()) {
   console.warn('[locations] INTERNAL_TOKEN no configurado; usando el valor de desarrollo.');
 }
 
+const settings = new LocationsSettingsStore({
+  filePath: SETTINGS_FILE,
+  defaults: {
+    provider: HASDATA_API_KEY ? 'hasdata' : 'preloaded',
+    apiKey: HASDATA_API_KEY,
+  },
+});
+
+const hasdata = new HasDataClient({
+  apiKey: () => settings.get().apiKey,
+  baseUrl: HASDATA_API_BASE,
+  timeoutMs: HASDATA_TIMEOUT_MS,
+  hl: HASDATA_HL,
+  gl: HASDATA_GL,
+  ttlMs: HASDATA_CACHE_TTL_MS,
+});
+
+const cache = new CatalogueService({
+  store: catalogue,
+  settings,
+  hasdata,
+  cacheTtlMs: HASDATA_CACHE_TTL_MS,
+});
+
 const seedState: SeedState = {
   enabled: SEED_CATALOGUE,
   seeded: !SEED_CATALOGUE,
@@ -81,7 +115,8 @@ if (SEED_CATALOGUE) {
 }
 
 const handler = createHandler({
-  catalogue,
+  catalogue: cache,
+  settings,
   verifyToken: verifyInternalToken,
   seed: () => runSeed(catalogue),
   seedState,
@@ -101,11 +136,14 @@ const server = Bun.serve({
 });
 
 console.log(`[locations] listening on :${PORT} (collection=${MONGODB_COLLECTION})`);
+console.log(
+  `[locations] provider=${settings.public().provider} hasKey=${settings.public().hasKey} cacheTtlHours=${HASDATA_CACHE_TTL_MS / 3_600_000}`,
+);
 
 async function shutdown(signal: string): Promise<void> {
   console.log(`[locations] ${signal}; cerrando`);
   server.stop();
-  await catalogue.close();
+  await cache.close();
   process.exit(0);
 }
 

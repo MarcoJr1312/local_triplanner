@@ -34,7 +34,7 @@ the only external integrations.
 | Web | Next.js 15 App Router, React 19, Tailwind v4, shadcn/ui |
 | API | Bun + graphql-yoga |
 | Relational | PostgreSQL 17 + pgvector |
-| Locations | Bun/TS `locations` service + MongoDB 7, seeded with real Toronto data |
+| Locations | Bun/TS `locations` service + MongoDB 7, optional HasData BYOK with Mongo cache |
 | Agent | Python 3.12 + FastAPI + Agno + pgvector |
 | Orchestration | Docker Compose, built from source |
 
@@ -44,10 +44,17 @@ Runtime services: `web`, `api`, `locations`, `agent`, `postgres`, `mongo`.
 
 - **No Firebase** at runtime. Demo auth via `x-user-id`; seeded `demo-user` and
   `demo-friend`.
-- **No HasData** at runtime. A one-time ingestion script writes the committed
-  Toronto dataset; search reads MongoDB only through the locations service.
+- **HasData is optional BYOK at runtime.** The default is the committed Toronto
+  catalogue in MongoDB. A recruiter-supplied key lives on the locations PVC and
+  HasData results are cached in MongoDB with a 5-day TTL; no key ships in the
+  repo or chart. The one-time ingestion script still refreshes the committed
+  dataset.
 - **One MongoDB owner**: `backend/locations-service` owns the catalogue. The API
   and agent must call its internal REST v1 contract, never MongoDB directly.
+- **MongoDB auth is on.** Demo credentials live in `values.yaml`, render into
+  the `triplanner-mongo-credentials` Secret, and are demo-only. Production must
+  use `mongo.auth.existingSecret` managed by HashiCorp Vault, External Secrets
+  or an equivalent secret store; never commit real credentials.
 - **Email is optional and off by default.** `EMAIL_MODE=disabled` keeps the
   demo key-free; invitations expose a copyable join link. The recruiter can add
   their own Resend key in Settings → Email delivery (BYOK); no key ships with the
@@ -100,9 +107,16 @@ auth and Dockerfiles.
 - Locations service: `backend/locations-service` (Bun/TS, internal REST v1,
   `:4300`) owns MongoDB and the 187-row Toronto seed. The API delegates
   GraphQL/agent reads and keeps favorites/limits in Postgres; the agent still
-  calls the API facade. Helm chart 0.3.0 adds the locations workload and a
+  calls the API facade. Helm chart 0.5.0 adds the locations workload and a
   single-node MongoDB StatefulSet; accepted on Docker Desktop. Image
-  `marcojr13/triplanner-locations:0.1.0`.
+  `marcojr13/triplanner-locations:0.2.1`.
+- HasData BYOK: Settings → Places data stores a service-wide key on the
+  locations PVC (0600). `provider=preloaded` uses the committed catalogue;
+  `provider=hasdata` calls HasData and caches results in MongoDB with a 5-day
+  TTL (`expires_at_ttl`). HasData failures fall back to cache.
+- MongoDB auth: root credentials are rendered into the
+  `triplanner-mongo-credentials` Secret from the demo `values.yaml`; production
+  overrides `mongo.auth.existingSecret` with Vault/External Secrets.
 - Known limitation: macOS clean-clone QA is pending.
 Do not assume the target architecture is already implemented — check the
 current tree.

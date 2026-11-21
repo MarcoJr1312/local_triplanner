@@ -8,6 +8,10 @@ import {
   type LocationCatalogue,
   type UpsertLocationInput,
 } from './catalogue/types.ts';
+import {
+  LocationsSettingsValidationError,
+  type LocationsSettingsProvider,
+} from './settings.ts';
 
 export interface SeedState {
   enabled: boolean;
@@ -18,6 +22,7 @@ export interface SeedState {
 
 export interface HttpDeps {
   catalogue: LocationCatalogue;
+  settings: LocationsSettingsProvider;
   verifyToken: (provided: string | null | undefined) => boolean;
   seed?: () => Promise<number>;
   seedState: SeedState;
@@ -81,7 +86,70 @@ export function createHandler(deps: HttpDeps): (req: Request) => Promise<Respons
       if (seedState.enabled && !seedState.seeded) {
         return json(503, { status: 'not_ready', mongo: 'ok', seeded: false });
       }
-      return json(200, { status: 'ready', mongo: 'ok', seeded: seedState.seeded, places: seedState.count });
+      return json(200, {
+        status: 'ready',
+        mongo: 'ok',
+        seeded: seedState.seeded,
+        places: seedState.count,
+        provider: deps.settings.public().provider,
+      });
+    }
+
+    if (path === '/api/locations/config' && req.method === 'GET') {
+      return json(200, {
+        ...deps.settings.public(),
+        cachedPlaces: await catalogue.countPlaces(),
+      });
+    }
+
+    if (path === '/api/locations/config' && req.method === 'POST') {
+      if (!deps.verifyToken(req.headers.get('x-internal-token'))) {
+        return json(401, { error: { code: 'AUTH_INVALID', message: 'invalid internal token' } });
+      }
+      const body = await readJson(req);
+      if (!body) {
+        return json(400, {
+          error: { code: 'LOCATIONS_CONFIG_INVALID', message: 'body must be a valid JSON object' },
+        });
+      }
+      if (typeof body.provider !== 'string') {
+        return json(400, {
+          error: { code: 'LOCATIONS_CONFIG_INVALID', message: 'provider must be a string' },
+        });
+      }
+      if (body.apiKey !== undefined && body.apiKey !== null && typeof body.apiKey !== 'string') {
+        return json(400, {
+          error: { code: 'LOCATIONS_CONFIG_INVALID', message: 'apiKey must be a string' },
+        });
+      }
+      if (body.clearKey !== undefined && typeof body.clearKey !== 'boolean') {
+        return json(400, {
+          error: { code: 'LOCATIONS_CONFIG_INVALID', message: 'clearKey must be a boolean' },
+        });
+      }
+      try {
+        const saved = deps.settings.update({
+          provider: body.provider,
+          apiKey: typeof body.apiKey === 'string' ? body.apiKey : undefined,
+          clearKey: body.clearKey === true,
+        });
+        return json(200, { ...saved, cachedPlaces: await catalogue.countPlaces() });
+      } catch (error) {
+        if (error instanceof LocationsSettingsValidationError) {
+          return json(400, {
+            error: { code: 'LOCATIONS_CONFIG_INVALID', message: error.message },
+          });
+        }
+        console.error('[locations] settings persist failed', {
+          reason: error instanceof Error ? error.message : 'unknown error',
+        });
+        return json(500, {
+          error: {
+            code: 'LOCATIONS_SETTINGS_PERSIST_FAILED',
+            message: 'could not persist locations settings',
+          },
+        });
+      }
     }
 
     if (!path.startsWith('/internal/v1/')) {

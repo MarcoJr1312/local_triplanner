@@ -13,10 +13,11 @@ The product UI is **English by default**, with an **es/en** switch in the
 profile settings.
 
 > **Status:** **v1.2.2** - one-command Docker Compose demo plus per-service
-> CI/CD and multi-arch Docker Hub publishing. Firebase, HasData and AWS are
-> removed from the runtime; place search reads a local MongoDB catalogue seeded
-> with 186 real Toronto places. Email is optional: the recruiter can add a
-> Resend key in Settings → Email delivery (BYOK), or keep the copyable join link.
+> CI/CD and multi-arch Docker Hub publishing. Firebase and AWS are removed from
+> the runtime; place search defaults to the committed Toronto catalogue in
+> MongoDB, with an optional HasData BYOK provider cached in MongoDB. Email is
+> optional: the recruiter can add a Resend key in Settings → Email delivery
+> (BYOK), or keep the copyable join link.
 
 ## Documentation
 
@@ -40,7 +41,9 @@ profile settings.
 - **Async email** — `TripInvitation` messages flow from the API through the Go
   demo broker to the email service; members show the invited email with a demo
   badge.
-- **Places** — catalogue-only search over the seeded Toronto data in MongoDB.
+- **Places** - catalogue-first search over the seeded Toronto data in MongoDB.
+  Add a HasData key in Settings → Places data to use live results; they are
+  cached in MongoDB and expire after 5 days.
 - **Uploads** — avatars, covers and attachments on local disk.
 - **AI agent** — deterministic demo mode by default, optional DeepSeek /
   OpenAI / Anthropic / Ollama providers.
@@ -159,6 +162,7 @@ Requires Bun, uv/Python 3.12 and Docker for the data stores.
 ```bash
 docker compose -f deploy/docker-compose.yml up -d postgres mongo
 cp backend/.env.example backend/.env
+cp backend/locations-service/.env.example backend/locations-service/.env
 
 # Locations :4300 (owns MongoDB and seeds the catalogue)
 cd backend/locations-service && bun install && bun run dev
@@ -187,6 +191,16 @@ the email, the invitation is accepted for **Demo Friend**; the root Demo owner
 stays untouched and the Demo Friend member row shows your email. The copyable
 link keeps the confirmation button.
 
+## Places data (BYOK)
+
+Search starts with the committed Toronto catalogue in MongoDB, so no key is
+needed. Open **Settings → Places data** to switch to HasData and paste your own
+key. The key is stored only on the locations-service volume
+(`locations.json`, mode `0600`) and is never returned to the browser. Search and
+place details are cached in MongoDB; cached rows expire after 5 days via the
+`expires_at_ttl` TTL index. If HasData is unavailable, the service serves the
+cache. Switch back to **Preloaded catalogue** to clear the key.
+
 ## Configuration
 
 ### Backend (`backend/.env`)
@@ -202,6 +216,14 @@ link keeps the confirmation button.
 | `INTERNAL_TOKEN` | Shared secret for `/internal/*` endpoints |
 | `AGENT_BASE_URL` | Agent base URL (default `http://127.0.0.1:4100`) |
 | `TRIPLANNER_UPLOADS_OVERRIDE` | Optional uploads directory |
+
+The locations service reads its own env (`backend/locations-service/.env`):
+`MONGODB_HOST`, `MONGODB_DB`, `MONGODB_USERNAME`, `MONGODB_PASSWORD`,
+`MONGODB_AUTH_SOURCE`, `SETTINGS_FILE`, and the optional `HASDATA_*` values.
+Demo Mongo credentials are `triplanner` / `triplanner`; the Helm chart uses
+`triplanner` / `triplanner-demo`. These are demo-only. In production use a
+secret manager (HashiCorp Vault, External Secrets, Sealed Secrets) or the
+chart's `mongo.auth.existingSecret`.
 
 ### Agent (`backend/agent-service/.env`) — host development
 
@@ -294,7 +316,7 @@ See [docs/CICD.md](docs/CICD.md) for setup, tags and release flow.
 
 ## Toronto dataset (maintainers)
 
-The recruiter catalogue is generated once from HasData and committed:
+The recruiter catalogue can be regenerated once from HasData and committed:
 
 ```bash
 cp backend/.env.fetch.example backend/.env.fetch
@@ -305,8 +327,10 @@ docker compose -f deploy/docker-compose.yml restart locations  # reload catalogu
 ```
 
 The script writes `backend/db/toronto-locations.json`, optional local images under
-`backend/db/seed-images/`, and `backend/db/TORONTO_DATA.md`. The API runtime
-never reads the key; the locations service seeds the JSON on startup.
+`backend/db/seed-images/`, and `backend/db/TORONTO_DATA.md`. The API never reads
+the key; the locations service seeds the JSON on startup. At runtime, a
+different HasData key can be entered in Settings → Places data; it is stored on
+the locations PVC and cached results expire after 5 days.
 
 ## Testing
 

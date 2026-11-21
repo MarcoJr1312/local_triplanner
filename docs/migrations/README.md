@@ -10,6 +10,9 @@ Migrations:
 - [`0002-go-broker.md`](./0002-go-broker.md) — Go HTTP broker + `TripInvitation`
 - [`0003-locations-service.md`](./0003-locations-service.md) — locations/activities
   service over MongoDB
+- [`0004-hasdata-byok.md`](./0004-hasdata-byok.md) — optional HasData BYOK +
+  MongoDB cache
+- [`0005-mongo-auth.md`](./0005-mongo-auth.md) — MongoDB credentials and Secret
 
 ## Branching (local only)
 

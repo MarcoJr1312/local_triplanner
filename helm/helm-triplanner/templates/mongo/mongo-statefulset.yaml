@@ -42,29 +42,36 @@ spec:
             - name: mongodb
               containerPort: {{ .Values.mongo.service.port }}
               protocol: TCP
+          {{- if .Values.mongo.auth.enabled }}
+          env:
+            - name: MONGO_INITDB_ROOT_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "helm-triplanner.mongoSecretName" . }}
+                  key: {{ .Values.mongo.auth.usernameKey }}
+            - name: MONGO_INITDB_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "helm-triplanner.mongoSecretName" . }}
+                  key: {{ .Values.mongo.auth.passwordKey }}
+            - name: MONGO_INITDB_DATABASE
+              value: {{ .Values.locationsService.mongo.database | quote }}
+          {{- end }}
           volumeMounts:
             - name: data
               mountPath: /data/db
             - name: tmp
               mountPath: /tmp
           livenessProbe:
-            exec:
-              command:
-                - mongosh
-                - --quiet
-                - --eval
-                - db.adminCommand('ping').ok
+            tcpSocket:
+              port: mongodb
             initialDelaySeconds: 15
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 6
           readinessProbe:
-            exec:
-              command:
-                - mongosh
-                - --quiet
-                - --eval
-                - db.adminCommand('ping').ok
+            tcpSocket:
+              port: mongodb
             initialDelaySeconds: 10
             periodSeconds: 5
             timeoutSeconds: 5

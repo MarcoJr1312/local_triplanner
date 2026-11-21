@@ -1,0 +1,20 @@
+{{- if and .Values.locationsService.enabled .Values.locationsService.persistence.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Values.locationsService.persistence.existingClaim | default "triplanner-locations-settings" }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: triplanner-locations
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: locations
+spec:
+  accessModes:
+    - ReadWriteOnce
+  {{- with .Values.locationsService.persistence.storageClass }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.locationsService.persistence.size }}
+{{- end }}

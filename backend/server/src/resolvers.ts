@@ -43,6 +43,12 @@ import {
   type UpdateEmailSettingsInput,
 } from './email-settings.ts';
 import {
+  locationsSettingsClient,
+  LocationsSettingsError,
+  type LocationsSettingsGql,
+  type UpdateLocationsSettingsInput,
+} from './locations-settings.ts';
+import {
   addInvitedMember,
   addItem as addItemRow,
   computeTripStats,
@@ -314,6 +320,11 @@ function emailSettingsError(error: unknown, fallback: string): GraphQLError {
   return gqlError('EMAIL_SETTINGS_FAILED', fallback);
 }
 
+function locationsSettingsError(error: unknown, fallback: string): GraphQLError {
+  if (error instanceof LocationsSettingsError) return gqlError(error.code, error.message);
+  return gqlError('LOCATIONS_SETTINGS_FAILED', fallback);
+}
+
 const nowIso = (): string => new Date().toISOString();
 
 const DEMO_FRIEND_ID = 'demo-friend';
@@ -378,6 +389,15 @@ const EMAIL_SETTINGS_UNAVAILABLE: EmailSettingsGql = {
   replyTo: '',
   hasKey: false,
   ready: false,
+};
+
+// The locations service is the catalogue owner. If it is down, the settings
+// card still renders in preloaded mode; writes surface a stable error.
+const LOCATIONS_SETTINGS_UNAVAILABLE: LocationsSettingsGql = {
+  provider: 'preloaded',
+  hasKey: false,
+  ready: false,
+  cachedPlaces: 0,
 };
 
 // The agent owns the provider runtime. GET is public; writes are protected by
@@ -625,6 +645,21 @@ export const resolvers: {
           return EMAIL_SETTINGS_UNAVAILABLE;
         }
         throw emailSettingsError(error, 'No se pudo leer la configuración de email.');
+      }
+    },
+
+    getLocationsSettings: async (_, __, ctx) => {
+      await requireCurrentUser(ctx.db, ctx.currentUserId);
+      try {
+        return await locationsSettingsClient.get();
+      } catch (error) {
+        if (
+          error instanceof LocationsSettingsError &&
+          error.code === 'LOCATIONS_SETTINGS_FAILED'
+        ) {
+          return LOCATIONS_SETTINGS_UNAVAILABLE;
+        }
+        throw locationsSettingsError(error, 'No se pudo leer la configuración de lugares.');
       }
     },
   },
@@ -1185,6 +1220,16 @@ export const resolvers: {
         return await emailSettingsClient.update(input);
       } catch (error) {
         throw emailSettingsError(error, 'No se pudo guardar la configuración de email.');
+      }
+    },
+
+    updateLocationsSettings: async (_, args, ctx) => {
+      const { input } = args as Args<{ input: UpdateLocationsSettingsInput }>;
+      await requireCurrentUser(ctx.db, ctx.currentUserId);
+      try {
+        return await locationsSettingsClient.update(input);
+      } catch (error) {
+        throw locationsSettingsError(error, 'No se pudo guardar la configuración de lugares.');
       }
     },
 

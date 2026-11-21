@@ -318,6 +318,8 @@ export interface TriplannerApi {
   updateLlmSettings(input: UpdateLlmSettingsInput): Promise<LlmSettings>;
   getEmailSettings(): Promise<EmailSettings>;
   updateEmailSettings(input: UpdateEmailSettingsInput): Promise<EmailSettings>;
+  getLocationsSettings(): Promise<LocationsSettings>;
+  updateLocationsSettings(input: UpdateLocationsSettingsInput): Promise<LocationsSettings>;
   autoSuggest(tripId: ID, offset?: number, limit?: number): Promise<AutoSuggestResult>;
   touchPresence(input: PresenceInput): Promise<Presence>;
 
@@ -370,6 +372,19 @@ export interface UpdateEmailSettingsInput {
   apiKey?: string | null;
   from?: string | null;
   replyTo?: string | null;
+  clearKey?: boolean | null;
+}
+
+export interface LocationsSettings {
+  provider: string;
+  hasKey: boolean;
+  ready: boolean;
+  cachedPlaces: number;
+}
+
+export interface UpdateLocationsSettingsInput {
+  provider: string;
+  apiKey?: string | null;
   clearKey?: boolean | null;
 }
 

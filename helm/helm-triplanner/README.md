@@ -29,6 +29,7 @@ templates/
   locations/
     locations-deployment.yaml
     locations-networkpolicy.yaml
+    locations-pvc.yaml
     locations-rbac-proxy.yaml
     locations-rbac.yaml
     locations-service.yaml
@@ -102,11 +103,12 @@ kubectl create namespace triplanner
 
 Prerequisites:
 
-- A default StorageClass for the three PVCs (broker, email settings, Mongo).
+- A default StorageClass for the four PVCs (broker, email settings, Mongo,
+  locations settings).
 - The `triplanner-internal` Secret with `INTERNAL_TOKEN`.
 - Images published at `marcojr13/triplanner-kafka:0.1.0`,
   `marcojr13/triplanner-email:0.1.0` and
-  `marcojr13/triplanner-locations:0.1.0` (or override `images.*`).
+  `marcojr13/triplanner-locations:0.2.1` (or override `images.*`).
 
 ```bash
 kubectl create namespace triplanner
@@ -159,6 +161,41 @@ to the Docker Desktop binary, for example:
 KUBECTL='/mnt/c/Program Files/Docker/Docker/resources/bin/kubectl.exe' \
   bash scripts/port-forward.sh
 ```
+
+### Places data (BYOK)
+
+The locations service starts with the committed Toronto catalogue
+(`provider=preloaded`). The recruiter can add a HasData key in **Settings →
+Places data**; the key is stored at
+`locationsService.settingsFile` on the `triplanner-locations-settings` PVC
+(mode `0600`). HasData results are cached in MongoDB with a 5-day expiry and
+the MongoDB TTL index removes them. If HasData fails, cached data is served.
+
+The locations pod needs egress on TCP 443 for HasData; the NetworkPolicy
+allows it. No key ships in the chart or images.
+
+### MongoDB credentials
+
+By default the chart renders the demo credentials from `mongo.auth` into the
+`triplanner-mongo-credentials` Secret and injects them into Mongo and the
+locations service. **This is demo-only.** For production, leave
+`mongo.auth.existingSecret` pointing at a Secret managed by HashiCorp Vault,
+External Secrets, Sealed Secrets or your platform secret manager; the chart
+does not render credentials when that field is set.
+
+```yaml
+mongo:
+  auth:
+    enabled: true
+    existingSecret: triplanner-mongo-credentials
+    usernameKey: MONGO_ROOT_USERNAME
+    passwordKey: MONGO_ROOT_PASSWORD
+```
+
+The existing Secret must contain those keys. Rotating a credential requires
+updating the Secret and restarting the Mongo and locations pods. The Mongo
+StatefulSet keeps its `data-triplanner-mongo-0` PVC, so a root user created on
+an older unauthenticated PVC must be created once manually or the PVC reset.
 
 Test hook pods are deleted after success via
 `helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded`. Failed tests

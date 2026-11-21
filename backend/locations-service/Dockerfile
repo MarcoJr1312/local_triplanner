@@ -15,9 +15,10 @@ RUN bun install --frozen-lockfile --production
 COPY backend/locations-service/src ./src
 COPY backend/db/toronto-locations.json ./db/toronto-locations.json
 
-RUN chown -R app:app /app
+RUN mkdir -p /app/.data && chown -R app:app /app
 
 ENV NODE_ENV=production
+ENV SETTINGS_FILE=/app/.data/locations.json
 USER app
 EXPOSE 4300
 

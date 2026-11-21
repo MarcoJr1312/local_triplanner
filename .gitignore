@@ -18,6 +18,7 @@ build/
 backend/server/uploads/
 backend/agent-service/.data/
 backend/email-service/.data/
+backend/locations-service/.data/
 
 # OS
 .DS_Store
