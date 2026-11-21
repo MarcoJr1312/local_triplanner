@@ -367,6 +367,8 @@ End-to-end:
   normal Compose smoke passes after restoring the local service.
 - Mongo runs as non-root with a read-only root filesystem, `/data/db` on the
   `data-triplanner-mongo-0` PVC and `/tmp` on emptyDir.
+- Image `marcojr13/triplanner-locations:0.1.0` built and pushed (digest
+  `sha256:1f632f3ce7d819fc6a71741874920c97ebf650fae777ab52de797c4950f744da`).
 
 ### M6e decommission (2026-11-21)
 

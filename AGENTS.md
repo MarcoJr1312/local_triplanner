@@ -101,7 +101,8 @@ auth and Dockerfiles.
   `:4300`) owns MongoDB and the 187-row Toronto seed. The API delegates
   GraphQL/agent reads and keeps favorites/limits in Postgres; the agent still
   calls the API facade. Helm chart 0.3.0 adds the locations workload and a
-  single-node MongoDB StatefulSet; accepted on Docker Desktop.
+  single-node MongoDB StatefulSet; accepted on Docker Desktop. Image
+  `marcojr13/triplanner-locations:0.1.0`.
 - Known limitation: macOS clean-clone QA is pending.
 Do not assume the target architecture is already implemented — check the
 current tree.
