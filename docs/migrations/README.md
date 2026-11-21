@@ -8,6 +8,8 @@ Migrations:
 
 - [`0001-email-service.md`](./0001-email-service.md) — email consumer, BYOK
 - [`0002-go-broker.md`](./0002-go-broker.md) — Go HTTP broker + `TripInvitation`
+- [`0003-locations-service.md`](./0003-locations-service.md) — locations/activities
+  service over MongoDB
 
 ## Branching (local only)
 
