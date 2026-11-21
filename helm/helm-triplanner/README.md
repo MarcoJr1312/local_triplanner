@@ -11,23 +11,43 @@ templates/
     broker-deployment.yaml
     broker-networkpolicy.yaml
     broker-pvc.yaml
+    broker-rbac.yaml
     broker-service.yaml
+    broker-serviceaccount.yaml
   email/
     email-deployment.yaml
     email-hpa.yaml
     email-networkpolicy.yaml
     email-pvc.yaml
+    email-rbac.yaml
     email-service.yaml
+    email-serviceaccount.yaml
     email-test.yaml
   NOTES.txt
   _helpers.tpl
-  serviceaccount.yaml
 values.yaml
 ```
 
 Each microservice owns its folder and every file is prefixed with the service
-name. `serviceaccount.yaml`, `_helpers.tpl` and `NOTES.txt` stay at the chart
-level because they are shared.
+name. `_helpers.tpl` and `NOTES.txt` stay at the chart level because they are
+shared.
+
+## RBAC
+
+Each workload has its own ServiceAccount:
+
+- `triplanner-helm-triplanner-broker`
+- `triplanner-helm-triplanner-email`
+
+Both run with `automountServiceAccountToken: false`, so no API token is mounted.
+Neither service calls the Kubernetes API, so their roles are intentionally
+empty. The chart creates a `ClusterRole` and a namespace-scoped `RoleBinding`
+for each service; set `rbac.kind: Role` on a service to use a namespaced Role
+instead. Do not add rules until a service actually needs API access.
+
+ClusterRoles are cluster-scoped and therefore do not have
+`metadata.namespace`; every namespaced object still uses
+`{{ .Release.Namespace }}`.
 
 ## Install
 

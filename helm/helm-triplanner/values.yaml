@@ -38,6 +38,17 @@ broker:
     size: 1Gi
     mountPath: /data
     existingClaim: ""
+  serviceAccount:
+    create: true
+    name: ""
+    automount: false
+    annotations: {}
+  # Service identity/RBAC. The service does not call the Kubernetes API; the
+  # role is intentionally empty. Switch kind to Role for namespace-scoped RBAC.
+  rbac:
+    create: true
+    kind: ClusterRole
+    rules: []
   podAnnotations: {}
   podLabels: {}
   podSecurityContext:
@@ -103,6 +114,17 @@ emailService:
   internalToken:
     existingSecret: triplanner-internal
     key: INTERNAL_TOKEN
+  serviceAccount:
+    create: true
+    name: ""
+    automount: false
+    annotations: {}
+  # Service identity/RBAC. The service does not call the Kubernetes API; the
+  # role is intentionally empty. Switch kind to Role for namespace-scoped RBAC.
+  rbac:
+    create: true
+    kind: ClusterRole
+    rules: []
 
   broker:
     url: http://triplanner-kafka:8080
@@ -175,12 +197,6 @@ emailService:
   nodeSelector: {}
   tolerations: []
   affinity: {}
-
-serviceAccount:
-  create: true
-  automount: false
-  annotations: {}
-  name: ""
 
 networkPolicy:
   enabled: false

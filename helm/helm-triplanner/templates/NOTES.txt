@@ -8,6 +8,10 @@ Components:
   - triplanner-kafka: Go HTTP broker (topic/offset/ack, SQLite)
   - triplanner-email: email consumer + BYOK settings
 
+RBAC:
+  - per-service ServiceAccount, token not mounted
+  - ClusterRole + RoleBinding per service, intentionally empty
+
 1. Check the rollouts:
    kubectl -n {{ .Release.Namespace }} rollout status deployment/triplanner-kafka
    kubectl -n {{ .Release.Namespace }} rollout status deployment/triplanner-email

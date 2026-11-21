@@ -91,9 +91,10 @@ auth and Dockerfiles.
   on a PVC, GraphQL proxy and Profile UI; images `marcojr13/triplanner-email`.
 - Go broker: `backend/kafka` (HTTP topic/offset/ack + SQLite) with topic
   `TripInvitation`; API producer, email consumer and DLQ `TripInvitation.dlq`.
-- Helm chart: deploys the Go broker + email service with PVCs, probes and
-  `triplanner-internal`; accepted on Docker Desktop (both pods ready, invite
-  consumed, BYOK persisted, DLQ verified).
+- Helm chart: deploys the Go broker + email service with PVCs, probes,
+  `triplanner-internal`, per-service ServiceAccounts and empty
+  ClusterRole/RoleBinding (no API token mounted); accepted on Docker Desktop
+  (both pods ready, invite consumed, BYOK persisted, DLQ verified).
 - Known limitation: macOS clean-clone QA is pending.
 Do not assume the target architecture is already implemented — check the
 current tree.

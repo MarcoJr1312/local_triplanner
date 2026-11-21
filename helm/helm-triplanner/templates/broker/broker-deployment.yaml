@@ -28,8 +28,8 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
     spec:
-      serviceAccountName: {{ include "helm-triplanner.serviceAccountName" . }}
-      automountServiceAccountToken: {{ .Values.serviceAccount.automount }}
+      serviceAccountName: {{ include "helm-triplanner.brokerServiceAccountName" . }}
+      automountServiceAccountToken: {{ .Values.broker.serviceAccount.automount }}
       terminationGracePeriodSeconds: 30
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:

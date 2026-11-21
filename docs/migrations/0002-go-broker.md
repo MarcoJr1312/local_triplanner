@@ -148,6 +148,11 @@ emailService:
 ```
 
 - Two PVCs: broker SQLite data and email BYOK settings.
+- Two ServiceAccounts, one per service, with `automountServiceAccountToken:
+  false`. Neither service calls the Kubernetes API, so their ClusterRoles are
+  intentionally empty and bound with namespace-scoped RoleBindings. Set
+  `rbac.kind: Role` to use namespaced Roles instead. ClusterRoles are the only
+  cluster-scoped exception to the namespace rule.
 - Both run as non-root with `runAsUser: 100`, `runAsGroup: 101` and
   `fsGroup: 101` (the Alpine app user); Kubernetes cannot verify a named,
   non-numeric image user without the numeric IDs.

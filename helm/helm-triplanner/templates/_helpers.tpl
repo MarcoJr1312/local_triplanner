@@ -51,12 +51,13 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
 {{/*
-Create the name of the service account to use
+Broker and email service accounts. Each service owns its identity; neither
+needs Kubernetes API permissions in the current design.
 */}}
-{{- define "helm-triplanner.serviceAccountName" -}}
-{{- if .Values.serviceAccount.create }}
-{{- default (include "helm-triplanner.fullname" .) .Values.serviceAccount.name }}
-{{- else }}
-{{- default "default" .Values.serviceAccount.name }}
+{{- define "helm-triplanner.brokerServiceAccountName" -}}
+{{- default (printf "%s-broker" (include "helm-triplanner.fullname" .)) .Values.broker.serviceAccount.name }}
 {{- end }}
+
+{{- define "helm-triplanner.emailServiceAccountName" -}}
+{{- default (printf "%s-email" (include "helm-triplanner.fullname" .)) .Values.emailService.serviceAccount.name }}
 {{- end }}
