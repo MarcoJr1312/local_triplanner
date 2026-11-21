@@ -1,8 +1,8 @@
 # Triplanner — Local Recruiter Demo
 
 > **Repository description:** A local-only collaborative travel-planning demo
-> with a one-command Docker Compose stack: Next.js 15, Bun GraphQL, FastAPI
-> agent, PostgreSQL 17 + pgvector and MongoDB 7.
+> with a one-command Docker Compose stack: Next.js 15, Bun GraphQL API, a Bun
+> locations service, FastAPI agent, PostgreSQL 17 + pgvector and MongoDB 7.
 
 Collaborative travel planning web app. Plan a trip with your team: build a
 day-by-day itinerary, organize activities and budgets, invite collaborators,
@@ -55,7 +55,7 @@ Browser
 web (Next.js 15)
   ├─ /api/graphql ──▶ api (Bun + graphql-yoga :4000)
   │                     ├─▶ postgres:5432 (relational + pgvector)
-  │                     ├─▶ mongo:27017 (locations)
+  │                     ├─▶ locations:4300 (Bun) ──▶ mongo:27017 (catalogue)
   │                     └─▶ broker :8080 (Go) ──▶ email :4200 ──▶ Resend/sink
   ├─ /api/agent/* ──▶ agent (FastAPI :4100)
   │                     ├─▶ postgres (pgvector embeddings)
@@ -71,10 +71,11 @@ the client.
 | Area | Stack |
 |---|---|
 | Frontend (`frontend-next/`) | Next.js 15 App Router, React 19, TypeScript, shadcn/ui on Radix, Tailwind v4 |
-| Backend (`backend/server/`) | TypeScript on Bun, graphql-yoga, Postgres (`pg`), MongoDB (`mongodb`) |
+| Backend (`backend/server/`) | TypeScript on Bun, graphql-yoga, Postgres (`pg`) |
+| Locations (`backend/locations-service/`) | TypeScript on Bun, internal REST v1, MongoDB (`mongodb`) |
 | Agent (`backend/agent-service/`) | Python 3.12, uv, FastAPI, Agno, pgvector |
-| Data (`backend/db/`) | Postgres `pg/schema.sql` + idempotent seed; MongoDB Toronto catalogue |
-| Local infra | Docker Compose: web, api, agent, PostgreSQL 17 + pgvector, MongoDB 7 |
+| Data (`backend/db/`) | Postgres `pg/schema.sql` + idempotent seed; Toronto catalogue JSON |
+| Local infra | Docker Compose: web, api, locations, agent, PostgreSQL 17 + pgvector, MongoDB 7 |
 
 ## Repository layout
 
@@ -83,14 +84,15 @@ the client.
 ├── frontend-next/          Next.js app (App Router, shadcn/ui, i18n)
 ├── backend/
 │   ├── server/             GraphQL API, demo auth, uploads
+│   ├── locations-service/  MongoDB catalogue + activity search (:4300)
 │   ├── agent-service/      FastAPI suggestion agent (pgvector)
-│   ├── db/                 Postgres schema + seed data
+│   ├── db/                 Postgres schema + seed data + Toronto catalogue JSON
 │   ├── graphql/            base schema
 │   └── .env.example        backend configuration template
 ├── deploy/
-│   ├── docker-compose.yml             web + api + agent + Postgres + MongoDB
+│   ├── docker-compose.yml             web + api + locations + agent + Postgres + MongoDB
 │   ├── docker-compose.hub.yml         published images
-│   └── docker-compose.local-cluster.yml  local app + cluster broker/email
+│   └── docker-compose.local-cluster.yml  local app + cluster broker/email/locations
 └── AGENTS.md               working agreement for AI agents
 ```
 
@@ -106,7 +108,7 @@ docker compose -f deploy/docker-compose.yml up --build
 
 Open http://localhost:3000/login and choose **Demo (owner)** or **Demo Friend**.
 
-The first build takes a few minutes. All five services become healthy:
+The first build takes a few minutes. All six services become healthy:
 
 ```bash
 docker compose -f deploy/docker-compose.yml ps
@@ -116,6 +118,7 @@ docker compose -f deploy/docker-compose.yml ps
 |---|---|
 | `web` | Next.js UI on http://localhost:3000 |
 | `api` | GraphQL API (internal) |
+| `locations` | Destinations/activities catalogue (internal, owns MongoDB) |
 | `agent` | FastAPI suggestions (internal) |
 | `postgres` | Relational data + pgvector |
 | `mongo` | Toronto location catalogue |
@@ -145,7 +148,10 @@ Requires Bun, uv/Python 3.12 and Docker for the data stores.
 docker compose -f deploy/docker-compose.yml up -d postgres mongo
 cp backend/.env.example backend/.env
 
-# API :4000
+# Locations :4300 (owns MongoDB and seeds the catalogue)
+cd backend/locations-service && bun install && bun run dev
+
+# API :4000 (LOCATIONS_URL defaults to http://127.0.0.1:4300)
 cd backend/server && bun install && bun run db:migrate && bun run db:seed && bun run dev
 
 # Web :3000
@@ -176,7 +182,8 @@ link keeps the confirmation button.
 | Variable | Purpose |
 |---|---|
 | `DATABASE_URL` | Postgres connection string |
-| `MONGODB_URL` | MongoDB connection string |
+| `LOCATIONS_URL` | Locations service URL (default `http://127.0.0.1:4300`) |
+| `LOCATIONS_TIMEOUT_MS` | Locations client timeout (default `2000`) |
 | `APP_URL` | Public frontend base for invitation links |
 | `LOCAL_PORT` | GraphQL port (default `4000`) |
 | `ATTACHMENT_TOKEN_SECRET` | HMAC secret for signed attachment URLs |
@@ -247,6 +254,7 @@ Each service has its own GitHub Actions workflow and test suite:
 |---|---|---|
 | `web.yml` | `frontend-next/lib/*.test.ts` | `triplanner-web` |
 | `api.yml` | `backend/server/test/*.test.ts` | `triplanner-api` |
+| `locations.yml` | `backend/locations-service/test/*.test.ts` | `triplanner-locations` |
 | `agent.yml` | `backend/agent-service/tests/test_m2.py` + `tests/test_settings.py` | `triplanner-agent` |
 | `compose-smoke.yml` | full Compose + `scripts/smoke.sh` | no push |
 
@@ -280,19 +288,24 @@ The recruiter catalogue is generated once from HasData and committed:
 cp backend/.env.fetch.example backend/.env.fetch
 # put HASDATA_API_KEY=... in backend/.env.fetch (gitignored)
 bun backend/server/scripts/fetch-toronto.ts
-cd backend/server && bun run db:seed
+cd backend/server && bun run db:seed   # Postgres demo data + images
+docker compose -f deploy/docker-compose.yml restart locations  # reload catalogue
 ```
 
 The script writes `backend/db/toronto-locations.json`, optional local images under
 `backend/db/seed-images/`, and `backend/db/TORONTO_DATA.md`. The API runtime
-never reads the key.
+never reads the key; the locations service seeds the JSON on startup.
 
 ## Testing
 
 ```bash
-# Backend: Postgres + MongoDB integration tests
+# Backend: Postgres integration tests (catalogue uses an in-memory fake)
 cd backend/server && bun test
 cd backend/server && bunx tsc --noEmit
+
+# Locations: MongoDB integration + HTTP tests
+cd backend/locations-service && bun test
+cd backend/locations-service && bunx tsc --noEmit
 
 # Agent: deterministic tests
 cd backend/agent-service && uv run python tests/test_m2.py

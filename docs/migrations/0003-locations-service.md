@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | M6d complete; M6e next |
+| Status | M6e complete (locations migration done) |
 | Integration branch | `refactor/helm` |
 | Work branch | `refactor/helm-locations-service` (local only) |
 | Runtime | Bun + TypeScript |
@@ -190,7 +190,6 @@ only to Mongo.
 
 | Env var | Default | Purpose |
 |---|---|---|
-| `LOCATIONS_MODE` | `local` until M6c, then `remote` | `remote` calls the service; `local` keeps the in-process adapter for rollback |
 | `LOCATIONS_URL` | `http://localhost:4300` | Service base URL |
 | `LOCATIONS_TIMEOUT_MS` | `2000` | Client timeout |
 | `INTERNAL_TOKEN` | existing | Shared internal token |
@@ -200,10 +199,10 @@ only to Mongo.
 - New `locations` service, built from `backend/locations-service`.
 - `depends_on: mongo: condition: service_healthy`.
 - Healthcheck: `curl -f http://localhost:4300/ready`.
-- API gets `LOCATIONS_MODE=remote`, `LOCATIONS_URL=http://locations:4300` and
+- API gets `LOCATIONS_URL=http://locations:4300` and
   `depends_on: locations: condition: service_healthy`.
 - After M6e, the API no longer receives `MONGODB_URL` and no longer depends on
-  `mongo`.
+  `mongo`; this is the current state.
 
 ### 7.4 Helm values
 
@@ -243,7 +242,6 @@ locationsService:
 api:
   locations:
     serviceUrl: http://triplanner-locations:4300
-    mode: remote
 ```
 
 ## 8. MongoDB StatefulSet
@@ -273,7 +271,6 @@ api:
 | M6c | Compose service, seed ownership, e2e | `compose ps` healthy + search/activities/details/favorite/agent/invite smoke |
 | M6d | Mongo StatefulSet + locations workload in Helm | `helm lint`, kubeconform, `helm test`, cluster acceptance |
 | M6e | Remove API Mongo adapter/dependency, docs, acceptance | grep proves one Mongo owner; full test matrix |
-
 ## 10. Test matrix
 
 Locations service:
@@ -305,8 +302,9 @@ End-to-end:
 
 - Before M6e: set `LOCATIONS_MODE=local` on the API and keep `MONGODB_URL`
   configured. The in-process adapter still exists for exactly this case.
-- After M6e: redeploy the previous API image tag with `LOCATIONS_MODE=local`
-  and the previous Compose/Helm values. Document the tag in the release notes.
+- After M6e (current): redeploy the previous API image tag and the previous
+  Compose/Helm values. The current API has no MongoDB driver, so the old image
+  is the rollback.
 - The locations service is additive: disabling `locationsService` must not
   break the email pipeline.
 
@@ -369,3 +367,16 @@ End-to-end:
   normal Compose smoke passes after restoring the local service.
 - Mongo runs as non-root with a read-only root filesystem, `/data/db` on the
   `data-triplanner-mongo-0` PVC and `/tmp` on emptyDir.
+
+### M6e decommission (2026-11-21)
+
+- Deleted `backend/server/src/catalogue/mongo.ts`, the local branch of
+  `createCatalogue`, the `mongodb` dependency, `MONGODB_URL`, `LOCATIONS_MODE`
+  and the API Mongo tests/helper. `seed.ts` now seeds Postgres only.
+- `grep -R "mongodb\\|MONGODB_URL\\|LOCATIONS_MODE" backend/server/src backend/server/test`
+  returns no matches.
+- API tests: 72 pass, typecheck clean. Locations tests: 16 pass. Compose API
+  rebuilt; smoke passes and the seed log reads
+  `Postgres listo; catálogo en locations-service`.
+- Hub Compose now includes `triplanner-locations` and the API depends on its
+  health; the old image tag is the documented rollback.

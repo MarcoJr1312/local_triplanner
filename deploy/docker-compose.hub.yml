@@ -36,6 +36,22 @@ services:
       retries: 20
     restart: unless-stopped
 
+  locations:
+    image: ${DOCKERHUB_USERNAME:-marcojr13}/triplanner-locations:${IMAGE_TAG:-latest}
+    container_name: local_triplanner-locations
+    pull_policy: always
+    environment:
+      NODE_ENV: production
+      PORT: "4300"
+      MONGODB_URL: mongodb://mongo:27017/triplanner
+      MONGODB_COLLECTION: locations
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:-dev-internal-token}
+      SEED_CATALOGUE: "true"
+    depends_on:
+      mongo:
+        condition: service_healthy
+    restart: unless-stopped
+
   api:
     image: ${DOCKERHUB_USERNAME:-marcojr13}/triplanner-api:${IMAGE_TAG:-latest}
     container_name: local_triplanner-api
@@ -43,7 +59,7 @@ services:
     environment:
       NODE_ENV: production
       DATABASE_URL: postgres://triplanner:triplanner@postgres:5432/triplanner
-      MONGODB_URL: mongodb://mongo:27017/triplanner
+      LOCATIONS_URL: http://locations:4300
       APP_URL: http://localhost:${WEB_PORT:-3000}
       LOCAL_PORT: "4000"
       INTERNAL_TOKEN: ${INTERNAL_TOKEN:-dev-internal-token}
@@ -54,7 +70,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      mongo:
+      locations:
         condition: service_healthy
     command: ["sh", "-c", "bun run db:migrate && bun run db:seed && bun src/index.ts"]
     restart: unless-stopped

@@ -7,15 +7,14 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { connectPg, deleteUser, insertUser } from './helpers/pg.ts';
-import { connectMongo } from './helpers/mongo.ts';
+import { MemoryLocationCatalogue } from './helpers/memory-catalogue.ts';
 import type { PgDb } from '../src/pg/db.ts';
-import type { MongoLocationCatalogue } from '../src/catalogue/mongo.ts';
 import { LocalDiskStorage } from '../src/storage.ts';
 import { deleteTripCascade } from '../src/pg/trips.ts';
 import { resolvers, type Ctx } from '../src/resolvers.ts';
 
 let db: PgDb | null = null;
-let catalogue: MongoLocationCatalogue | null = null;
+let catalogue: MemoryLocationCatalogue | null = null;
 let storage: LocalDiskStorage;
 let root: string;
 let ctx: Ctx | null = null;
@@ -25,8 +24,7 @@ const call = (fn: unknown, args: Record<string, unknown>) =>
 
 before(async () => {
   db = await connectPg();
-  catalogue = await connectMongo('locations_graphql_test');
-  await catalogue?.clear();
+  catalogue = new MemoryLocationCatalogue();
   root = mkdtempSync(path.join(tmpdir(), 'triplanner-smoke-'));
   storage = new LocalDiskStorage(root);
 });

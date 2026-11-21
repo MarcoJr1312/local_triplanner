@@ -65,8 +65,6 @@ services:
     environment:
       NODE_ENV: production
       DATABASE_URL: postgres://triplanner:triplanner@postgres:5432/triplanner
-      MONGODB_URL: mongodb://mongo:27017/triplanner
-      LOCATIONS_MODE: remote
       LOCATIONS_URL: http://locations:4300
       APP_URL: http://localhost:${WEB_PORT:-3000}
       LOCAL_PORT: "4000"
@@ -79,8 +77,6 @@ services:
       postgres:
         condition: service_healthy
       locations:
-        condition: service_healthy
-      mongo:
         condition: service_healthy
     command: ["sh", "-c", "bun run db:migrate && bun run db:seed && bun src/index.ts"]
     restart: unless-stopped

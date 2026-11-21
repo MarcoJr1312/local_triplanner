@@ -1,19 +1,17 @@
 import { after, before, beforeEach, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { connectPg, deleteUser, insertUser } from './helpers/pg.ts';
-import { connectMongo } from './helpers/mongo.ts';
+import { MemoryLocationCatalogue } from './helpers/memory-catalogue.ts';
 import type { PgDb } from '../src/pg/db.ts';
 import { setFavorite } from '../src/pg/favorites.ts';
-import type { MongoLocationCatalogue } from '../src/catalogue/mongo.ts';
 import { searchCatalogue, searchLocationsWithCatalogue } from '../src/catalogue/search.ts';
 
 let db: PgDb | null = null;
-let catalogue: MongoLocationCatalogue | null = null;
+let catalogue: MemoryLocationCatalogue | null = null;
 
 before(async () => {
   db = await connectPg();
-  catalogue = await connectMongo('locations_search_test');
-  await catalogue?.clear();
+  catalogue = new MemoryLocationCatalogue();
 });
 
 after(async () => {

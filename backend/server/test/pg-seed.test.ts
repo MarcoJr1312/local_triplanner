@@ -1,9 +1,7 @@
 import { after, before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { connectPg } from './helpers/pg.ts';
-import { connectMongo } from './helpers/mongo.ts';
 import type { PgDb } from '../src/pg/db.ts';
-import type { MongoLocationCatalogue } from '../src/catalogue/mongo.ts';
 import { seedAll, type SeedData } from '../src/seed.ts';
 
 const data: SeedData = {
@@ -23,7 +21,6 @@ const data: SeedData = {
 };
 
 let db: PgDb | null = null;
-let catalogue: MongoLocationCatalogue | null = null;
 
 async function cleanDemo(conn: PgDb) {
   await conn.prepare("DELETE FROM trip_items WHERE trip_id = 'demo-trip'").run();
@@ -35,29 +32,19 @@ async function cleanDemo(conn: PgDb) {
 
 before(async () => {
   db = await connectPg();
-  catalogue = await connectMongo('locations_seed_test');
-  await catalogue?.clear();
   if (db) await cleanDemo(db);
 });
 
 after(async () => {
-  await catalogue?.clear();
-  await catalogue?.close();
   if (db) await cleanDemo(db);
   await db?.close();
 });
 
-describe('seed on Postgres + MongoDB', () => {
-  test('writes catalogue and demo data, and is idempotent', async () => {
-    if (!db || !catalogue) return;
+describe('demo seed on Postgres', () => {
+  test('writes demo data and is idempotent', async () => {
+    if (!db) return;
 
-    const first = await seedAll(catalogue, db, data);
-    assert.equal(first, 2);
-
-    const destinations = await catalogue.listDestinations();
-    assert.deepEqual(destinations.map((d) => d.slug), ['dest-x']);
-    assert.deepEqual((await catalogue.listByParent('dest-x')).map((a) => a.id), ['act-x']);
-
+    await seedAll(db, data);
     const counts = async () =>
       db!
         .prepare(
@@ -69,12 +56,10 @@ describe('seed on Postgres + MongoDB', () => {
         )
         .get<Record<string, number>>();
 
-    const before = await counts();
-    assert.deepEqual(before, { users: 2, trips: 1, members: 1, items: 1 });
+    const firstCounts = await counts();
+    assert.deepEqual(firstCounts, { users: 2, trips: 1, members: 1, items: 1 });
 
-    await seedAll(catalogue, db, data);
-    assert.deepEqual(await counts(), before);
-    assert.equal((await catalogue.listDestinations()).length, 1);
-    assert.equal((await catalogue.listByParent('dest-x')).length, 1);
+    await seedAll(db, data);
+    assert.deepEqual(await counts(), firstCounts);
   });
 });

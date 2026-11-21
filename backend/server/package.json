@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Triplanner local GraphQL API built with Bun, graphql-yoga, PostgreSQL and MongoDB.",
+  "description": "Triplanner local GraphQL API built with Bun, graphql-yoga and PostgreSQL; catalogue reads go to the locations service.",
   "scripts": {
     "start": "bun src/index.ts",
     "dev": "bun --watch src/index.ts",
@@ -14,7 +14,6 @@
   },
   "dependencies": {
     "graphql-yoga": "^5.13.0",
-    "mongodb": "^7.9.0",
     "pg": "^8.23.1"
   },
   "devDependencies": {

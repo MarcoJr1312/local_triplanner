@@ -408,4 +408,3 @@ api:
     serviceUrl: http://triplanner-email:4200
   locations:
     serviceUrl: http://triplanner-locations:4300
-    mode: remote

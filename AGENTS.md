@@ -34,18 +34,20 @@ the only external integrations.
 | Web | Next.js 15 App Router, React 19, Tailwind v4, shadcn/ui |
 | API | Bun + graphql-yoga |
 | Relational | PostgreSQL 17 + pgvector |
-| Locations | MongoDB 7, seeded with real Toronto data |
+| Locations | Bun/TS `locations` service + MongoDB 7, seeded with real Toronto data |
 | Agent | Python 3.12 + FastAPI + Agno + pgvector |
 | Orchestration | Docker Compose, built from source |
 
-Runtime services: `web`, `api`, `agent`, `postgres`, `mongo`.
+Runtime services: `web`, `api`, `locations`, `agent`, `postgres`, `mongo`.
 
 ## Hard constraints
 
 - **No Firebase** at runtime. Demo auth via `x-user-id`; seeded `demo-user` and
   `demo-friend`.
 - **No HasData** at runtime. A one-time ingestion script writes the committed
-  Toronto dataset; search reads MongoDB only.
+  Toronto dataset; search reads MongoDB only through the locations service.
+- **One MongoDB owner**: `backend/locations-service` owns the catalogue. The API
+  and agent must call its internal REST v1 contract, never MongoDB directly.
 - **Email is optional and off by default.** `EMAIL_MODE=disabled` keeps the
   demo key-free; invitations expose a copyable join link. The recruiter can add
   their own Resend key in Settings → Email delivery (BYOK); no key ships with the
@@ -95,6 +97,11 @@ auth and Dockerfiles.
   `triplanner-internal`, per-service ServiceAccounts and ClusterRoles for the
   kube-rbac-proxy sidecars (TokenReview/SAR; HTTP 8443 local-only); accepted on
   Docker Desktop (both pods ready, invite consumed, BYOK persisted, DLQ verified).
+- Locations service: `backend/locations-service` (Bun/TS, internal REST v1,
+  `:4300`) owns MongoDB and the 187-row Toronto seed. The API delegates
+  GraphQL/agent reads and keeps favorites/limits in Postgres; the agent still
+  calls the API facade. Helm chart 0.3.0 adds the locations workload and a
+  single-node MongoDB StatefulSet; accepted on Docker Desktop.
 - Known limitation: macOS clean-clone QA is pending.
 Do not assume the target architecture is already implemented — check the
 current tree.
@@ -118,8 +125,10 @@ current tree.
 docker compose -f deploy/docker-compose.yml up --build        # full demo
 docker compose -f deploy/docker-compose.yml down              # stop, keep volumes
 docker compose -f deploy/docker-compose.yml down -v           # reset data
-cd backend/server && bun test      # API tests (needs Postgres/Mongo)
+cd backend/server && bun test      # API tests (needs Postgres)
 cd backend/server && bunx tsc --noEmit
+cd backend/locations-service && bun test    # needs MongoDB
+cd backend/locations-service && bunx tsc --noEmit
 cd frontend-next && bun test
 cd backend/agent-service && uv run python tests/test_m2.py
 ```

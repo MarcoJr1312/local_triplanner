@@ -17,12 +17,7 @@ try {
 // ---- Base publica para los links de invitacion ----
 export const APP_URL = process.env.APP_URL ?? 'http://localhost:3000';
 
-// ---- MongoDB (catalogo de lugares, solo en LOCATIONS_MODE=local) ----
-export const MONGODB_URL = process.env.MONGODB_URL ?? 'mongodb://127.0.0.1:27017/triplanner';
-
 // ---- Servicio de catalogo (locations/activities, :4300) ----
-export const LOCATIONS_MODE: 'local' | 'remote' =
-  process.env.LOCATIONS_MODE === 'remote' ? 'remote' : 'local';
 export const LOCATIONS_URL = (process.env.LOCATIONS_URL ?? 'http://127.0.0.1:4300').replace(/\/+$/, '');
 export const LOCATIONS_TIMEOUT_MS = Number(process.env.LOCATIONS_TIMEOUT_MS ?? 2000);
 
