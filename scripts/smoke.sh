@@ -17,7 +17,7 @@ pass() {
 
 echo "Smoke test against $BASE"
 
-for svc in postgres mongo api agent web; do
+for svc in postgres mongo locations api agent web; do
   name="local_triplanner-$svc"
   status="$(docker inspect --format '{{.State.Health.Status}}' "$name" 2>/dev/null || true)"
   [ "$status" = "healthy" ] || fail "$name is '$status'"
@@ -34,9 +34,26 @@ pass "GraphQL profile via web proxy"
 
 search="$(curl -fsS -X POST "$BASE/api/graphql" \
   -H 'x-user-id: demo-user' -H 'Content-Type: application/json' \
-  -d '{"query":"query { searchLocations(q: \"CN Tower\") { id name imageUrl } }"}')"
+  -d '{"query":"query { searchLocations(q: \"CN Tower\") { id name placeId imageUrl } }"}')"
 echo "$search" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert len(d["data"]["searchLocations"])>0'
 pass "Toronto place search"
+
+activities="$(curl -fsS -X POST "$BASE/api/graphql" \
+  -H 'x-user-id: demo-user' -H 'Content-Type: application/json' \
+  -d '{"query":"query { listActivities(destSlug: \"toronto\", category: \"food\") { id name } }"}')"
+echo "$activities" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert len(d["data"]["listActivities"])>0'
+pass "Toronto activities"
+
+place_id="$(echo "$search" | python3 -c 'import json,sys
+items=json.load(sys.stdin)["data"]["searchLocations"]
+print(next((i["placeId"] for i in items if i.get("placeId")), ""))')"
+if [ -n "$place_id" ]; then
+  details_payload="$(python3 -c 'import json,sys; pid=sys.argv[1]; print(json.dumps({"query":"query { locationDetails(placeId: \""+pid+"\") { id name } }"}))' "$place_id")"
+  details="$(curl -fsS -X POST "$BASE/api/graphql" \
+    -H 'x-user-id: demo-user' -H 'Content-Type: application/json' -d "$details_payload")"
+  echo "$details" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["data"]["locationDetails"]["id"]'
+  pass "location details"
+fi
 
 image="$(echo "$search" | python3 -c 'import json,sys
 items=json.load(sys.stdin)["data"]["searchLocations"]

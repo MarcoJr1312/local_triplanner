@@ -16,7 +16,7 @@ function Pass([string]$Message) {
 
 Write-Host "Smoke test against $Base"
 
-foreach ($svc in @('postgres', 'mongo', 'api', 'agent', 'web')) {
+foreach ($svc in @('postgres', 'mongo', 'locations', 'api', 'agent', 'web')) {
   $name = "local_triplanner-$svc"
   $status = docker inspect --format '{{.State.Health.Status}}' $name 2>$null
   if ($status -ne 'healthy') { Fail "$name is '$status'" }
@@ -31,11 +31,24 @@ $profile = Invoke-RestMethod -Uri "$Base/api/graphql" -Method Post -Headers $Hea
 if ($profile.data.getMyProfile.userId -ne 'demo-friend') { Fail "demo-friend profile" }
 Pass "GraphQL profile via web proxy"
 
-$searchBody = @{ query = 'query { searchLocations(q: "CN Tower") { id name imageUrl } }' } | ConvertTo-Json
+$searchBody = @{ query = 'query { searchLocations(q: "CN Tower") { id name placeId imageUrl } }' } | ConvertTo-Json
 $search = Invoke-RestMethod -Uri "$Base/api/graphql" -Method Post -Headers $HeadersUser -Body $searchBody
 $items = @($search.data.searchLocations)
 if ($items.Count -lt 1) { Fail "search returned no places" }
 Pass "Toronto place search ($($items.Count) results)"
+
+$activitiesBody = @{ query = 'query { listActivities(destSlug: "toronto", category: "food") { id name } }' } | ConvertTo-Json
+$activities = Invoke-RestMethod -Uri "$Base/api/graphql" -Method Post -Headers $HeadersUser -Body $activitiesBody
+if (@($activities.data.listActivities).Count -lt 1) { Fail "activities returned no places" }
+Pass "Toronto activities"
+
+$placeId = ($items | Where-Object { $_.placeId } | Select-Object -First 1).placeId
+if ($placeId) {
+  $detailsBody = @{ query = "query { locationDetails(placeId: `"$placeId`") { id name } }" } | ConvertTo-Json
+  $details = Invoke-RestMethod -Uri "$Base/api/graphql" -Method Post -Headers $HeadersUser -Body $detailsBody
+  if (-not $details.data.locationDetails.id) { Fail "location details empty" }
+  Pass "location details"
+}
 
 $imageItem = $items | Where-Object { $_.imageUrl } | Select-Object -First 1
 if ($imageItem) {

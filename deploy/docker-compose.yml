@@ -39,6 +39,24 @@ services:
       retries: 20
     restart: unless-stopped
 
+  # Owns MongoDB and the catalogue seed. Internal only: do not publish 4300.
+  locations:
+    build:
+      context: ..
+      dockerfile: backend/locations-service/Dockerfile
+    container_name: local_triplanner-locations
+    environment:
+      NODE_ENV: production
+      PORT: "4300"
+      MONGODB_URL: mongodb://mongo:27017/triplanner
+      MONGODB_COLLECTION: locations
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:-dev-internal-token}
+      SEED_CATALOGUE: "true"
+    depends_on:
+      mongo:
+        condition: service_healthy
+    restart: unless-stopped
+
   api:
     build:
       context: ..
@@ -48,6 +66,8 @@ services:
       NODE_ENV: production
       DATABASE_URL: postgres://triplanner:triplanner@postgres:5432/triplanner
       MONGODB_URL: mongodb://mongo:27017/triplanner
+      LOCATIONS_MODE: remote
+      LOCATIONS_URL: http://locations:4300
       APP_URL: http://localhost:${WEB_PORT:-3000}
       LOCAL_PORT: "4000"
       INTERNAL_TOKEN: ${INTERNAL_TOKEN:-dev-internal-token}
@@ -57,6 +77,8 @@ services:
       - uploads:/app/uploads
     depends_on:
       postgres:
+        condition: service_healthy
+      locations:
         condition: service_healthy
       mongo:
         condition: service_healthy

@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | Planned (M6) |
+| Status | M6c complete; M6d next |
 | Integration branch | `refactor/helm` |
 | Work branch | `refactor/helm-locations-service` (local only) |
 | Runtime | Bun + TypeScript |
@@ -69,8 +69,9 @@ agent (FastAPI) --/internal/*--> api                                    |
                                +-- broker --> email                      |
 ```
 
-- `locations` listens on `4100` inside the Compose network and the cluster;
-  only `api` may call it. Port 4100 is never published on the host.
+- `locations` listens on `4300` inside the Compose network and the cluster;
+  only `api` may call it. Port 4300 is never published on the host. The agent
+  keeps 4100.
 - `agent` keeps calling the API. Pointing the agent directly at the locations
   service is a later, separate decision.
 - Mongo listens on `27017`, reachable only from `locations`.
@@ -141,10 +142,11 @@ The API maps it to camelCase exactly as it does today.
 | Method | Route | Behaviour |
 |---|---|---|
 | `GET` | `/destinations` | Rows with a non-null `slug`, sorted by `name`. Returns `{ "items": LocationRow[] }`. |
-| `GET` | `/destinations/{slug}/activities?category=&limit=10` | Places with `parent_id=slug` and non-null `category`. Optional category filter. Sort: `rating` desc, `rating_count` desc, `name` asc. `limit` 1-50, default 10. |
+| `GET` | `/destinations/{slug}/activities?category=&limit=50` | Places with `parent_id=slug` and non-null `category`. Optional category filter. Sort: `rating` desc, `rating_count` desc, `name` asc. `limit` 1-200, default 50. |
 | `GET` | `/locations/search?q=&lat=&lng=&limit=100` | Token AND match over `name_lower`; places only. If `lat` and `lng` are present, keep rows within 75 km. Sort: `rating` desc, `rating_count` desc, `name` asc. `limit` 1-100, default 100. Empty `q` returns `{ "items": [] }`. |
 | `GET` | `/locations/{id}` | Single row by `id`; `404` when absent. |
 | `GET` | `/locations/by-place/{placeId}` | Single row by `place_id`; `404` when absent. |
+| `GET` | `/locations/by-data/{dataId}` | Single row by `data_id`; `404` when absent. |
 | `POST` | `/locations` | Guarded upsert, deduping by `place_id`, `data_id` then `id`. Used by the seed and future ingestion. Returns `{ "item": LocationRow }`. |
 | `POST` | `/seed` | Re-runs the committed dataset seed. Returns `{ "seeded": number }`. Disabled when `SEED_CATALOGUE=false`; `403 {"error":"SEED_DISABLED"}`. |
 
@@ -172,7 +174,7 @@ dependency is removed from the API in M6e, after acceptance.
 
 | Env var | Default | Purpose |
 |---|---|---|
-| `PORT` | `4100` | HTTP listen port |
+| `PORT` | `4300` | HTTP listen port |
 | `MONGODB_URL` | `mongodb://localhost:27017/triplanner` | Mongo connection |
 | `MONGODB_DB` | derived from the URL | Database name override |
 | `MONGODB_COLLECTION` | `locations` | Collection name |
@@ -189,7 +191,7 @@ only to Mongo.
 | Env var | Default | Purpose |
 |---|---|---|
 | `LOCATIONS_MODE` | `local` until M6c, then `remote` | `remote` calls the service; `local` keeps the in-process adapter for rollback |
-| `LOCATIONS_URL` | `http://localhost:4100` | Service base URL |
+| `LOCATIONS_URL` | `http://localhost:4300` | Service base URL |
 | `LOCATIONS_TIMEOUT_MS` | `2000` | Client timeout |
 | `INTERNAL_TOKEN` | existing | Shared internal token |
 
@@ -197,8 +199,8 @@ only to Mongo.
 
 - New `locations` service, built from `backend/locations-service`.
 - `depends_on: mongo: condition: service_healthy`.
-- Healthcheck: `curl -f http://localhost:4100/ready`.
-- API gets `LOCATIONS_MODE=remote`, `LOCATIONS_URL=http://locations:4100` and
+- Healthcheck: `curl -f http://localhost:4300/ready`.
+- API gets `LOCATIONS_MODE=remote`, `LOCATIONS_URL=http://locations:4300` and
   `depends_on: locations: condition: service_healthy`.
 - After M6e, the API no longer receives `MONGODB_URL` and no longer depends on
   `mongo`.
@@ -225,7 +227,7 @@ locationsService:
     tag: "0.1.0"
   service:
     type: ClusterIP
-    port: 4100
+    port: 4300
   mongo:
     url: mongodb://triplanner-mongo:27017/triplanner
   seed:
@@ -240,7 +242,7 @@ locationsService:
 
 api:
   locations:
-    serviceUrl: http://triplanner-locations:4100
+    serviceUrl: http://triplanner-locations:4300
     mode: remote
 ```
 
@@ -326,3 +328,23 @@ End-to-end:
   `/uploads/seed/*`. Keep the JSON as the single source of truth.
 - **gRPC**: deferred. Revisit after the locations HTTP contract has run in the
   demo for a release.
+
+## 13. Local evidence (M6c, 2026-11-21)
+
+- `backend/locations-service`: 16 tests pass, `bunx tsc --noEmit` clean; image
+  builds and starts as non-root.
+- `backend/server`: 77 tests pass, typecheck clean; 8 of those cover the remote
+  client and the GraphQL guard.
+- Compose: `locations` healthy, API logs `catálogo remoto
+  (http://locations:4300)` and seeds Postgres only.
+- GraphQL through the web proxy: destinations, search, activities and details
+  return Toronto data with `isFavorite` flags.
+- Agent path: `/internal/search-places`, `/internal/place-details` and
+  `/internal/places-cache/demo-trip` (186 places) work; `auto-suggest` and
+  suggestions pass in demo mode.
+- Failure injection: stopping `locations` returns
+  `LOCATIONS_UNAVAILABLE` in GraphQL and `503 LOCATIONS_UNAVAILABLE` on the
+  internal route; restart recovers.
+- `scripts/smoke.ps1` passes all checks, including the new activities and
+  details checks.
+- Port 4300 is used because the agent already owns 4100.
