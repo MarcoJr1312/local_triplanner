@@ -107,6 +107,9 @@ current tree.
   visibility and short-lived HMAC URLs.
 - Avatars and attachments are served same-origin through the web proxy.
 - Routes use Google Maps deep links; Uber deep links never preload a pickup.
+- Every Helm manifest for a namespaced kind sets
+  `metadata.namespace: {{ .Release.Namespace }}`. Cluster-scoped objects
+  (ClusterRole, ClusterRoleBinding) are the only exception and omit it.
 - Package manager is **bun** for JS projects; Python uses **uv**.
 
 ## Local commands
