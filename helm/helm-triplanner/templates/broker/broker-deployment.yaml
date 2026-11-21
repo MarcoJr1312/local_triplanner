@@ -29,7 +29,7 @@ spec:
       {{- end }}
     spec:
       serviceAccountName: {{ include "helm-triplanner.brokerServiceAccountName" . }}
-      automountServiceAccountToken: {{ .Values.broker.serviceAccount.automount }}
+      automountServiceAccountToken: {{ if .Values.broker.rbacProxy.enabled }}true{{ else }}{{ .Values.broker.serviceAccount.automount }}{{ end }}
       terminationGracePeriodSeconds: 30
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
@@ -63,6 +63,41 @@ spec:
             {{- toYaml .Values.broker.resources | nindent 12 }}
           securityContext:
             {{- toYaml .Values.broker.securityContext | nindent 12 }}
+        {{- if .Values.broker.rbacProxy.enabled }}
+        - name: kube-rbac-proxy
+          image: "{{ .Values.broker.rbacProxy.image.repository }}:{{ .Values.broker.rbacProxy.image.tag }}"
+          imagePullPolicy: {{ .Values.broker.rbacProxy.image.pullPolicy | default "IfNotPresent" }}
+          args:
+            - --insecure-listen-address=0.0.0.0:{{ .Values.broker.rbacProxy.port }}
+            - --upstream=http://127.0.0.1:{{ .Values.broker.service.port }}/
+            - --config-file=/etc/kube-rbac-proxy/config-file.yaml
+          ports:
+            - name: rbac-proxy
+              containerPort: {{ .Values.broker.rbacProxy.port }}
+              protocol: TCP
+          volumeMounts:
+            - name: rbac-proxy-config
+              mountPath: /etc/kube-rbac-proxy
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+          livenessProbe:
+            tcpSocket:
+              port: rbac-proxy
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            tcpSocket:
+              port: rbac-proxy
+            initialDelaySeconds: 3
+            periodSeconds: 5
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.broker.rbacProxy.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.broker.rbacProxy.securityContext | nindent 12 }}
+        {{- end }}
       volumes:
         - name: broker-data
           {{- if .Values.broker.persistence.enabled }}
@@ -73,6 +108,11 @@ spec:
           {{- end }}
         - name: tmp
           emptyDir: {}
+        {{- if .Values.broker.rbacProxy.enabled }}
+        - name: rbac-proxy-config
+          configMap:
+            name: triplanner-kafka-rbac-proxy
+        {{- end }}
       {{- with .Values.broker.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

@@ -43,12 +43,41 @@ broker:
     name: ""
     automount: false
     annotations: {}
-  # Service identity/RBAC. The service does not call the Kubernetes API; the
-  # role is intentionally empty. Switch kind to Role for namespace-scoped RBAC.
+  # Must stay ClusterRole while rbacProxy.enabled: TokenReview and
+  # SubjectAccessReview are cluster-scoped and the chart adds those rules.
+  # Add any extra service rules here.
   rbac:
     create: true
     kind: ClusterRole
     rules: []
+  # Local demo: HTTP 8443 for kubectl port-forward only. Never expose it.
+  rbacProxy:
+    enabled: true
+    image:
+      repository: quay.io/brancz/kube-rbac-proxy
+      tag: v0.23.1
+      pullPolicy: IfNotPresent
+    port: 8443
+    config:
+      apiVersion: v1
+      resource: services
+      subresource: proxy
+      name: triplanner-kafka
+    resources:
+      requests:
+        cpu: 10m
+        memory: 32Mi
+      limits:
+        cpu: 100m
+        memory: 64Mi
+    securityContext:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      runAsNonRoot: true
+      runAsUser: 65532
+      runAsGroup: 65532
+      capabilities:
+        drop: [ "ALL" ]
   podAnnotations: {}
   podLabels: {}
   podSecurityContext:
@@ -119,12 +148,41 @@ emailService:
     name: ""
     automount: false
     annotations: {}
-  # Service identity/RBAC. The service does not call the Kubernetes API; the
-  # role is intentionally empty. Switch kind to Role for namespace-scoped RBAC.
+  # Must stay ClusterRole while rbacProxy.enabled: TokenReview and
+  # SubjectAccessReview are cluster-scoped and the chart adds those rules.
+  # Add any extra service rules here.
   rbac:
     create: true
     kind: ClusterRole
     rules: []
+  # Local demo: HTTP 8443 for kubectl port-forward only. Never expose it.
+  rbacProxy:
+    enabled: true
+    image:
+      repository: quay.io/brancz/kube-rbac-proxy
+      tag: v0.23.1
+      pullPolicy: IfNotPresent
+    port: 8443
+    config:
+      apiVersion: v1
+      resource: services
+      subresource: proxy
+      name: triplanner-email
+    resources:
+      requests:
+        cpu: 10m
+        memory: 32Mi
+      limits:
+        cpu: 100m
+        memory: 64Mi
+    securityContext:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      runAsNonRoot: true
+      runAsUser: 65532
+      runAsGroup: 65532
+      capabilities:
+        drop: [ "ALL" ]
 
   broker:
     url: http://triplanner-kafka:8080

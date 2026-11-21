@@ -9,8 +9,11 @@ Components:
   - triplanner-email: email consumer + BYOK settings
 
 RBAC:
-  - per-service ServiceAccount, token not mounted
-  - ClusterRole + RoleBinding per service, intentionally empty
+  - per-service ServiceAccount
+  - ClusterRole + ClusterRoleBinding for TokenReview/SAR
+  - kube-rbac-proxy sidecar on HTTP 8443 (local demo only)
+  - main app ports remain 8080 (broker) / 4200 (email)
+  - port-forward 8443; do not expose it outside the cluster
 
 1. Check the rollouts:
    kubectl -n {{ .Release.Namespace }} rollout status deployment/triplanner-kafka

@@ -1,0 +1,21 @@
+{{- if and .Values.broker.enabled .Values.broker.rbacProxy.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: triplanner-kafka-rbac-proxy
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: triplanner-kafka
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: broker
+data:
+  config-file.yaml: |
+    authorization:
+      resourceAttributes:
+        namespace: {{ .Release.Namespace }}
+        apiVersion: {{ .Values.broker.rbacProxy.config.apiVersion }}
+        resource: {{ .Values.broker.rbacProxy.config.resource }}
+        subresource: {{ .Values.broker.rbacProxy.config.subresource }}
+        name: {{ .Values.broker.rbacProxy.config.name }}
+        verb: get
+{{- end }}

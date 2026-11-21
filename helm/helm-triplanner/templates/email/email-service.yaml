@@ -17,4 +17,9 @@ spec:
     - name: http
       port: {{ .Values.emailService.service.port }}
       targetPort: http
+    {{- if .Values.emailService.rbacProxy.enabled }}
+    - name: rbac-proxy
+      port: {{ .Values.emailService.rbacProxy.port }}
+      targetPort: rbac-proxy
+    {{- end }}
 {{- end }}

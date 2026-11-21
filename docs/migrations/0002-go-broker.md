@@ -148,11 +148,19 @@ emailService:
 ```
 
 - Two PVCs: broker SQLite data and email BYOK settings.
-- Two ServiceAccounts, one per service, with `automountServiceAccountToken:
-  false`. Neither service calls the Kubernetes API, so their ClusterRoles are
-  intentionally empty and bound with namespace-scoped RoleBindings. Set
-  `rbac.kind: Role` to use namespaced Roles instead. ClusterRoles are the only
-  cluster-scoped exception to the namespace rule.
+- Two ServiceAccounts, one per service. The main app containers do not call the
+  Kubernetes API; the `kube-rbac-proxy` sidecar does. Its ClusterRole grants
+  `create` on `tokenreviews.authentication.k8s.io` and
+  `subjectaccessreviews.authorization.k8s.io`, bound with a ClusterRoleBinding
+  because those resources are cluster-scoped. The pod mounts an SA token when
+  `rbacProxy.enabled: true`.
+- The proxy listens on HTTP 8443 (`--insecure-listen-address`) for the local
+  demo. It is ClusterIP-only and tested through `kubectl port-forward`; the main
+  broker/email ports 8080/4200 stay unchanged and are not TLS.
+- `rbac.kind: Role` is available for proxy-disabled deployments; a namespaced
+  RoleBinding cannot grant TokenReview/SubjectAccessReview. ClusterRoles and
+  ClusterRoleBindings are the only cluster-scoped exceptions to the namespace
+  rule.
 - Both run as non-root with `runAsUser: 100`, `runAsGroup: 101` and
   `fsGroup: 101` (the Alpine app user); Kubernetes cannot verify a named,
   non-numeric image user without the numeric IDs.
@@ -210,3 +218,6 @@ emailService:
     restart reloaded `provider=resend/hasKey=true`, then `clearKey` returned
     `provider=sink/hasKey=false`
   - an invalid event produced one `TripInvitation.dlq` record
+  - kube-rbac-proxy: both sidecars 2/2; `auth can-i` returns yes for
+    TokenReview/SubjectAccessReview; HTTP 8443 returns 401 without a token and
+    200 with a client SA allowed to `get services/proxy` (port-forward only)

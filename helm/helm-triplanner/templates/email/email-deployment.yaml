@@ -29,7 +29,7 @@ spec:
       {{- end }}
     spec:
       serviceAccountName: {{ include "helm-triplanner.emailServiceAccountName" . }}
-      automountServiceAccountToken: {{ .Values.emailService.serviceAccount.automount }}
+      automountServiceAccountToken: {{ if .Values.emailService.rbacProxy.enabled }}true{{ else }}{{ .Values.emailService.serviceAccount.automount }}{{ end }}
       terminationGracePeriodSeconds: 30
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
@@ -111,6 +111,41 @@ spec:
             {{- toYaml .Values.emailService.resources | nindent 12 }}
           securityContext:
             {{- toYaml .Values.emailService.securityContext | nindent 12 }}
+        {{- if .Values.emailService.rbacProxy.enabled }}
+        - name: kube-rbac-proxy
+          image: "{{ .Values.emailService.rbacProxy.image.repository }}:{{ .Values.emailService.rbacProxy.image.tag }}"
+          imagePullPolicy: {{ .Values.emailService.rbacProxy.image.pullPolicy | default "IfNotPresent" }}
+          args:
+            - --insecure-listen-address=0.0.0.0:{{ .Values.emailService.rbacProxy.port }}
+            - --upstream=http://127.0.0.1:{{ .Values.emailService.service.port }}/
+            - --config-file=/etc/kube-rbac-proxy/config-file.yaml
+          ports:
+            - name: rbac-proxy
+              containerPort: {{ .Values.emailService.rbacProxy.port }}
+              protocol: TCP
+          volumeMounts:
+            - name: rbac-proxy-config
+              mountPath: /etc/kube-rbac-proxy
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+          livenessProbe:
+            tcpSocket:
+              port: rbac-proxy
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            tcpSocket:
+              port: rbac-proxy
+            initialDelaySeconds: 3
+            periodSeconds: 5
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.emailService.rbacProxy.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.emailService.rbacProxy.securityContext | nindent 12 }}
+        {{- end }}
       volumes:
         - name: email-settings
           {{- if .Values.emailService.persistence.enabled }}
@@ -121,6 +156,11 @@ spec:
           {{- end }}
         - name: tmp
           emptyDir: {}
+        {{- if .Values.emailService.rbacProxy.enabled }}
+        - name: rbac-proxy-config
+          configMap:
+            name: triplanner-email-rbac-proxy
+        {{- end }}
       {{- with .Values.emailService.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

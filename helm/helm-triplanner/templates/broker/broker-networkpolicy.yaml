@@ -26,10 +26,18 @@ spec:
       ports:
         - port: {{ .Values.broker.service.port }}
           protocol: TCP
+    {{- if .Values.broker.rbacProxy.enabled }}
+    - ports:
+        - port: {{ .Values.broker.rbacProxy.port }}
+          protocol: TCP
+    {{- end }}
   egress:
     - ports:
         - port: 53
           protocol: UDP
         - port: 53
+          protocol: TCP
+    - ports:
+        - port: 443
           protocol: TCP
 {{- end }}

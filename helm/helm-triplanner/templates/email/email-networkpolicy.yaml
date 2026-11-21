@@ -23,6 +23,11 @@ spec:
       ports:
         - port: {{ .Values.emailService.service.port }}
           protocol: TCP
+    {{- if .Values.emailService.rbacProxy.enabled }}
+    - ports:
+        - port: {{ .Values.emailService.rbacProxy.port }}
+          protocol: TCP
+    {{- end }}
   egress:
     - to:
         - podSelector:
