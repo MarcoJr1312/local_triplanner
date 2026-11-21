@@ -9,6 +9,7 @@ import { isTripMember } from './pg/trips.ts';
 import { favoriteIdsForUser } from './pg/favorites.ts';
 import { listUserInterests } from './pg/interests.ts';
 import { searchLocationsWithCatalogue } from './catalogue/search.ts';
+import { CatalogueUnavailableError } from './catalogue/remote.ts';
 import type { LocationCatalogue } from './catalogue/types.ts';
 import type { AsyncDb } from './pg/db.ts';
 import type { LocationRow, TripRow } from './schema-types.ts';
@@ -358,6 +359,10 @@ async function dispatch(deps: InternalDeps, req: IncomingMessage, res: ServerRes
     }
     json(res, 404, { error: 'NOT_FOUND', message: 'Ruta interna no encontrada.' });
   } catch (e) {
+    if (e instanceof CatalogueUnavailableError) {
+      json(res, 503, { error: 'LOCATIONS_UNAVAILABLE', message: 'El catálogo no está disponible.' });
+      return;
+    }
     json(res, 500, {
       error: 'INTERNAL_ERROR',
       message: e instanceof Error ? e.message : 'Error interno.',

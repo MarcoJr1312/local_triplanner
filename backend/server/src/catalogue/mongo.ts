@@ -3,8 +3,9 @@
 // matching over `name_lower`, which is enough at demo scale.
 
 import { MongoClient, type Collection, type Db } from 'mongodb';
+import { distanceKm } from '../geo.ts';
 import type { LocationRow, UpsertLocationInput } from '../schema-types.ts';
-import { LOCATION_FIELDS, tokenize, type LocationCatalogue } from './types.ts';
+import { LOCATION_FIELDS, SEARCH_RADIUS_KM, tokenize, type LocationCatalogue } from './types.ts';
 
 export const DEFAULT_MONGO_URL = 'mongodb://localhost:27017/triplanner';
 export const DEFAULT_COLLECTION = 'locations';
@@ -106,7 +107,11 @@ export class MongoLocationCatalogue implements LocationCatalogue {
     return row;
   }
 
-  async search(q: string, limit = 20): Promise<LocationRow[]> {
+  async search(
+    q: string,
+    limit = 20,
+    options: { lat?: number | null; lng?: number | null } = {},
+  ): Promise<LocationRow[]> {
     const tokens = tokenize(q).slice(0, 4);
     if (tokens.length === 0) return [];
     const filters = tokens.map((token) => ({
@@ -114,9 +119,19 @@ export class MongoLocationCatalogue implements LocationCatalogue {
     }));
     const docs = await this.collection
       .find({ $and: [{ category: { $exists: true, $ne: null } }, ...filters] })
-      .limit(Math.min(Math.max(limit, 1), 100))
+      .limit(100)
       .toArray();
-    return docs.map(toRow).filter((row): row is LocationRow => row !== null);
+    const rows = docs.map(toRow).filter((row): row is LocationRow => row !== null);
+    const within =
+      options.lat == null || options.lng == null
+        ? rows
+        : rows.filter(
+            (row) =>
+              row.lat != null &&
+              row.lng != null &&
+              distanceKm(options.lat!, options.lng!, row.lat, row.lng) <= SEARCH_RADIUS_KM,
+          );
+    return within.slice(0, Math.min(Math.max(limit, 1), 100));
   }
 
   async listDestinations(): Promise<LocationRow[]> {

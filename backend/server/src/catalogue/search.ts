@@ -6,9 +6,7 @@ import { distanceKm } from '../geo.ts';
 import type { AsyncDb } from '../pg/db.ts';
 import { favoriteIdsForUser } from '../pg/favorites.ts';
 import type { LocationRow } from '../schema-types.ts';
-import type { LocationCatalogue } from './types.ts';
-
-const SEARCH_RADIUS_KM = 75;
+import { SEARCH_RADIUS_KM, type LocationCatalogue } from './types.ts';
 
 export interface CatalogueSearchOptions {
   lat?: number | null;
@@ -42,7 +40,7 @@ export async function searchCatalogue(
   limit = 20,
   userId?: string | null,
 ): Promise<LocationRow[]> {
-  const rows = await catalogue.search(q, 100);
+  const rows = await catalogue.search(q, 100, { lat: options.lat, lng: options.lng });
   const favorites = userId ? await favoriteIdsForUser(db, userId) : new Set<string>();
   const filtered = withinRadius(rows, options.lat, options.lng);
   return rank(filtered, favorites).slice(0, limit);

@@ -9,6 +9,7 @@ import { migrate } from './db/migrate.ts';
 import { resolveDatabaseUrl } from './pg/config.ts';
 import { ensureDemoUsers, getCurrentUserId } from './pg/auth.ts';
 import { createCatalogue } from './catalogue/index.ts';
+import { guardCatalogue } from './catalogue/guard.ts';
 import { defaultStorage } from './storage.ts';
 import {
   PORT,
@@ -29,6 +30,7 @@ if (BOOTSTRAP_LOCAL) {
 await ensureDemoUsers(db);
 
 const catalogue = await createCatalogue();
+const gqlCatalogue = guardCatalogue(catalogue);
 const storage = defaultStorage();
 const pubsub = createPubSub() as unknown as PubSub;
 
@@ -43,7 +45,7 @@ const yoga = createYoga({
   schema,
   context: async ({ request }: { request: Request }): Promise<Ctx> => ({
     db,
-    catalogue,
+    catalogue: gqlCatalogue,
     storage,
     pubsub,
     currentUserId: getCurrentUserId(request),

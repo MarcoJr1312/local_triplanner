@@ -11,6 +11,7 @@ import { migrate } from './db/migrate.ts';
 import { PgDb } from './pg/db.ts';
 import { resolveDatabaseUrl } from './pg/config.ts';
 import { createCatalogue } from './catalogue/index.ts';
+import { LOCATIONS_MODE, LOCATIONS_URL } from './env.ts';
 import { uploadsRoot } from './storage.ts';
 import type { LocationCatalogue } from './catalogue/types.ts';
 import type { AsyncDb } from './pg/db.ts';
@@ -207,8 +208,12 @@ export async function seedDemo(db: AsyncDb, activities: SeedActivity[] = []): Pr
   }
 }
 
-export async function seedAll(catalogue: LocationCatalogue, db: AsyncDb, data: SeedData): Promise<number> {
-  const locations = await seedCatalogue(catalogue, data);
+export async function seedAll(
+  catalogue: LocationCatalogue | null,
+  db: AsyncDb,
+  data: SeedData,
+): Promise<number> {
+  const locations = catalogue ? await seedCatalogue(catalogue, data) : 0;
   await seedDemo(db, data.destinations[0]?.activities ?? []);
   return locations;
 }
@@ -219,16 +224,20 @@ if (import.meta.main) {
 
   await migrate(url);
   const db = await PgDb.connect(url);
-  const catalogue = await createCatalogue();
+  const catalogue = LOCATIONS_MODE === 'local' ? await createCatalogue() : null;
   try {
     const images = copySeedImages();
     const total = await seedAll(catalogue, db, data);
-    const destinations = await catalogue.listDestinations();
-    console.log(
-      `Seed OK — ${destinations.length} destinos, ${total - destinations.length} actividades, ${images} imágenes`,
-    );
+    if (catalogue) {
+      const destinations = await catalogue.listDestinations();
+      console.log(
+        `Seed OK — ${destinations.length} destinos, ${total - destinations.length} actividades, ${images} imágenes`,
+      );
+    } else {
+      console.log(`Seed OK — Postgres listo; catálogo remoto (${LOCATIONS_URL}), ${images} imágenes`);
+    }
   } finally {
     await db.close();
-    await catalogue.close();
+    await catalogue?.close();
   }
 }

@@ -1196,6 +1196,7 @@ export const resolvers: {
         );
         return { locationId, favorite: state };
       } catch (e) {
+        if (e instanceof GraphQLError) throw e;
         throw gqlError('FAVORITE_SAVE_FAILED', e instanceof Error ? e.message : 'No se pudo actualizar el favorito.');
       }
     },

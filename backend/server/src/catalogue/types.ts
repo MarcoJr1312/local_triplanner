@@ -3,14 +3,13 @@
 
 import type { LocationRow, UpsertLocationInput } from '../schema-types.ts';
 
-export interface LocationCatalogue {
-  /** Insert or update, deduping by place_id/data_id when present. */
+export interface LocationCatalogue {  /** Insert or update, deduping by place_id/data_id when present. */
   upsert(loc: UpsertLocationInput): Promise<LocationRow>;
   getById(id: string): Promise<LocationRow | null>;
   getByPlaceId(placeId: string): Promise<LocationRow | null>;
   getByDataId(dataId: string): Promise<LocationRow | null>;
   /** Token AND match over the lowercased name; places only (category set). */
-  search(q: string, limit?: number): Promise<LocationRow[]>;
+  search(q: string, limit?: number, options?: { lat?: number | null; lng?: number | null }): Promise<LocationRow[]>;
   /** Rows with a slug (destinations). */
   listDestinations(): Promise<LocationRow[]>;
   /** Places whose parent is this destination. */
@@ -19,7 +18,11 @@ export interface LocationCatalogue {
   listPlaces(): Promise<LocationRow[]>;
   /** Test/seed helper. */
   clear(): Promise<void>;
+  /** Releases the underlying connection, when any. */
+  close(): Promise<void>;
 }
+
+export const SEARCH_RADIUS_KM = 75;
 
 export function tokenize(q: unknown): string[] {
   return String(q ?? '')
