@@ -1,10 +1,10 @@
 apiVersion: v2
 name: helm-triplanner
-description: Triplanner demo email pipeline (Go HTTP broker + email consumer with BYOK)
+description: Triplanner local demo services (Go HTTP broker, email consumer, locations catalogue + MongoDB)
 type: application
 
 # Chart version. Bump on chart changes.
-version: 0.2.0
+version: 0.3.0
 
 # Version of the deployed application images.
 appVersion: "0.1.0"

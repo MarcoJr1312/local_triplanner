@@ -1,0 +1,21 @@
+{{- if .Values.mongo.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: triplanner-mongo
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: triplanner-mongo
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: mongo
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: triplanner-mongo
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  ports:
+    - name: mongodb
+      port: {{ .Values.mongo.service.port }}
+      targetPort: mongodb
+      protocol: TCP
+{{- end }}

@@ -13,5 +13,7 @@ services:
       BROKER_URL: http://host.docker.internal:8080
       BROKER_TOPIC: TripInvitation
       EMAIL_SERVICE_URL: http://host.docker.internal:4200
+      LOCATIONS_MODE: remote
+      LOCATIONS_URL: http://host.docker.internal:4300
     extra_hosts:
       - "host.docker.internal:host-gateway"

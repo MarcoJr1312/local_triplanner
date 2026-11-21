@@ -1,7 +1,8 @@
 # helm-triplanner
 
-Helm chart for the Triplanner demo email pipeline: a Go HTTP broker and the
-email consumer with BYOK settings.
+Helm chart for the Triplanner demo services: a Go HTTP broker, the email
+consumer with BYOK settings, and the locations/activities catalogue with its
+single-node MongoDB StatefulSet.
 
 ## Layout
 
@@ -25,6 +26,18 @@ templates/
     email-service.yaml
     email-serviceaccount.yaml
     email-test.yaml
+  locations/
+    locations-deployment.yaml
+    locations-networkpolicy.yaml
+    locations-rbac-proxy.yaml
+    locations-rbac.yaml
+    locations-service.yaml
+    locations-serviceaccount.yaml
+    locations-test.yaml
+  mongo/
+    mongo-networkpolicy.yaml
+    mongo-service.yaml
+    mongo-statefulset.yaml
   NOTES.txt
   _helpers.tpl
 values.yaml
@@ -40,6 +53,7 @@ Each workload has its own ServiceAccount:
 
 - `triplanner-helm-triplanner-broker`
 - `triplanner-helm-triplanner-email`
+- `triplanner-helm-triplanner-locations`
 
 The main app containers do not use the Kubernetes API. The
 `kube-rbac-proxy` sidecar does: it needs `create` on
@@ -62,12 +76,16 @@ This is a local demo: the sidecar listens with
 ```bash
 kubectl -n triplanner port-forward svc/triplanner-kafka 8443:8443
 curl -i http://localhost:8443/ready          # 401 without a token
+
+kubectl -n triplanner port-forward svc/triplanner-locations 8443:8443
+curl -i http://localhost:8443/ready
 ```
 
 A client token must be allowed to `get` `services/proxy` for the service name in
 the proxy ConfigMap. The proxy returns 403 for an authenticated but unauthorized
-token, and proxies the upstream on success. The main broker/email HTTP ports
-(8080/4200) remain available to the app; 8443 is the RBAC-protected path.
+token, and proxies the upstream on success. The main broker/email/locations HTTP
+ports (8080/4200/4300) remain available to the app; 8443 is the RBAC-protected
+path.
 
 ClusterRoles and ClusterRoleBindings are cluster-scoped and therefore do not
 have `metadata.namespace`; every namespaced object still uses
@@ -84,10 +102,11 @@ kubectl create namespace triplanner
 
 Prerequisites:
 
-- A default StorageClass for the two PVCs.
+- A default StorageClass for the three PVCs (broker, email settings, Mongo).
 - The `triplanner-internal` Secret with `INTERNAL_TOKEN`.
-- Images published at `marcojr13/triplanner-kafka:0.1.0` and
-  `marcojr13/triplanner-email:0.1.0` (or override `images.*`).
+- Images published at `marcojr13/triplanner-kafka:0.1.0`,
+  `marcojr13/triplanner-email:0.1.0` and
+  `marcojr13/triplanner-locations:0.1.0` (or override `images.*`).
 
 ```bash
 kubectl create namespace triplanner
@@ -110,6 +129,10 @@ kubectl -n triplanner get pods
 kubectl -n triplanner port-forward svc/triplanner-email 4200:4200
 curl http://localhost:4200/health
 curl http://localhost:4200/ready
+
+kubectl -n triplanner port-forward svc/triplanner-locations 4300:4300
+curl http://localhost:4300/health
+curl http://localhost:4300/ready
 ```
 
 Test hook pods are deleted after success via
@@ -121,4 +144,11 @@ keep the pod for logs.
 ```bash
 helm uninstall triplanner -n triplanner
 kubectl delete namespace triplanner
+```
+
+The Mongo StatefulSet keeps its `data-triplanner-mongo-0` PVC after uninstall;
+delete it explicitly to reset the catalogue:
+
+```bash
+kubectl -n triplanner delete pvc -l app.kubernetes.io/name=triplanner-mongo
 ```

@@ -1,0 +1,21 @@
+{{- if and .Values.locationsService.enabled .Values.locationsService.rbacProxy.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: triplanner-locations-rbac-proxy
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: triplanner-locations
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: locations
+data:
+  config-file.yaml: |
+    authorization:
+      resourceAttributes:
+        namespace: {{ .Release.Namespace }}
+        apiVersion: {{ .Values.locationsService.rbacProxy.config.apiVersion }}
+        resource: {{ .Values.locationsService.rbacProxy.config.resource }}
+        subresource: {{ .Values.locationsService.rbacProxy.config.subresource }}
+        name: {{ .Values.locationsService.rbacProxy.config.name }}
+        verb: get
+{{- end }}

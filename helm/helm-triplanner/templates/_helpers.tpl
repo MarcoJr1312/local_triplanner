@@ -61,3 +61,7 @@ needs Kubernetes API permissions in the current design.
 {{- define "helm-triplanner.emailServiceAccountName" -}}
 {{- default (printf "%s-email" (include "helm-triplanner.fullname" .)) .Values.emailService.serviceAccount.name }}
 {{- end }}
+
+{{- define "helm-triplanner.locationsServiceAccountName" -}}
+{{- default (printf "%s-locations" (include "helm-triplanner.fullname" .)) .Values.locationsService.serviceAccount.name }}
+{{- end }}

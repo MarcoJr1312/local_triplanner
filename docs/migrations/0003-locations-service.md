@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | M6c complete; M6d next |
+| Status | M6d complete; M6e next |
 | Integration branch | `refactor/helm` |
 | Work branch | `refactor/helm-locations-service` (local only) |
 | Runtime | Bun + TypeScript |
@@ -348,3 +348,24 @@ End-to-end:
 - `scripts/smoke.ps1` passes all checks, including the new activities and
   details checks.
 - Port 4300 is used because the agent already owns 4100.
+
+### M6d Helm acceptance (2026-11-21)
+
+- Chart `0.3.0`: `helm lint` clean; kubeconform strict 24/24 on the default
+  render, 28/28 with NetworkPolicies enabled and 21/21 in proxy-disabled Role
+  mode.
+- Namespace audit: 22 namespaced objects, 0 without
+  `metadata.namespace`; ClusterRole/Binding are the only cluster-scoped
+  objects.
+- Docker Desktop: `triplanner-mongo-0` 1/1 and `triplanner-locations` 2/2
+  (app + sidecar); both `/ready` checks pass and the service reports 187
+  seeded places.
+- `helm test`: email and locations suites both `Succeeded`.
+- Locations proxy: 401 without a token, 403 with an authenticated unauthorized
+  token, 200 with a client SA allowed `get services/proxy`.
+- API cutover against the cluster: with the Compose locations container
+  stopped, the API reached the chart service through
+  `host.docker.internal:4300` and served destinations, search and activities;
+  normal Compose smoke passes after restoring the local service.
+- Mongo runs as non-root with a read-only root filesystem, `/data/db` on the
+  `data-triplanner-mongo-0` PVC and `/tmp` on emptyDir.

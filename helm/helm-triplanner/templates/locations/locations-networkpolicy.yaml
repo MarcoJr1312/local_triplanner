@@ -1,0 +1,45 @@
+{{- if and .Values.locationsService.enabled .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: triplanner-locations
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: triplanner-locations
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: locations
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: triplanner-locations
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: triplanner-api
+      ports:
+        - port: {{ .Values.locationsService.service.port }}
+          protocol: TCP
+    {{- if .Values.locationsService.rbacProxy.enabled }}
+    - ports:
+        - port: {{ .Values.locationsService.rbacProxy.port }}
+          protocol: TCP
+    {{- end }}
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: triplanner-mongo
+      ports:
+        - port: {{ .Values.mongo.service.port }}
+          protocol: TCP
+    - ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+{{- end }}
