@@ -126,13 +126,38 @@ in **Profile → Email delivery**. No Resend Secret is required.
 ```bash
 helm test triplanner -n triplanner
 kubectl -n triplanner get pods
-kubectl -n triplanner port-forward svc/triplanner-email 4200:4200
-curl http://localhost:4200/health
-curl http://localhost:4200/ready
+```
 
-kubectl -n triplanner port-forward svc/triplanner-locations 4300:4300
-curl http://localhost:4300/health
-curl http://localhost:4300/ready
+Or forward every service with one command:
+
+```bash
+# Windows
+powershell -ExecutionPolicy Bypass -File scripts/port-forward.ps1
+
+# macOS / Linux / Git Bash
+bash scripts/port-forward.sh
+```
+
+| Local | Service | Notes |
+|---|---|---|
+| `8080` | `triplanner-kafka` | app port |
+| `4200` | `triplanner-email` | app port |
+| `4300` | `triplanner-locations` | app port |
+| `8443` | broker `kube-rbac-proxy` | with `-Proxy` / `--proxy` |
+| `8444` | email `kube-rbac-proxy` | with `-Proxy` / `--proxy` |
+| `8445` | locations `kube-rbac-proxy` | with `-Proxy` / `--proxy` |
+| `27018` | MongoDB | with `-Mongo` / `--mongo`; avoids Compose on 27017 |
+
+App ports bind `0.0.0.0` by default so Compose containers can use
+`host.docker.internal`; do not run this on an untrusted network. Proxy and Mongo
+ports bind `127.0.0.1` only. Stop with `... -Stop` / `--stop`.
+
+If your shell resolves a different `kubectl` (WSL, Git Bash), set `KUBECTL`
+to the Docker Desktop binary, for example:
+
+```bash
+KUBECTL='/mnt/c/Program Files/Docker/Docker/resources/bin/kubectl.exe' \
+  bash scripts/port-forward.sh
 ```
 
 Test hook pods are deleted after success via

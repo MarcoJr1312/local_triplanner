@@ -131,6 +131,18 @@ docker compose down -v    # reset data, re-seed on next start
 docker compose logs -f api
 ```
 
+### Cluster demo (optional)
+
+The chart in `helm/helm-triplanner` runs the broker, email, locations and MongoDB
+on a local cluster. See the [chart README](helm/helm-triplanner/README.md), then
+forward the services with one command:
+
+```bash
+powershell -ExecutionPolicy Bypass -File scripts/port-forward.ps1 -Proxy
+# or
+bash scripts/port-forward.sh --proxy
+```
+
 ### What to try
 
 1. Open the seeded Toronto trip (Dec 4–6, 2026).
