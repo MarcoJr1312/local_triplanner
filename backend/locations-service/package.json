@@ -1,0 +1,21 @@
+{
+  "name": "triplanner-locations-service",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "MongoDB-backed destinations and activities catalogue for Triplanner.",
+  "scripts": {
+    "start": "bun src/index.ts",
+    "dev": "bun --watch src/index.ts",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "mongodb": "^7.9.0"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.4.5",
+    "@types/node": "^26.6.5",
+    "typescript": "^7.0.2"
+  }
+}
