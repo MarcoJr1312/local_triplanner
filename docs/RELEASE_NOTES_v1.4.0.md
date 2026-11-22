@@ -75,7 +75,7 @@
 - Local image digests (single-host build; CI publish digests pending):
   - users `0.1.0` `sha256:c762d22307fb498fa176c04ceaf765aa087f19d4e1e17a885d2ac0d665b5b0dc`
   - trips `0.1.1` `sha256:7bbff00deff78f710ed57d6c0bcad11bfd94d64dc43d29eee514d017bd81f344`
-  - API `1.3.0` `sha256:79ef3029c4500f8f16d76ee9769d0f701a579ae88893f531ee1119454ffe100d`
+  - API `1.3.0` `sha256:7be0a766866f9554b92bb7038361ce36e3b60f7f4c2be3572245650d031299f8`
   - web `1.3.0` `sha256:c60d77705f37085d2e6ec01c0f34f54f4411dcca32d830633d76020eea9b8ed5`
 
 ## Pending before publish
