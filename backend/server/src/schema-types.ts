@@ -70,11 +70,12 @@ export interface InvitationRow {
 export interface Profile {
   userId: string;
   username: string;
-  email: string;
+  email: string | null;
   displayName: string;
   color?: string | null;
   avatarUrl?: string | null;
   language?: string | null;
+  deletedAt?: string | null;
 }
 
 export interface Destination {

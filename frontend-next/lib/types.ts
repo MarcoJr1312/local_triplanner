@@ -7,18 +7,19 @@ export type MemberRole = 'owner' | 'editor' | 'viewer';
 export interface UserProfile {
   userId: string;
   username: string;
-  email: string;
+  email: string | null;
   displayName: string;
   color?: string | null;
   avatarUrl?: string | null;
   language?: 'es' | 'en' | null;
+  deletedAt?: string | null;
 }
 
 export interface Member {
   userId: string;
   username?: string | null;
   displayName: string;
-  email: string;
+  email: string | null;
   invitedEmail?: string | null;
   role: MemberRole;
   joinedAt?: string | null;

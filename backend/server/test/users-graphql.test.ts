@@ -12,6 +12,7 @@ import type { PgDb } from '../src/pg/db.ts';
 import { resolvers, type Ctx, type PubSub } from '../src/resolvers.ts';
 import { loadTypeDefs } from '../src/schema.ts';
 import { LocalUsersStore } from '../src/users/local.ts';
+import { usersError } from '../src/users/errors.ts';
 import type { UserRecord } from '../src/users/types.ts';
 import type { TripData, TripsStore } from '../src/trips/types.ts';
 import type { InvitationRow } from '../src/schema-types.ts';
@@ -26,6 +27,7 @@ let subscriber: UserRecord;
 let tripId: string;
 let invitation: InvitationRow | null = null;
 const localInvites = new Map<string, InvitationRow>();
+const revokedInvitations = new Set<string>();
 const published: { topic: string; payload: unknown }[] = [];
 const bus = createPubSub();
 const ownedTrips = new Map<string, { role: 'owner' | 'editor' | 'viewer' }[]>();
@@ -116,6 +118,16 @@ const trips = {
   async declineLocalInvitation() {
     assert.ok(invitation);
     invitation.status = 'declined';
+    return invitation;
+  },
+  async revokeLocalInvitation(
+    _userId: string,
+    _tripId: string,
+    invitationId: string,
+  ) {
+    assert.ok(invitation);
+    revokedInvitations.add(invitationId);
+    invitation.status = 'revoked';
     return invitation;
   },
   async isMember() {
@@ -308,7 +320,11 @@ describe('users and local invites over GraphQL', () => {
       invitee.id,
       { id: invite.notificationId },
     );
-    assert.equal(codeOf(again), 'INVITE_ALREADY_USED');
+    assert.equal(again.errors, undefined);
+    assert.equal(
+      (again.data as { acceptTripLocalInvite: { id: string } }).acceptTripLocalInvite.id,
+      tripId,
+    );
   });
 
   test('marks read and declines a fresh invite idempotently', async () => {
@@ -354,6 +370,53 @@ describe('users and local invites over GraphQL', () => {
       (again.data as { declineTripLocalInvite: { status: string } }).declineTripLocalInvite.status,
       'declined',
     );
+
+    const acceptDeclined = await run(
+      'mutation($id: ID!) { acceptTripLocalInvite(notificationId: $id) { id } }',
+      declinee.id,
+      { id: invite.notificationId },
+    );
+    assert.equal(codeOf(acceptDeclined), 'INVITE_ALREADY_USED');
+  });
+
+  test('compensates a notification failure by revoking the invite', async () => {
+    if (!db) return;
+    const target = await users.createUser({
+      username: `notify-fail-${randomUUID().slice(0, 8)}`,
+      password: 'secret123',
+      displayName: 'Notify Fail',
+    });
+    revokedInvitations.clear();
+
+    const failingUsers = new Proxy(users, {
+      get(store, property) {
+        if (property === 'createNotification') {
+          return async () => {
+            throw usersError('USERS_UNAVAILABLE', 'users down');
+          };
+        }
+        const value = Reflect.get(store, property, store);
+        return typeof value === 'function' ? value.bind(store) : value;
+      },
+    });
+
+    try {
+      const result = await graphql({
+        schema,
+        source: INVITE,
+        contextValue: { ...contextFor(inviter.id), users: failingUsers },
+        variableValues: {
+          tripId,
+          username: target.username,
+          role: 'viewer',
+        },
+      });
+      assert.equal(codeOf(result), 'NOTIFICATION_FAILED');
+      assert.equal(revokedInvitations.size, 1);
+    } finally {
+      await db.prepare('DELETE FROM notifications WHERE user_id = ?').run(target.id);
+      await deleteUser(db, target.id);
+    }
   });
 
   test('delivers onNotification over the live subscription', async () => {

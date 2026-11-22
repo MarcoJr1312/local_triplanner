@@ -511,7 +511,7 @@ export const api: TriplannerApi = {
         const profile: UserProfile = {
           userId: parsed.userId,
           username: parsed.username ?? parsed.displayName ?? parsed.userId,
-          email: parsed.email ?? '',
+          email: parsed.email ?? null,
           displayName: parsed.displayName ?? parsed.username ?? parsed.userId,
           color: parsed.color ?? null,
           avatarUrl: parsed.avatarUrl ?? null,

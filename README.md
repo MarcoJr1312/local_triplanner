@@ -1,15 +1,16 @@
 # Triplanner — Local Recruiter Demo
 
 > **Repository description:** A local-only collaborative travel-planning demo
-> with a one-command Docker Compose stack: Next.js 15, Bun GraphQL API, a Bun
-> locations service, FastAPI agent, PostgreSQL 17 + pgvector and MongoDB 7.
+> with a one-command Docker Compose stack: Next.js 15, Bun GraphQL API, Bun
+> locations/trips/users services, FastAPI agent, PostgreSQL 17 + pgvector and
+> MongoDB 7.
 
 Collaborative travel planning web app. Plan a trip with your team: build a
 day-by-day itinerary, organize activities and budgets, invite collaborators,
 attach tickets with per-file visibility, get AI suggestions, and jump straight
 to Google Maps routes or an Uber deep link.
 
-The product UI is **English by default**, with an **es/en** switch in the
+The product UI is **Spanish by default**, with an **es/en** switch in the
 profile settings.
 
 > **Status:** **v1.2.2** - one-command Docker Compose demo plus per-service
@@ -32,12 +33,16 @@ profile settings.
 
 ## What works now
 
-- **Demo auth** — two seeded identities: `Demo` (owner) and `Demo Friend`
-  (collaborator). No Firebase, no password, no external account.
+- **Demo auth** — username + password, no Firebase and no JWT. Seeded accounts:
+  `demo` / `demo123` (owner) and `demo-friend` / `demo123`; the recruiter can
+  create and delete local accounts from the login screen.
 - **Trips and itineraries** — day-by-day plans, categories, costs and budgets.
-- **Collaboration** — invitations produce a copyable join link; the second demo
-  identity can join the trip. Email is optional: add a Resend key in Settings →
-  Email delivery, otherwise no email is sent.
+- **Collaboration** — invite by username (the invitee gets a notification in the
+  bell and accepts/declines there) or create a copyable email join link. Email is
+  optional: add a Resend key in Settings → Email delivery, otherwise no email is
+  sent.
+- **Users service** — accounts, Argon2id password login and the notification
+  inbox live in `triplanner-users` with its own PostgreSQL.
 - **Async email** — `TripInvitation` messages flow from the API through the Go
   demo broker to the email service; members show the invited email with a demo
   badge.
@@ -59,6 +64,8 @@ web (Next.js 15)
   ├─ /api/graphql ──▶ api (Bun + graphql-yoga :4000)
   │                     ├─▶ postgres:5432 (relational + pgvector)
   │                     ├─▶ locations:4300 (Bun) ──▶ mongo:27017 (catalogue)
+  │                     ├─▶ trips:4400 (Bun) ──▶ trips-postgres:5432
+  │                     ├─▶ users:4500 (Bun) ──▶ users-postgres:5432
   │                     └─▶ broker :8080 (Go) ──▶ email :4200 ──▶ Resend/sink
   ├─ /api/agent/* ──▶ agent (FastAPI :4100)
   │                     ├─▶ postgres (pgvector embeddings)
@@ -76,6 +83,8 @@ the client.
 | Frontend (`frontend-next/`) | Next.js 15 App Router, React 19, TypeScript, shadcn/ui on Radix, Tailwind v4 |
 | Backend (`backend/server/`) | TypeScript on Bun, graphql-yoga, Postgres (`pg`) |
 | Locations (`backend/locations-service/`) | TypeScript on Bun, internal REST v1, MongoDB (`mongodb`) |
+| Trips (`backend/trips-service/`) | TypeScript on Bun, internal REST v1, PostgreSQL (`pg`) |
+| Users (`backend/users-service/`) | TypeScript on Bun, internal REST v1, PostgreSQL (`pg`), Argon2id (`Bun.password`) |
 | Agent (`backend/agent-service/`) | Python 3.12, uv, FastAPI, Agno, pgvector |
 | Data (`backend/db/`) | Postgres `pg/schema.sql` + idempotent seed; Toronto catalogue JSON |
 | Local infra | Docker Compose: web, api, locations, agent, PostgreSQL 17 + pgvector, MongoDB 7 |

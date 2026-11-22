@@ -309,7 +309,7 @@ type Notification {
   tripId: ID!
   tripName: String!
   invitationId: ID!
-  inviter: UserProfile!
+  inviter: UserProfile
   role: MemberRole!
   status: String!
   createdAt: AWSDateTime!

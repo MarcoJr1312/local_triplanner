@@ -259,5 +259,11 @@ export interface TripsStore {
     tripId: string,
     invitationId: string,
   ): Promise<InvitationRow>;
+  /** Inviter/editor cancellation used for notification compensation. */
+  revokeLocalInvitation(
+    userId: string,
+    tripId: string,
+    invitationId: string,
+  ): Promise<InvitationRow>;
   joinTrip(userId: string, tripId: string, input: JoinInput): Promise<JoinResult>;
 }

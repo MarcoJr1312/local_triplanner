@@ -7,14 +7,15 @@ docker compose -f deploy/docker-compose.yml up --build
 docker compose -f deploy/docker-compose.yml ps
 ```
 
-All five services should show `healthy`.
+All services should show `healthy`.
 
 ## 1. Sign in as the owner
 
-Open http://localhost:3000/login and choose **Demo (owner)**.
+Open http://localhost:3000/login and sign in with **`demo` / `demo123`**.
 
-The UI starts in English. Switch to Spanish at any time in
-**Settings → Language**.
+The UI starts in Spanish (the recruiter can switch to English in
+**Settings → Language**). The login screen also lets you create and delete local
+accounts; `demo` and `demo-friend` are protected.
 
 You should land on the trips dashboard with the seeded trip
 **“Fin de semana en Toronto”** (Dec 4–6, 2026).
@@ -46,17 +47,20 @@ modal with address, rating, phone, hours, description, links and Google Maps.
 
 ## 4. Test collaboration without email
 
-1. Open **Invite** on the trip.
-2. Leave the prefilled `friend@triplanner.local`.
-3. Create the invitation and click **Copy link**.
-4. Open the link in an incognito window.
-5. Choose **Join as Demo Friend**.
+1. Open **Invitar** on the trip.
+2. Choose the **Por usuario** tab and type `demo-friend`.
+3. Pick the role and click **Enviar invitación**.
+4. Sign out (top-right) and sign in as **`demo-friend` / `demo123`**.
+5. Open the bell. The invite shows the trip and the inviter; click **Aceptar**.
 
 The second identity joins as a viewer. Switch back to the owner to see the
-member list update.
+member list update. The invitee can also **Rechazar**; the owner can still
+create a copyable email join link from the **Por email** tab.
 
-> Email delivery is intentionally disabled in this demo. The copyable link is
-> the invitation.
+> Email delivery is intentionally disabled by default. The notification bell and
+> the copyable link are the invitation paths.
+>
+> Deleting a user who owns a trip is blocked (`USER_OWNS_TRIPS`).
 
 ## 5. Upload something
 

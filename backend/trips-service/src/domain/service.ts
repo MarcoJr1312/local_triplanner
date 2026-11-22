@@ -689,6 +689,38 @@ export class TripsService {
     });
   }
 
+  /**
+   * Cancels a pending local invite as the inviter/editor. Used by the API to
+   * compensate when the notification cannot be stored.
+   */
+  async revokeLocalInvitation(
+    actorId: string,
+    tripId: string,
+    invitationId: string,
+  ): Promise<LocalInvitationRow> {
+    const id = pathId(tripId, 'trip_id');
+    await this.requireTrip(id);
+    this.requireEditor(await this.requireRole(id, actorId));
+    const target = pathId(invitationId, 'invitation_id');
+
+    return this.db.transaction(async (tx) => {
+      const invitation = await store.findLocalInvitationForUpdate(tx, id, target);
+      if (!invitation) {
+        throw new AppError('INVITE_NOT_FOUND', 'Invitación no encontrada.');
+      }
+      if (invitation.status === 'revoked') return invitation;
+      if (invitation.status !== 'pending') {
+        throw new AppError('INVITE_ALREADY_USED', 'La invitación ya fue utilizada.');
+      }
+
+      const revoked = await store.revokeInvitation(tx, invitation.id);
+      if (!revoked) {
+        throw new AppError('INVITE_ALREADY_USED', 'La invitación ya fue utilizada.');
+      }
+      return revoked;
+    });
+  }
+
   // ---------------------------------------------------------------- items
 
   async addItem(

@@ -91,6 +91,7 @@ describe('demo auth on Postgres', () => {
       color: null,
       avatarUrl: 'http://img',
       language: 'en',
+      deletedAt: null,
     });
   });
 });

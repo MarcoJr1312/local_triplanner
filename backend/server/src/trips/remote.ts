@@ -463,6 +463,20 @@ export class RemoteTripsStore implements TripsStore {
     );
   }
 
+  async revokeLocalInvitation(
+    userId: string,
+    tripId: string,
+    invitationId: string,
+  ): Promise<InvitationRow> {
+    return toInvitation(
+      await this.request<RemoteInvitation>(
+        'POST',
+        `/internal/v1/trips/${encodeURIComponent(tripId)}/local-invite/${encodeURIComponent(invitationId)}/revoke`,
+        userId,
+      ),
+    );
+  }
+
   async joinTrip(userId: string, tripId: string, input: JoinInput): Promise<JoinResult> {    const response = await this.request<{
       joined: boolean;
       trip: RemoteAggregate;

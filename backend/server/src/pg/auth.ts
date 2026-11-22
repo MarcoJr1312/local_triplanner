@@ -56,17 +56,18 @@ interface ProfileSource {
   color?: string | null;
   avatar_url?: string | null;
   language?: string | null;
+  deleted_at?: string | null;
 }
 
 export function toProfile(row: ProfileSource): Profile {
   return {
     userId: row.id,
     username: row.username,
-    // GraphQL keeps `email: String!` until the M10.9 frontend switch.
-    email: row.email ?? '',
+    email: row.email,
     displayName: row.display_name,
     color: row.color ?? null,
     avatarUrl: row.avatar_url ?? null,
     language: row.language ?? 'en',
+    deletedAt: row.deleted_at ?? null,
   };
 }

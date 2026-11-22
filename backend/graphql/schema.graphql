@@ -78,7 +78,7 @@ type TripSummary {
 type Member {
   userId: ID!
   displayName: String!
-  email: String!
+  email: String
   invitedEmail: String
   role: MemberRole!
   joinedAt: AWSDateTime!
@@ -129,8 +129,9 @@ type Activity {
 
 type UserProfile {
   userId: ID!
-  email: String!
+  email: String
   displayName: String!
+  deletedAt: AWSDateTime
 }
 
 type Presence {

@@ -210,6 +210,17 @@ export function createHandler(deps: HttpDeps): (req: Request) => Promise<Respons
         )),
     ),
 
+    makeRoute(
+      'POST',
+      '/internal/v1/trips/:id/local-invite/:invitationId/revoke',
+      async (ctx) =>
+        json(200, await service().revokeLocalInvitation(
+          ctx.actor,
+          ctx.params.id ?? '',
+          ctx.params.invitationId ?? '',
+        )),
+    ),
+
     makeRoute('POST', '/internal/v1/trips/:id/leave', async (ctx) =>
       json(200, await service().leaveTrip(ctx.actor, ctx.params.id ?? '', ctx.body))),
 

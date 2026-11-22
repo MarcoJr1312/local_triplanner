@@ -494,7 +494,7 @@ async function enrichMembers(users: UsersStore, members: TripMemberRow[]): Promi
       user_id: member.user_id,
       username: user?.username ?? null,
       display_name: user?.display_name ?? member.user_id,
-      email: user?.email ?? '',
+      email: user?.email ?? null,
       invited_email: member.invited_email,
       role: member.role,
       joined_at: member.joined_at,
@@ -875,7 +875,7 @@ export const resolvers: {
       } catch (error) {
         // Compensate: never leave a local invitation the invitee cannot see.
         await ctx.trips
-          .declineLocalInvitation(ctx.currentUserId, tripId, invitation.id)
+          .revokeLocalInvitation(ctx.currentUserId, tripId, invitation.id)
           .catch(() => undefined);
         if (error instanceof GraphQLError) {
           const code = error.extensions.code;
@@ -894,8 +894,13 @@ export const resolvers: {
         ctx.currentUserId,
         notificationId,
       );
-      if (notification.status === 'accepted' || notification.status === 'declined') {
+      if (notification.status === 'declined') {
         throw gqlError('INVITE_ALREADY_USED', 'La invitación ya fue utilizada.');
+      }
+      if (notification.status === 'accepted') {
+        // Idempotent retry: membership already exists, return the trip.
+        const current = await ctx.trips.getTrip(ctx.currentUserId, notification.trip_id);
+        return buildTrip(ctx, current);
       }
 
       const result = await ctx.trips.joinLocal(
@@ -1280,15 +1285,13 @@ export const resolvers: {
         throw gqlError('FORBIDDEN_INVITE', 'Solo el propietario o un editor puede invitar');
       }
 
-      const inviter = await ctx.db
-        .prepare('SELECT display_name, language FROM users WHERE id = ?')
-        .get<{ display_name: string | null; language: string | null }>(ctx.currentUserId);
+      const inviter = await ctx.users.getUser(ctx.currentUserId);
 
       const result = await ctx.trips.createInvitation(ctx.currentUserId, tripId, {
         email: normalized,
         role: inviteRole,
         notify: {
-          inviterName: inviter?.display_name?.trim() || 'DemoUser',
+          inviterName: inviter?.display_name.trim() || 'DemoUser',
           language: inviter?.language === 'en' ? 'en' : 'es',
           appUrl: APP_URL,
           demo: true,

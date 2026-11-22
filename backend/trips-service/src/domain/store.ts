@@ -564,6 +564,20 @@ export async function declineInvitation(
   );
 }
 
+/** Inviter/editor cancels a pending local invite (notification compensation). */
+export async function revokeInvitation(
+  tx: Queryable,
+  invitationId: string,
+): Promise<LocalInvitationRow | null> {
+  return tx.one<LocalInvitationRow>(
+    `UPDATE invitations
+        SET status = 'revoked'
+      WHERE id = $1 AND status = 'pending'
+      RETURNING *`,
+    [invitationId],
+  );
+}
+
 export async function acceptInvitation(
   tx: Queryable,
   invitationId: string,

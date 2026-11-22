@@ -1017,6 +1017,36 @@ describe('local invitations', () => {
     );
   });
 
+  test('revokes a pending local invite as an editor and is idempotent', async () => {
+    if (!db) return;
+    const id = await newTrip();
+    await service.addMember('u1', id, { user_id: 'u3', role: 'viewer' });
+    const invitation = await service.createLocalInvitation('u1', id, {
+      invitee_user_id: 'u2',
+      role: 'viewer',
+    });
+
+    await expectCode(
+      () => service.revokeLocalInvitation('u3', id, invitation.invitation.id),
+      'FORBIDDEN_EDIT',
+    );
+
+    const revoked = await service.revokeLocalInvitation('u1', id, invitation.invitation.id);
+    expect(revoked.status).toBe('revoked');
+
+    const repeat = await service.revokeLocalInvitation('u1', id, invitation.invitation.id);
+    expect(repeat.status).toBe('revoked');
+
+    await expectCode(
+      () =>
+        service.joinLocal('u2', id, {
+          user_id: 'u2',
+          invitation_id: invitation.invitation.id,
+        }),
+      'INVITE_ALREADY_USED',
+    );
+  });
+
   test('exposes the local routes over HTTP', async () => {
     if (!db) return;
     const trip = await service.createTrip('u1', {
