@@ -145,6 +145,7 @@ Rules:
 | `email.reminder.v1` | `to, tripName, itemTitle, day, startTime, language?` | reminder sweep (M3) |
 | `email.verification.v1` | `to, link, name?, language?` | future auth flow |
 | `email.welcome.v1` | `to, name, language?` | future onboarding |
+| `email.member.joined.v1` | `to, ownerName, memberName, tripName, language?` | trips `/join` (M9.5) |
 
 `language` is `es` (default) or `en`. Unknown values normalize to `es`.
 

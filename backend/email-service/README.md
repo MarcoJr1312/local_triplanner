@@ -1,13 +1,15 @@
 # Triplanner email service
 
 HTTP consumer for the Go demo broker. It renders and delivers Triplanner
-email; the API publishes `TripInvitation` messages and keeps serving the
-copyable join link when email is disabled.
+email; the API and the trips service publish `TripInvitation` messages and keep
+serving the copyable join link when email is disabled.
 
 - Runtime: Bun + TypeScript
 - Broker: `backend/kafka` (Go, HTTP topic/offset/ack + SQLite)
 - Provider: Resend (direct `fetch`, no SDK) or `sink` for local/demo
 - Topic: `TripInvitation`; DLQ: `TripInvitation.dlq`
+- Events: `email.invite.v1`, `email.reminder.v1`, `email.verification.v1`,
+  `email.welcome.v1`, `email.member.joined.v1`
 - Probes: `GET /health`, `GET /ready` on `HEALTH_PORT` (default `4200`)
 - BYOK settings: `GET/POST /api/email/config` on the same port
 

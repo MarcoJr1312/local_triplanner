@@ -137,3 +137,52 @@ describe('verification and welcome templates', () => {
     assert.ok(email.html.includes('href="https://triplanner.example.com"'));
   });
 });
+
+describe('member joined template', () => {
+  function joined(payload: Record<string, unknown>) {
+    return renderEmail(
+      {
+        id: 'evt-join-1',
+        type: 'email.member.joined.v1',
+        version: 1,
+        occurredAt: '2026-11-21T10:00:00.000Z',
+        source: 'triplanner-trips',
+        payload: {
+          to: 'owner@example.com',
+          ownerName: 'Demo',
+          memberName: 'Demo Friend',
+          tripName: 'Toronto 2026',
+          ...payload,
+        },
+      } as Parameters<typeof renderEmail>[0],
+      { appUrl: 'https://triplanner.example.com' },
+    );
+  }
+
+  test('renders the owner notification in both languages', () => {
+    const es = joined({ language: 'es' });
+    assert.equal(es.subject, 'Demo Friend se unió a "Toronto 2026"');
+    assert.ok(es.html.includes('Hola Demo,'));
+    assert.ok(es.html.includes('Demo Friend'));
+    assert.ok(es.html.includes('Abrir el viaje'));
+    assert.ok(es.html.includes('https://triplanner.example.com'));
+
+    const en = joined({ language: 'en' });
+    assert.equal(en.subject, 'Demo Friend joined "Toronto 2026"');
+    assert.ok(en.html.includes('Hi Demo,'));
+    assert.ok(en.html.includes('Open the trip'));
+  });
+
+  test('escapes member, owner and trip names', () => {
+    const email = joined({
+      ownerName: 'A <owner>',
+      memberName: '<img src=x>',
+      tripName: 'A & B',
+      language: 'es',
+    });
+    assert.ok(!email.html.includes('<img'));
+    assert.ok(email.html.includes('&lt;img'));
+    assert.ok(email.html.includes('A &amp; B'));
+    assert.ok(email.html.includes('A &lt;owner&gt;'));
+  });
+});

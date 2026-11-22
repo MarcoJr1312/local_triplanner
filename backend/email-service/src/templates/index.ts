@@ -1,5 +1,6 @@
 import type { EmailEvent } from '../events.ts';
 import { renderInvite } from './invite.ts';
+import { renderMemberJoined } from './member-joined.ts';
 import { renderReminder } from './reminder.ts';
 import { renderVerification } from './verification.ts';
 import { renderWelcome } from './welcome.ts';
@@ -21,5 +22,7 @@ export function renderEmail(event: EmailEvent, { appUrl }: RenderOptions): Rende
       return renderVerification(event.payload);
     case 'email.welcome.v1':
       return renderWelcome(event.payload, appUrl);
+    case 'email.member.joined.v1':
+      return renderMemberJoined(event.payload, appUrl);
   }
 }

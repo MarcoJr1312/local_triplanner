@@ -10,6 +10,7 @@ export const EMAIL_EVENT_TYPES = [
   'email.reminder.v1',
   'email.verification.v1',
   'email.welcome.v1',
+  'email.member.joined.v1',
 ] as const;
 
 export type EmailEventType = (typeof EMAIL_EVENT_TYPES)[number];
@@ -48,6 +49,14 @@ export interface WelcomePayload {
   language?: Language;
 }
 
+export interface MemberJoinedPayload {
+  to: string;
+  ownerName: string;
+  memberName: string;
+  tripName: string;
+  language?: Language;
+}
+
 interface Envelope<TType extends EmailEventType, TPayload> {
   id: string;
   type: TType;
@@ -61,7 +70,13 @@ export type InviteEvent = Envelope<'email.invite.v1', InvitePayload>;
 export type ReminderEvent = Envelope<'email.reminder.v1', ReminderPayload>;
 export type VerificationEvent = Envelope<'email.verification.v1', VerificationPayload>;
 export type WelcomeEvent = Envelope<'email.welcome.v1', WelcomePayload>;
-export type EmailEvent = InviteEvent | ReminderEvent | VerificationEvent | WelcomeEvent;
+export type MemberJoinedEvent = Envelope<'email.member.joined.v1', MemberJoinedPayload>;
+export type EmailEvent =
+  | InviteEvent
+  | ReminderEvent
+  | VerificationEvent
+  | WelcomeEvent
+  | MemberJoinedEvent;
 
 export type ParseResult = { ok: true; event: EmailEvent } | { ok: false; reason: string };
 
@@ -204,6 +219,21 @@ function parsePayload(type: EmailEventType, envelope: Record<string, unknown>): 
         payload: {
           to: email(payload.to, 'payload.to'),
           name: text(payload.name, 'payload.name', 120),
+          language: language(payload.language, 'payload.language'),
+        },
+      };
+    }
+    case 'email.member.joined.v1': {
+      const event = base(envelope);
+      return {
+        ...event,
+        type,
+        version: 1,
+        payload: {
+          to: email(payload.to, 'payload.to'),
+          ownerName: text(payload.ownerName, 'payload.ownerName', 120),
+          memberName: text(payload.memberName, 'payload.memberName', 120),
+          tripName: text(payload.tripName, 'payload.tripName', 200),
           language: language(payload.language, 'payload.language'),
         },
       };

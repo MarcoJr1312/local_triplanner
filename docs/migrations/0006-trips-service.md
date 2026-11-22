@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **Proposed — pending Gate 1** |
+| Status | **Gate 1 approved 2026-11-21 — M9.1 to M9.5b implemented** |
 | Integration branch | `refactor/helm` |
 | Work branch | `refactor/helm-trips-service` |
 | Runtime | Bun + TypeScript |

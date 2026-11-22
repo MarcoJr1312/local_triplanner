@@ -109,3 +109,43 @@ describe('redactEmail', () => {
     assert.equal(redactEmail('@example.com'), '***');
   });
 });
+
+describe('member joined event', () => {
+  function joined(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+    return {
+      id: 'evt-join-1',
+      type: 'email.member.joined.v1',
+      version: 1,
+      occurredAt: '2026-11-21T10:00:00.000Z',
+      source: 'triplanner-trips',
+      payload: {
+        to: 'owner@example.com',
+        ownerName: 'Demo',
+        memberName: 'Demo Friend',
+        tripName: 'Toronto 2026',
+        language: 'es',
+      },
+      ...overrides,
+    };
+  }
+
+  test('accepts a valid member joined envelope', () => {
+    const result = parseEmailEvent(joined());
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    if (result.event.type !== 'email.member.joined.v1') {
+      assert.fail(`unexpected type ${result.event.type}`);
+    }
+    assert.equal(result.event.payload.to, 'owner@example.com');
+    assert.equal(result.event.payload.memberName, 'Demo Friend');
+    assert.equal(result.event.payload.ownerName, 'Demo');
+  });
+
+  test('rejects a member joined envelope without memberName', () => {
+    const event = joined();
+    delete (event.payload as Record<string, unknown>).memberName;
+    const result = parseEmailEvent(event);
+    assert.equal(result.ok, false);
+    if (!result.ok) assert.match(result.reason, /payload\.memberName/);
+  });
+});
