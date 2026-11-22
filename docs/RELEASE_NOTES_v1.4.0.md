@@ -84,6 +84,9 @@
   the multi-arch images (users workflow is new).
 - Run the published-stack smoke (login with `demo`/`demo123`, username invite →
   bell → accept).
+- The local Helm release currently overrides users/trips to the pre-publish
+  `0.1.0-dev1` / `0.1.1-dev1` tags; after publication run `helm upgrade` with
+  `images.users.tag=0.1.0` and `images.trips.tag=0.1.1` (or reset values).
 - macOS clean-clone QA remains pending.
 
 ## Rollback
