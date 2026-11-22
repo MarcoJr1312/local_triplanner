@@ -274,6 +274,10 @@ Re-run evidence on revision 29:
 Gate 2 status after the rerun: **APPROVE** for merge, with image publication
 (`marcojr13/triplanner-web:1.3.0`) still owned by the pending release step.
 
+Gate 2 decision (2026-11-22): the human owner **approved Gate 2** for the
+frontend Helm slice. Merge and release may proceed; publication remains the
+release step.
+
 ## 9. Evidence artifacts
 
 | Artifact | Location / command |

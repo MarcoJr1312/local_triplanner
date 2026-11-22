@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **Approved; M11.2–M11.7 complete; Gate 2 pending** |
+| Status | **Gate 2 approved (2026-11-22); released as v1.5.0** |
 | Cycle | Kubernetes Manifest Delivery (`bf155f51-737c-4138-a439-01d547450118`) |
 | Integration branch | `refactor/helm` |
 | Work branch | `refactor/helm-frontend-service` |
@@ -246,7 +246,7 @@ Docker Desktop should publish the controller on localhost:80/443. Port conflicts
 | M11.5 | Web image/CI alignment and ingress/runbook docs — **done** | SRE |
 | M11.6 | Cluster acceptance through nginx ingress — **done** | SRE |
 | M11.7 | QA matrix, failure injection and Gate 2 evidence — **done**; see `0012-frontend-qa.md` | QA |
-| M11.8 | Gate 2, release notes and tag | PM/SRE |
+| M11.8 | Gate 2, release notes and tag — **done**; `docs/RELEASE_NOTES_v1.5.0.md` | PM/SRE |
 
 ## 11. Exit criteria
 

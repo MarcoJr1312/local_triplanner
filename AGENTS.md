@@ -144,6 +144,15 @@ auth and Dockerfiles.
   Evidence: `docs/migrations/0008-users-service.md`,
   `0009-users-cutover.md` and `0010-users-qa.md`. M10.14 (image publish,
   Helm acceptance, tag v1.4.0) is pending.
+- M11 done (`2da2fe3`): the Next.js web is a Helm workload (`triplanner-web`)
+  behind nginx ingress at `http://triplanner.localhost`, chart 0.8.0. Adds
+  `/api/health` + `/api/ready` (readiness gates on config only and reports API
+  reachability as `backend: ok|down`), SSE-safe ingress annotations, a
+  non-root/read-only pod, an optional NetworkPolicy and the
+  `deploy/docker-compose.frontend-helm.yml` transition overlay that publishes
+  the still-Compose API/agent. Evidence:
+  `docs/migrations/0011-frontend-service.md` and `0012-frontend-qa.md`
+  (Gate 2 approved). M10.14 and the web image publish move to tag `v1.5.0`.
 Do not assume the target architecture is already implemented — check the
 current tree.
 
