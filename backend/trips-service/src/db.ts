@@ -24,6 +24,8 @@ export interface Queryable {
     params?: readonly unknown[],
   ): Promise<T | null>;
   run(sql: string, params?: readonly unknown[]): Promise<number>;
+  /** Simple-protocol execution for multi-statement DDL. No parameters. */
+  exec(sql: string): Promise<void>;
 }
 
 export interface Db extends Queryable {
@@ -55,6 +57,10 @@ class Sql implements Queryable {
   async run(sql: string, params: readonly unknown[] = []): Promise<number> {
     const result = await this.client.query(sql, params as unknown[]);
     return result.rowCount ?? 0;
+  }
+
+  async exec(sql: string): Promise<void> {
+    await this.client.query(sql);
   }
 }
 

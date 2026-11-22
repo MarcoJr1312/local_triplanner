@@ -25,8 +25,13 @@ cd backend/trips-service
 bun install
 bunx tsc --noEmit
 bun test
+bun run db:migrate
+bun run db:seed
 bun src/index.ts
 ```
+
+Tests use `TEST_TRIPS_DATABASE_URL`, then `TRIPS_DATABASE_URL`, then a local
+throwaway Postgres on `127.0.0.1:55432`. They skip when no database answers.
 
 ## Configuration
 

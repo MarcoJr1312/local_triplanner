@@ -13,6 +13,7 @@ COPY backend/trips-service/package.json backend/trips-service/bun.lock ./
 RUN bun install --frozen-lockfile --production
 
 COPY backend/trips-service/src ./src
+COPY backend/trips-service/db ./db
 
 RUN chown -R app:app /app
 
