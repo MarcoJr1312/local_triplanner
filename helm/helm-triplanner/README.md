@@ -149,12 +149,15 @@ Prerequisites:
   locations settings, trips PostgreSQL, users PostgreSQL).
 - An nginx ingress controller (`ingressClassName: nginx`).
 - The `triplanner-internal` Secret with `INTERNAL_TOKEN`.
-- Images published at `marcojr13/triplanner-kafka:0.1.0`,
+- Images referenced by the chart (override `images.*`):
+  `marcojr13/triplanner-kafka:0.1.0`,
   `marcojr13/triplanner-email:0.1.1`,
   `marcojr13/triplanner-locations:0.2.1`,
   `marcojr13/triplanner-trips:0.1.1`,
   `marcojr13/triplanner-users:0.1.0` and
-  `marcojr13/triplanner-web:1.3.0` (or override `images.*`).
+  `marcojr13/triplanner-web:1.3.0`. The web tag is built locally for the
+  frontend slice; `web.yml` publishes it when the release tag is pushed. The
+  backend images are the published v1.4.0 set.
 
 ```bash
 kubectl create namespace triplanner
@@ -206,6 +209,11 @@ and a 20 MB body limit for GraphQL attachments. If `host.docker.internal` does
 not resolve from the pod, set `webService.hostAliases` to the Docker Desktop
 gateway IP.
 
+`/api/ready` gates on configuration only and reports API reachability in its
+body (`backend: ok|down`), so an API outage leaves the web pod Ready and the
+ingress serving the app's own error state instead of an nginx 503 page. The
+liveness probe only checks the Next process.
+
 The API’s `APP_URL` remains the Compose web URL, so email invite links still
 target `http://localhost:3000` until the API migrates. Username invites and
 notifications work through the Helm web.
@@ -240,7 +248,7 @@ bash scripts/port-forward.sh
 | `4300` | `triplanner-locations` | app port |
 | `4400` | `triplanner-trips` | app port |
 | `4500` | `triplanner-users` | app port |
-| `3000` | `triplanner-web` | served through nginx ingress at `http://triplanner.localhost` |
+| — | `triplanner-web` | served through nginx ingress at `http://triplanner.localhost`; not port-forwarded |
 | `8443` | broker `kube-rbac-proxy` | with `-Proxy` / `--proxy` |
 | `8444` | email `kube-rbac-proxy` | with `-Proxy` / `--proxy` |
 | `8445` | locations `kube-rbac-proxy` | with `-Proxy` / `--proxy` |

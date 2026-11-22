@@ -678,6 +678,7 @@ export const es = {
   'errors.FAVORITE_SAVE_FAILED': 'No se pudo actualizar el favorito.',
   'errors.AGENT_TIMEOUT': 'El agente tardó demasiado en responder.',
   'errors.AGENT_ERROR': 'El agente no pudo responder.',
+  'errors.AGENT_UNREACHABLE': 'El agente no está disponible.',
   'errors.LLM_SETTINGS_FAILED': 'No se pudo guardar la configuración del proveedor de IA.',
   'errors.EMAIL_CONFIG_INVALID': 'Revisa la configuración de email.',
   'errors.EMAIL_SETTINGS_FAILED': 'No se pudo guardar la configuración de email.',

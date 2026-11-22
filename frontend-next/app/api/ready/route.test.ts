@@ -39,27 +39,27 @@ describe('GET /api/ready', () => {
     expect(called).toBe('http://api:4000/health');
   });
 
-  test('is 503 when the API reports an error', async () => {
+  test('stays ready and reports the backend when the API reports an error', async () => {
     globalThis.fetch = (async () =>
       new Response('down', { status: 503 })) as typeof fetch;
 
     const response = await GET();
-    expect(response.status).toBe(503);
-    expect(await response.json()).toMatchObject({
-      status: 'not_ready',
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      status: 'ready',
       backend: 'down',
       upstream_status: 503,
     });
   });
 
-  test('is 503 when the API is unreachable', async () => {
+  test('stays ready and reports the backend when the API is unreachable', async () => {
     globalThis.fetch = (async () => {
       throw new TypeError('fetch failed');
     }) as typeof fetch;
 
     const response = await GET();
-    expect(response.status).toBe(503);
-    expect(await response.json()).toEqual({ status: 'not_ready', backend: 'down' });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ status: 'ready', backend: 'down' });
   });
 
   test('is 503 before any call when required config is missing', async () => {

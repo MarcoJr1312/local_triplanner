@@ -680,6 +680,7 @@ export const en: typeof es = {
   'errors.FAVORITE_SAVE_FAILED': "Couldn't update the favorite.",
   'errors.AGENT_TIMEOUT': 'The agent took too long to respond.',
   'errors.AGENT_ERROR': "The agent couldn't respond.",
+  'errors.AGENT_UNREACHABLE': 'The agent is unavailable.',
   'errors.LLM_SETTINGS_FAILED': 'Could not save the AI provider settings.',
   'errors.EMAIL_CONFIG_INVALID': 'Check the email settings.',
   'errors.EMAIL_SETTINGS_FAILED': 'Could not save the email settings.',

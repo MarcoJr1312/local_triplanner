@@ -43,6 +43,24 @@ jobs:
         working-directory: frontend-next
         run: bun test
 
+  build:
+    name: Build web image (PR)
+    needs: test
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: frontend-next/Dockerfile
+          push: false
+          tags: triplanner-web:pr
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
   publish:
     name: Publish triplanner-web
     needs: test

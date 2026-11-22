@@ -35,7 +35,7 @@ async function proxy(
     });
   } catch {
     return Response.json(
-      { error: { code: 'AGENT_UNREACHABLE', message: 'El agente no está disponible.' } },
+      { error: { code: 'AGENT_UNREACHABLE', message: 'Agent unavailable.' } },
       { status: 502 },
     );
   }

@@ -17,6 +17,15 @@ Migrations:
   PostgreSQL (M9 complete, legacy path decommissioned)
 - [`0007-trips-qa.md`](./0007-trips-qa.md) — trips QA evidence and Gate 2
   (approved; M9.11 complete)
+- [`0008-users-service.md`](./0008-users-service.md) — users service over
+  PostgreSQL, username/password login, local invites and notifications
+- [`0009-users-cutover.md`](./0009-users-cutover.md) — fixed-UUID cutover runbook
+- [`0010-users-qa.md`](./0010-users-qa.md) — users QA evidence and Gate 2
+  (approved; M10.13 decommission complete)
+- [`0011-frontend-service.md`](./0011-frontend-service.md) — Next.js web on Helm
+  behind nginx ingress (web-only slice)
+- [`0012-frontend-qa.md`](./0012-frontend-qa.md) — frontend Helm QA evidence and
+  Gate 2 recommendation
 
 ## Branching (local only)
 

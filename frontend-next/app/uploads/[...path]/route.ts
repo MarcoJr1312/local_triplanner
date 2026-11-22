@@ -15,7 +15,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ pat
   try {
     upstream = await fetch(target, { cache: 'no-store' });
   } catch {
-    return new Response('No se pudo leer el archivo.', { status: 502 });
+    return new Response('Could not read the file.', { status: 502 });
   }
 
   return new Response(upstream.body, {

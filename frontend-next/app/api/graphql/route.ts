@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
     });
   } catch {
     return Response.json(
-      { errors: [{ message: 'No se pudo conectar con el backend local.' }] },
+      { errors: [{ message: 'The local backend is unavailable.' }] },
       { status: 502 }
     );
   }

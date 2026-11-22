@@ -748,6 +748,10 @@ webService:
   # Optional extra /etc/hosts entries if host.docker.internal does not resolve
   # from the pod, e.g. [{ip: "192.168.65.254", hostnames: ["host.docker.internal"]}]
   hostAliases: []
+  # When the optional NetworkPolicy is enabled, add the node/kubelet CIDR here
+  # so liveness/readiness probes are not blocked, e.g. ["172.19.0.0/16"].
+  networkPolicy:
+    probeCIDRs: []
   serviceAccount:
     create: true
     name: ""
@@ -788,6 +792,7 @@ webService:
       port: http
     initialDelaySeconds: 5
     periodSeconds: 5
+    timeoutSeconds: 3
     failureThreshold: 3
   nodeSelector: {}
   tolerations: []

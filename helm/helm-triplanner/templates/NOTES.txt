@@ -64,6 +64,7 @@ RBAC:
    # Requires an nginx ingress controller and the API/agent host ports published
    # for the transitional web-only slice.
    curl -H "Host: {{ .Values.webService.ingress.host }}" http://127.0.0.1/api/health
+   # /api/ready stays 200 during an API outage and reports {"backend":"down"}.
 
 8. BYOK:
    The email service starts with provider={{ .Values.emailService.provider }}.

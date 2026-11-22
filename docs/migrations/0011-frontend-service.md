@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **Approved; M11.2–M11.5 implemented; M11.6 acceptance in progress** |
+| Status | **Approved; M11.2–M11.7 complete; Gate 2 pending** |
 | Cycle | Kubernetes Manifest Delivery (`bf155f51-737c-4138-a439-01d547450118`) |
 | Integration branch | `refactor/helm` |
 | Work branch | `refactor/helm-frontend-service` |
@@ -86,10 +86,13 @@ The server-side proxy contract is unchanged:
 
 - `GET /api/health` → `200 {"status":"ok"}` with no backend call. Used for
   liveness and the container healthcheck.
-- `GET /api/ready` → `200 {"status":"ready","backend":"ok"}` when the required
-  env is present and `GET <backend origin>/health` answers within 2 s;
-  `503 {"status":"not_ready",...}` when config is missing or the API is down.
-  The agent is not part of readiness; a down agent degrades AI only.
+- `GET /api/ready` → `200 {"status":"ready","backend":"ok"|"down"}` when the
+  required env is present. Readiness gates on configuration only; API
+  reachability is reported in the body (`GET <backend origin>/health` within
+  2 s) but does not fail the probe, so an API outage keeps the web pod in the
+  Service and the UI shows its own error state instead of an nginx 503.
+  `503 {"status":"not_ready",...}` is returned only when required config is
+  missing. The agent is not part of readiness; a down agent degrades AI only.
 
 ## 5. Kubernetes contract
 
@@ -113,9 +116,11 @@ The server-side proxy contract is unchanged:
 - Backend `triplanner-web:3000`.
 - Required annotations:
   - `nginx.ingress.kubernetes.io/proxy-buffering: "off"`
+  - `nginx.ingress.kubernetes.io/proxy-http-version: "1.1"`
   - `nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"`
   - `nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"`
   - `nginx.ingress.kubernetes.io/proxy-body-size: "20m"`
+  - `nginx.ingress.kubernetes.io/ssl-redirect: "false"`
 - Optional TLS via `webService.ingress.tls`; HTTP by default for the local demo.
 
 ### 5.3 Values sketch
@@ -145,11 +150,15 @@ webService:
     path: /
     annotations:
       nginx.ingress.kubernetes.io/proxy-buffering: "off"
+      nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
       nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
       nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
       nginx.ingress.kubernetes.io/proxy-body-size: "20m"
+      nginx.ingress.kubernetes.io/ssl-redirect: "false"
     tls: []
   hostAliases: []          # optional [{ip: "192.168.65.254", hostnames: ["host.docker.internal"]}]
+  networkPolicy:
+    probeCIDRs: []         # add the node CIDR when enabling NetworkPolicy
   serviceAccount:
     create: true
   networkPolicy:
@@ -206,8 +215,9 @@ Docker Desktop should publish the controller on localhost:80/443. Port conflicts
   trip, username invite, bell/SSE accept, decline, language switch.
 - Uploads render through `/uploads/*`; AI panel works through `/api/agent/*`
   (or shows a clear degraded state when the agent is down).
-- Failure injection: API down → `/api/ready` 503 and web recovers; agent down →
-  UI degrades without crashing; ingress SSE stays unbuffered.
+- Failure injection: API down → `/api/ready` stays 200 with `backend: down`,
+  the ingress keeps serving the UI, and the app recovers when the API returns;
+  agent down → UI degrades without crashing; ingress SSE stays unbuffered.
 - No secrets in manifests/logs/browser; non-root/read-only pod; no DB Services
   exposed.
 - Rollback to chart 0.7.0 leaves the existing backend release intact.
@@ -234,8 +244,8 @@ Docker Desktop should publish the controller on localhost:80/443. Port conflicts
 | M11.3 | Ingress prerequisite and host-connectivity spike — **done** | SRE |
 | M11.4 | Helm web Deployment, Service, Ingress, SA, NetworkPolicy, chart 0.8.0 — **done** | SRE |
 | M11.5 | Web image/CI alignment and ingress/runbook docs — **done** | SRE |
-| M11.6 | Cluster acceptance through nginx ingress | SRE |
-| M11.7 | QA matrix, failure injection and Gate 2 evidence | QA |
+| M11.6 | Cluster acceptance through nginx ingress — **done** | SRE |
+| M11.7 | QA matrix, failure injection and Gate 2 evidence — **done**; see `0012-frontend-qa.md` | QA |
 | M11.8 | Gate 2, release notes and tag | PM/SRE |
 
 ## 11. Exit criteria
