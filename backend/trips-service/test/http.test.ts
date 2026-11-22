@@ -77,7 +77,7 @@ describe('internal guard', () => {
   });
 
   test('an authenticated unknown route is a 404', async () => {
-    const res = await call(makeHandler(), '/internal/v1/trips', {
+    const res = await call(makeHandler(), '/internal/v1/nope', {
       headers: { 'x-internal-token': 'test-token' },
     });
     expect(res.status).toBe(404);
@@ -85,6 +85,25 @@ describe('internal guard', () => {
       error: 'NOT_FOUND',
       message: 'Ruta no encontrada.',
     });
+  });
+
+  test('a real internal route requires x-actor-id', async () => {
+    const res = await call(makeHandler(), '/internal/v1/trips', {
+      headers: { 'x-internal-token': 'test-token' },
+    });
+    expect(res.status).toBe(401);
+    expect(await res.json()).toEqual({
+      error: 'ACTOR_REQUIRED',
+      message: 'x-actor-id requerido.',
+    });
+  });
+
+  test('a matched route without a domain service is 503', async () => {
+    const res = await call(makeHandler(), '/internal/v1/trips', {
+      headers: { 'x-internal-token': 'test-token', 'x-actor-id': 'u1' },
+    });
+    expect(res.status).toBe(503);
+    expect((await res.json()) as { error: string }).toMatchObject({ error: 'UNAVAILABLE' });
   });
 
   test('unknown public path is a 404', async () => {

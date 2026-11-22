@@ -2,6 +2,7 @@
 // /internal/v1 route requires the shared internal token. Actor-scoped routes
 // additionally require x-actor-id, resolved by the API from the browser.
 
+import type { TripsService } from './domain/service.ts';
 import { verifyInternalToken } from './env.ts';
 import { AppError, toErrorResponse } from './errors.ts';
 
@@ -17,6 +18,25 @@ export interface ReadinessDb {
 export interface HttpDeps {
   db: ReadinessDb;
   internalToken: string;
+  /** Optional so health/readiness can be tested without a domain service. */
+  service?: TripsService;
+}
+
+interface RouteContext {
+  url: URL;
+  params: Record<string, string>;
+  actor: string;
+  body: Record<string, unknown>;
+}
+
+type RouteHandler = (ctx: RouteContext) => Promise<Response>;
+
+interface Route {
+  method: string;
+  pattern: RegExp;
+  keys: string[];
+  actor: boolean;
+  handler: RouteHandler;
 }
 
 function json(status: number, body: unknown): Response {
@@ -58,6 +78,35 @@ export async function readJson(req: Request): Promise<Record<string, unknown>> {
   return parsed as Record<string, unknown>;
 }
 
+function makeRoute(
+  method: string,
+  path: string,
+  handler: RouteHandler,
+  actor = true,
+): Route {
+  const keys: string[] = [];
+  const pattern = new RegExp(
+    `^${path.replace(/:([A-Za-z_]+)/g, (_, key: string) => {
+      keys.push(key);
+      return '([^/]+)';
+    })}$`,
+  );
+  return { method, pattern, keys, actor, handler };
+}
+
+function parseParams(route: Route, match: RegExpExecArray): Record<string, string> {
+  const params: Record<string, string> = {};
+  route.keys.forEach((key, index) => {
+    const raw = match[index + 1] ?? '';
+    try {
+      params[key] = decodeURIComponent(raw);
+    } catch {
+      throw new AppError('INVALID_ARGUMENT', 'Parámetro de ruta inválido.');
+    }
+  });
+  return params;
+}
+
 async function readiness(deps: HttpDeps): Promise<Response> {
   try {
     await deps.db.ping();
@@ -78,6 +127,97 @@ async function readiness(deps: HttpDeps): Promise<Response> {
 }
 
 export function createHandler(deps: HttpDeps): (req: Request) => Promise<Response> {
+  const service = (): TripsService => {
+    if (!deps.service) {
+      throw new AppError('UNAVAILABLE', 'Servicio no disponible.');
+    }
+    return deps.service;
+  };
+
+  const routes: Route[] = [
+    makeRoute('POST', '/internal/v1/trips', async (ctx) =>
+      json(201, await service().createTrip(ctx.actor, ctx.body))),
+
+    makeRoute('GET', '/internal/v1/trips', async (ctx) =>
+      json(200, { items: await service().listTrips(ctx.actor) })),
+
+    makeRoute('GET', '/internal/v1/trips/:id/context', async (ctx) =>
+      json(200, await service().getContext(ctx.actor, ctx.params.id ?? ''))),
+
+    makeRoute('GET', '/internal/v1/trips/:id/members', async (ctx) =>
+      json(200, { items: await service().listMembers(ctx.actor, ctx.params.id ?? '') })),
+
+    makeRoute('POST', '/internal/v1/trips/:id/members', async (ctx) =>
+      json(201, await service().addMember(ctx.actor, ctx.params.id ?? '', ctx.body))),
+
+    makeRoute('PATCH', '/internal/v1/trips/:id/members/:userId', async (ctx) =>
+      json(200, await service().updateMemberRole(
+        ctx.actor,
+        ctx.params.id ?? '',
+        ctx.params.userId ?? '',
+        ctx.body,
+      ))),
+
+    makeRoute('DELETE', '/internal/v1/trips/:id/members/:userId', async (ctx) =>
+      json(200, await service().removeMember(
+        ctx.actor,
+        ctx.params.id ?? '',
+        ctx.params.userId ?? '',
+      ))),
+
+    makeRoute('POST', '/internal/v1/trips/:id/leave', async (ctx) =>
+      json(200, await service().leaveTrip(ctx.actor, ctx.params.id ?? '', ctx.body))),
+
+    makeRoute('GET', '/internal/v1/trips/:id/items', async (ctx) =>
+      json(200, { items: await service().listItems(ctx.actor, ctx.params.id ?? '') })),
+
+    makeRoute('POST', '/internal/v1/trips/:id/items', async (ctx) =>
+      json(201, await service().addItem(ctx.actor, ctx.params.id ?? '', ctx.body))),
+
+    makeRoute('PATCH', '/internal/v1/trips/:id/items/:itemId', async (ctx) =>
+      json(200, await service().updateItem(
+        ctx.actor,
+        ctx.params.id ?? '',
+        ctx.params.itemId ?? '',
+        ctx.body,
+      ))),
+
+    makeRoute('DELETE', '/internal/v1/trips/:id/items/:itemId', async (ctx) =>
+      json(200, await service().deleteItem(
+        ctx.actor,
+        ctx.params.id ?? '',
+        ctx.params.itemId ?? '',
+      ))),
+
+    makeRoute('POST', '/internal/v1/trips/:id/items/:itemId/move', async (ctx) =>
+      json(200, await service().moveItem(
+        ctx.actor,
+        ctx.params.id ?? '',
+        ctx.params.itemId ?? '',
+        ctx.body,
+      ))),
+
+    makeRoute('POST', '/internal/v1/trips/:id/items/:itemId/reminder', async (ctx) =>
+      json(200, await service().setReminder(
+        ctx.actor,
+        ctx.params.id ?? '',
+        ctx.params.itemId ?? '',
+        ctx.body,
+      ))),
+
+    makeRoute('GET', '/internal/v1/items/:itemId', async (ctx) =>
+      json(200, await service().getItemForActor(ctx.actor, ctx.params.itemId ?? ''))),
+
+    makeRoute('GET', '/internal/v1/trips/:id', async (ctx) =>
+      json(200, await service().getTrip(ctx.actor, ctx.params.id ?? ''))),
+
+    makeRoute('PATCH', '/internal/v1/trips/:id', async (ctx) =>
+      json(200, await service().updateTrip(ctx.actor, ctx.params.id ?? '', ctx.body))),
+
+    makeRoute('DELETE', '/internal/v1/trips/:id', async (ctx) =>
+      json(200, await service().deleteTrip(ctx.actor, ctx.params.id ?? ''))),
+  ];
+
   return async function handle(req: Request): Promise<Response> {
     try {
       const url = new URL(req.url);
@@ -90,17 +230,33 @@ export function createHandler(deps: HttpDeps): (req: Request) => Promise<Respons
         return await readiness(deps);
       }
 
+      const internal =
+        url.pathname === '/internal/v1' || url.pathname.startsWith('/internal/v1/');
+      if (!internal) {
+        return json(404, { error: 'NOT_FOUND', message: 'Ruta no encontrada.' });
+      }
+
       // Token-check unknown internal routes too, so an unauthenticated caller
       // cannot probe which routes exist.
-      if (url.pathname === '/internal/v1' || url.pathname.startsWith('/internal/v1/')) {
-        requireInternalToken(req, deps.internalToken);
-        return json(404, { error: 'NOT_FOUND', message: 'Ruta no encontrada.' });
+      requireInternalToken(req, deps.internalToken);
+
+      for (const route of routes) {
+        if (route.method !== method) continue;
+        const match = route.pattern.exec(url.pathname);
+        if (!match) continue;
+
+        const params = parseParams(route, match);
+        const actor = route.actor ? requireActor(req) : '';
+        const body =
+          method === 'GET' || method === 'DELETE' ? {} : await readJson(req);
+
+        return await route.handler({ url, params, actor, body });
       }
 
       return json(404, { error: 'NOT_FOUND', message: 'Ruta no encontrada.' });
     } catch (error) {
       const { status, body } = toErrorResponse(error);
-      if (status >= 500) {
+      if (status >= 500 && !(error instanceof AppError)) {
         console.error('[trips] unhandled request error:', error);
       }
       return json(status, body);

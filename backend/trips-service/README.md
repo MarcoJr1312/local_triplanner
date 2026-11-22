@@ -12,11 +12,28 @@ Contract: [`docs/migrations/0006-trips-service.md`](../../docs/migrations/0006-t
 |---|---|---|
 | GET | `/health` | liveness, no token |
 | GET | `/ready` | Postgres ping + migrated; 503 until ready |
-| * | `/internal/v1/*` | `x-internal-token`; actor routes add `x-actor-id` |
+| POST | `/internal/v1/trips` | create; actor becomes owner |
+| GET | `/internal/v1/trips` | summaries for the actor |
+| GET | `/internal/v1/trips/{id}` | aggregate + `my_role` + stats |
+| PATCH | `/internal/v1/trips/{id}` | settings, budget, cover metadata |
+| DELETE | `/internal/v1/trips/{id}` | owner only |
+| GET/POST | `/internal/v1/trips/{id}/members` | list / add |
+| PATCH/DELETE | `/internal/v1/trips/{id}/members/{userId}` | role / remove |
+| POST | `/internal/v1/trips/{id}/leave` | owner must transfer |
+| GET/POST | `/internal/v1/trips/{id}/items` | list / add |
+| PATCH/DELETE | `/internal/v1/trips/{id}/items/{itemId}` | update / remove |
+| POST | `/internal/v1/trips/{id}/items/{itemId}/move` | day + order |
+| POST | `/internal/v1/trips/{id}/items/{itemId}/reminder` | toggle |
+| GET | `/internal/v1/items/{itemId}` | resolve item → trip (attachments) |
+| GET | `/internal/v1/trips/{id}/context` | agent context |
 
-Planned v1 routes (M9.4/M9.5): trips, members, items, invitations, `/join` and
-the agent context. The service never reads the platform database and has no
-foreign keys to `users`.
+All `/internal/v1` routes require `x-internal-token`; actor-scoped routes add
+`x-actor-id`. Invitations and `/join` arrive in M9.5.
+
+Authorization is enforced here: viewers read only; editors edit items, settings
+and invitations; owners change roles, delete and transfer. Cover metadata is
+owner-only. Locations lookups are best-effort: a failure keeps the supplied text
+and reports `place_resolved: false` instead of blocking the write.
 
 ## Commands
 

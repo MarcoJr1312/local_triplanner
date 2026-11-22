@@ -1,4 +1,6 @@
 import { connect, type Db } from './db.ts';
+import { createLocationsClient } from './domain/locations.ts';
+import { TripsService } from './domain/service.ts';
 import { isUsingDefaultInternalToken, loadConfig, loadDotEnv } from './env.ts';
 import { createHandler } from './http.ts';
 import { createShutdown } from './shutdown.ts';
@@ -15,10 +17,13 @@ const db: Db = await connect(config).catch((error: unknown) => {
   process.exit(1);
 });
 
+const locations = createLocationsClient(config);
+const service = new TripsService(db, locations);
+
 const server = Bun.serve({
   hostname: '0.0.0.0',
   port: config.port,
-  fetch: createHandler({ db, internalToken: config.internalToken }),
+  fetch: createHandler({ db, internalToken: config.internalToken, service }),
   error(error) {
     console.error('[trips] unhandled error:', error);
     return new Response(
