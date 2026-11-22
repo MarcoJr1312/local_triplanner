@@ -1,6 +1,7 @@
 import { connect, type Db } from './db.ts';
 import { migrate } from './db/migrate.ts';
 import { seedDemoUsers } from './db/seed.ts';
+import { UsersService } from './domain/service.ts';
 import { isUsingDefaultInternalToken, loadConfig, loadDotEnv } from './env.ts';
 import { createHandler } from './http.ts';
 import { createShutdown } from './shutdown.ts';
@@ -38,7 +39,7 @@ if (config.seedDemo) {
 const server = Bun.serve({
   hostname: '0.0.0.0',
   port: config.port,
-  fetch: createHandler({ db, internalToken: config.internalToken }),
+  fetch: createHandler({ db, internalToken: config.internalToken, service: new UsersService(db) }),
   error(error) {
     console.error('[users] unhandled error:', error);
     return new Response(

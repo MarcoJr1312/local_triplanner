@@ -1,0 +1,186 @@
+// Users domain service. It owns account creation, password login, profile
+// updates and soft deletion. The service never calls the API or trips; the API
+// orchestrates local invites and enforces the trip-owner delete guard.
+
+import { randomUUID } from 'node:crypto';
+import type { Db } from '../db.ts';
+import { isProtectedUserId } from '../db/seed.ts';
+import { AppError } from '../errors.ts';
+import * as store from './store.ts';
+import { toPublicUser, type UserPublic } from './types.ts';
+import {
+  batchIds,
+  loginUsername,
+  optionalAvatarUrl,
+  optionalColor,
+  optionalLanguage,
+  optionalString,
+  pathUuid,
+  requiredPassword,
+  requiredString,
+  searchLimit,
+  searchQuery,
+} from './validation.ts';
+
+// A real Argon2id hash so a missing username costs the same as a wrong
+// password. The plain value is irrelevant and never matches user input.
+const DUMMY_HASH =
+  '$argon2id$v=19$m=65536,t=2,p=1$MTupKnjGDJAio8C95xdbkcRt+pvgGsUoZ8oukwIB96A$BGsTnwinuP4HRoLoCPFLP0WPq3EetHwaJMStUf0sU6Y';
+
+function uniqueViolation(error: unknown): never {
+  const code = (error as { code?: string }).code;
+  if (code === '23505') {
+    const constraint = (error as { constraint?: string }).constraint ?? '';
+    if (constraint.includes('email')) {
+      throw new AppError('EMAIL_TAKEN', 'El correo ya está registrado.');
+    }
+    throw new AppError('USERNAME_TAKEN', 'El nombre de usuario ya está en uso.');
+  }
+  throw error;
+}
+
+export interface DeleteResult {
+  deleted: true;
+}
+
+export class UsersService {
+  constructor(private readonly db: Db) {}
+
+  async listUsers(query: unknown, limit: unknown): Promise<UserPublic[]> {
+    const rows = await store.search(this.db, searchQuery(query), searchLimit(limit));
+    return rows.map(toPublicUser);
+  }
+
+  /** Profile lookup includes soft-deleted accounts for enrichment. */
+  async getUser(id: string): Promise<UserPublic> {
+    return toPublicUser(await this.requireAny(id));
+  }
+
+  async getByUsername(username: string): Promise<UserPublic> {
+    const value = String(username ?? '').trim().toLowerCase();
+    if (value === '' || value.length > 64) {
+      throw new AppError('USER_NOT_FOUND', 'Usuario no encontrado.');
+    }
+    const row = await store.findByUsername(this.db, value);
+    if (!row) throw new AppError('USER_NOT_FOUND', 'Usuario no encontrado.');
+    return toPublicUser(row);
+  }
+
+  /** Used by the agent to resolve legacy demo emails; active accounts only. */
+  async getByEmail(email: string): Promise<UserPublic> {
+    const value = String(email ?? '').trim().toLowerCase();
+    if (value === '' || value.length > 254) {
+      throw new AppError('USER_NOT_FOUND', 'Usuario no encontrado.');
+    }
+    const row = await store.findByEmail(this.db, value);
+    if (!row) throw new AppError('USER_NOT_FOUND', 'Usuario no encontrado.');
+    return toPublicUser(row);
+  }
+
+  async batchUsers(ids: unknown): Promise<UserPublic[]> {
+    const rows = await store.batch(this.db, batchIds(ids));
+    return rows.map(toPublicUser);
+  }
+
+  async createUser(body: Record<string, unknown>): Promise<UserPublic> {
+    const username = String(body.username ?? '')
+      .trim()
+      .toLowerCase();
+    if (!/^[a-z0-9][a-z0-9_-]{2,31}$/.test(username)) {
+      throw new AppError(
+        'INVALID_ARGUMENT',
+        'username debe tener 3-32 caracteres: minúsculas, números, guion o guion bajo.',
+      );
+    }
+    const password = requiredPassword(body.password);
+    const displayName = requiredString(body.display_name, 'display_name', 1, 80);
+    const language = optionalLanguage(body.language) ?? 'es';
+
+    const passwordHash = await Bun.password.hash(password, { algorithm: 'argon2id' });
+
+    const row = await store
+      .insert(this.db, {
+        id: randomUUID(),
+        username,
+        passwordHash,
+        displayName,
+        language,
+      })
+      .catch(uniqueViolation);
+
+    return toPublicUser(row);
+  }
+
+  async login(body: Record<string, unknown>): Promise<UserPublic> {
+    const username = loginUsername(body.username);
+    const password = body.password;
+    if (typeof password !== 'string' || password.length === 0 || password.length > 128) {
+      throw new AppError('INVALID_CREDENTIALS', 'Usuario o contraseña incorrectos.');
+    }
+
+    const row = await store.findByUsername(this.db, username);
+    // Verify against a dummy hash on a miss so timing does not reveal accounts.
+    const hash = row?.password_hash ?? DUMMY_HASH;
+    let valid = false;
+    try {
+      valid = await Bun.password.verify(password, hash);
+    } catch {
+      valid = false;
+    }
+    if (!row || !valid) {
+      throw new AppError('INVALID_CREDENTIALS', 'Usuario o contraseña incorrectos.');
+    }
+
+    return toPublicUser(row);
+  }
+
+  async updateProfile(
+    actorId: string,
+    id: string,
+    body: Record<string, unknown>,
+  ): Promise<UserPublic> {
+    const userId = pathUuid(id);
+    if (actorId !== userId) {
+      throw new AppError('FORBIDDEN', 'No autorizado para modificar este perfil.');
+    }
+
+    const displayName = optionalString(body.display_name, 'display_name', 1, 80);
+    const language = optionalLanguage(body.language);
+    const avatarUrl = optionalAvatarUrl(body.avatar_url);
+    const color = optionalColor(body.color);
+
+    if (
+      displayName === undefined &&
+      language === undefined &&
+      avatarUrl === undefined &&
+      color === undefined
+    ) {
+      throw new AppError('INVALID_ARGUMENT', 'No hay cambios.');
+    }
+
+    const row = await store.update(this.db, userId, {
+      ...(displayName !== undefined ? { displayName } : {}),
+      ...(language !== undefined ? { language } : {}),
+      ...(avatarUrl !== undefined ? { avatarUrl } : {}),
+      ...(color !== undefined ? { color } : {}),
+    });
+    if (!row) throw new AppError('USER_NOT_FOUND', 'Usuario no encontrado.');
+    return toPublicUser(row);
+  }
+
+  async deleteUser(id: string): Promise<DeleteResult> {
+    const userId = pathUuid(id);
+    if (isProtectedUserId(userId)) {
+      throw new AppError('PROTECTED_USER', 'Las cuentas demo no se pueden eliminar.');
+    }
+    const exists = await store.softDelete(this.db, userId);
+    if (!exists) throw new AppError('USER_NOT_FOUND', 'Usuario no encontrado.');
+    return { deleted: true };
+  }
+
+  private async requireAny(id: string) {
+    const row = await store.findAnyById(this.db, pathUuid(id));
+    if (!row) throw new AppError('USER_NOT_FOUND', 'Usuario no encontrado.');
+    return row;
+  }
+}
