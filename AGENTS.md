@@ -2,7 +2,7 @@
 
 Project: **local_triplanner** — a recruiter-ready, local-only Triplanner demo.
 Collaborative travel planning app (itinerary, budgets, attachments, real-time
-collaboration, AI suggestions, routes/Uber deep links). Product UI is **Spanish
+collaboration, AI suggestions, routes/Uber deep links). Product UI is **English
 by default**, with an es/en switch.
 
 Orkai category id: `ba4c49a10fa15dd100c16c61383f6529`.
@@ -149,7 +149,7 @@ current tree.
 
 ## Product conventions (do not regress)
 
-- Spanish UI default with mirrored es/en i18n keys; every string goes through
+- English UI default with mirrored es/en i18n keys; every string goes through
   `t()`, API errors use stable codes.
 - Membership checks on every read/mutation; attachments are gated by per-file
   visibility and short-lived HMAC URLs.

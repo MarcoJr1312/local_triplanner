@@ -138,7 +138,7 @@ export class RemoteUsersStore implements UsersStore {
         username: input.username,
         password: input.password,
         display_name: input.displayName,
-        language: input.language ?? 'es',
+        language: input.language ?? 'en',
       }),
     );
   }

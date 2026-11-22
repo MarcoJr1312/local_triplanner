@@ -283,7 +283,7 @@ describe('demo seed', () => {
       username: 'demo',
       email: 'demo@triplanner.local',
       display_name: 'Demo',
-      language: 'es',
+      language: 'en',
     });
     expect(demo?.password_hash.startsWith('$argon2id$')).toBe(true);
     expect(await Bun.password.verify(DEMO_PASSWORD, demo?.password_hash ?? '')).toBe(true);

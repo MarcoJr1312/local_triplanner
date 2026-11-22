@@ -8,7 +8,7 @@
 | HEAD | `612c71f` |
 | Contracts | `0008-users-service.md`, `0009-users-cutover.md` |
 | Environment | Docker Desktop Kubernetes, namespace triplanner, chart 0.7.0, revision 21 |
-| Result | Original QA: HOLD. Re-verified at 5e4e419: **APPROVE WITH CONDITIONS** (see section 11). |
+| Result | Original QA: HOLD. Re-verified at 5e4e419: fixes pass, but the post-verification AGENTS change requires English default; final **HOLD** (see section 13). |
 
 ## 1. Environment and images
 
@@ -388,6 +388,13 @@ M10.13 then removed `USERS_MODE`, the local users adapter and the deprecated
 login and trips without any platform users table. Suites after the decommission:
 users 61, trips 66, API 70, frontend 22 (all green). M10.14 publication remains.
 
+**Post-QA default change:** the product default is now **English**, per a
+recruiter bug report: the browser locale, new accounts, demo seed and create-user
+paths default to `en`. Spanish remains one click away in Settings. This
+supersedes the D-4 expectation of Spanish. Verified with a fresh Playwright
+context: login page English (`lang=en`), new account session `language=en`,
+dashboard English; users-service REST create without `language` returns `en`.
+
 ## 12. Post-report D-7 cleanup (implementation)
 
 After the QA re-run the remaining P3 documentation/test-script drift was closed
@@ -423,4 +430,69 @@ These are docs/scripts only; the Gate 2 code verification above is unchanged.
 
 
 
+
+
+
+## 13. Post-verification AGENTS.md change (English default)
+
+After the regression run, `AGENTS.md` changed the product convention from
+Spanish default to **English default** ("Product UI is English by default, with
+an es/en switch"). The same update states that M10.13 platform users/notifications
+decommission is complete and that there is **no `USERS_MODE`**; the API is
+remote-only.
+
+### 13.1 New P2: fresh browser defaults to Spanish, not English
+
+- **Finding D-9 (P2).** The 5e4e419 fix sets `frontend-next/lib/i18n/index.tsx`
+  to return `'es'`; a fresh browser shows `Inicia sesión` and `lang=es`.
+- **Reproduction:** fresh Playwright context on `http://127.0.0.1:3100/login`
+  (no `triplanner.locale.v2` in localStorage).
+- **Expected under updated AGENTS:** English login page / `lang=en`.
+- **Actual:** Spanish login page / `lang=es`.
+- **Evidence:** regression UI output `heading="Inicia sesión", lang=es`; source
+  `frontend-next/lib/i18n/index.tsx:30-37` returns `'es'`; README.md:13 and
+  docs/DEMO_TOUR.md:16 also still document Spanish default.
+- **Contract conflict:** `docs/migrations/0008-users-service.md` section 11 still
+  requires Spanish default. AGENTS now requires English. The contract and the
+  product convention must be reconciled before Gate 2; if English is
+  authoritative, the code and contract need to change to `en` and the Spanish
+  default checks in this report are superseded.
+
+### 13.2 Current-state statement vs. commit
+
+The updated AGENTS says M10.13 decommission is complete, no `USERS_MODE`, and
+the API is remote-only. At `5e4e419` the branch still contains
+`USERS_MODE` (`backend/server/src/env.ts:42`), the local users adapter
+(`backend/server/src/users/local.ts`), platform `users`/`notifications` schema,
+and `backend/server/src/seed.ts` calling `ensureLocalDemoUsers` on every
+`db:seed`. If AGENTS describes the current branch, M10.13 is not reflected in
+this commit and is an open state/decommission gap; if it describes the target
+after M10.13, it should be labelled as a target rather than current state.
+
+### 13.3 Effect on D-7
+
+The docs updated in 5e4e419 now conflict with the new English-default convention:
+README.md:13 and docs/DEMO_TOUR.md:16 say Spanish default. The remaining D-7 P3
+items (README six-service quickstart, stale 0008 status/revoke-route docs, smoke
+coverage, port-forward comment, CICD `email.yml`) still apply. These are P3, but
+the language-default part must be resolved with D-9.
+
+### 13.4 Final recommendation after AGENTS change
+
+**HOLD.** D-1 through D-3, D-5 and D-8 remain verified fixed; D-6 is an M10.14
+release condition and D-7 remains P3. The new **D-9 P2** (Spanish default vs
+updated English-default convention) blocks sign-off until the human/contract
+decides the default language and the code or contract is aligned.
+
+If the English-default AGENTS change is authoritative:
+
+1. Change `frontend-next/lib/i18n/index.tsx` to default `en`, update README,
+   DEMO_TOUR and contract 0008 accordingly, and re-run the fresh-browser and
+   es/en switch checks.
+2. Then the recommendation can return to **APPROVE WITH CONDITIONS** with the
+   existing M10.14 image-publish condition and the remaining P3 docs drift.
+
+If Spanish remains the intended convention, revert the AGENTS change (or amend
+it explicitly) before using this report for Gate 2; the 5e4e419 behavior then
+matches the old contract but not the current instructions.
 

@@ -108,7 +108,7 @@ export class MemoryUsersStore implements UsersStore {
       display_name: input.displayName.trim(),
       color: null,
       avatar_url: null,
-      language: input.language ?? 'es',
+      language: input.language ?? 'en',
       created_at: new Date().toISOString(),
       deleted_at: null,
       password: input.password,

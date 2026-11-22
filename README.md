@@ -10,7 +10,7 @@ day-by-day itinerary, organize activities and budgets, invite collaborators,
 attach tickets with per-file visibility, get AI suggestions, and jump straight
 to Google Maps routes or an Uber deep link.
 
-The product UI is **Spanish by default**, with an **es/en** switch in the
+The product UI is **English by default**, with an **es/en** switch in the
 profile settings.
 
 > **Status:** **v1.4.0** — users microservice with username/password login,

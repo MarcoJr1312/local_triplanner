@@ -95,7 +95,7 @@ export function toPublicNotification(row: NotificationJoinedRow): NotificationPu
           display_name: row.inviter_display_name,
           color: row.inviter_color,
           avatar_url: row.inviter_avatar_url,
-          language: row.inviter_language ?? 'es',
+          language: row.inviter_language ?? 'en',
           created_at: row.inviter_created_at ?? '',
           deleted_at: row.inviter_deleted_at,
         }

@@ -58,7 +58,7 @@ const PROFILE = {
   displayName: 'Demo',
   color: '#6366f1',
   avatarUrl: null,
-  language: 'es',
+  language: 'en',
 };
 
 describe('api auth and users', () => {
@@ -104,7 +104,7 @@ describe('api auth and users', () => {
         username: 'new-user',
         password: 'secret123',
         displayName: 'New User',
-        language: 'es',
+        language: 'en',
       },
     });
 

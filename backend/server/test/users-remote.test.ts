@@ -100,7 +100,7 @@ describe('RemoteUsersStore', () => {
       username: 'demo',
       password: 'secret123',
       display_name: 'Demo',
-      language: 'es',
+      language: 'en',
     });
 
     await store.updateUser(USER.id, { displayName: 'New', language: 'en' });

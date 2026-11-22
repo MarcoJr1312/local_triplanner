@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS users (
   display_name  text NOT NULL,
   color         text,
   avatar_url    text,
-  language      text NOT NULL DEFAULT 'es' CHECK (language IN ('es', 'en')),
+  language      text NOT NULL DEFAULT 'en' CHECK (language IN ('es', 'en')),
   created_at    timestamptz NOT NULL DEFAULT now(),
   deleted_at    timestamptz
 );

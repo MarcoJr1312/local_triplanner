@@ -14,6 +14,8 @@
 - **Users microservice** (`backend/users-service`, `:4500`) with its own
   PostgreSQL StatefulSet, username + password login (Argon2id), search/batch,
   profile update, protected soft delete and a local notification inbox.
+- **English by default.** New accounts, the demo seed and a fresh browser start
+  in English; Spanish remains available in Settings → Language.
 - **No JWT.** Login returns the profile; the browser keeps the UUID and sends
   `x-user-id`. Demo accounts: `demo` / `demo123` and `demo-friend` / `demo123`
   with fixed UUIDs `11111111-1111-4111-8111-111111111111` and
@@ -70,16 +72,16 @@
   built and started all ten services healthy; `scripts/smoke.ps1` passed
   (profile, users-service login, place search, agent demo suggestions).
 - Helm `lint`/`test` 4/4; users and trips pods ready at revision 22.
-- Playwright full UI: Spanish default, create account, username invite, bell
+- Playwright full UI: English default, create account, username invite, bell
   accept, protected demo users, owner-delete guard, account delete, no console
   errors.
 - Migration scratch DB test covers dry-run, apply, foreign-key removal, fixed
   UUIDs and idempotent rerun.
 - Local image digests (single-host build; CI publish digests pending):
-  - users `0.1.0` `sha256:c762d22307fb498fa176c04ceaf765aa087f19d4e1e17a885d2ac0d665b5b0dc`
+  - users `0.1.0` `sha256:0c8fbc9941f91e82abceb53bd006552420ef7229789a63a0c5ea319cfc2dad9a`
   - trips `0.1.1` `sha256:7bbff00deff78f710ed57d6c0bcad11bfd94d64dc43d29eee514d017bd81f344`
-  - API `1.3.0` `sha256:7be0a766866f9554b92bb7038361ce36e3b60f7f4c2be3572245650d031299f8`
-  - web `1.3.0` `sha256:c60d77705f37085d2e6ec01c0f34f54f4411dcca32d830633d76020eea9b8ed5`
+  - API `1.3.0` `sha256:a7cd708c8aeb506b006492877ff4401b0f8614b0f74ca94507758496db98ecbd`
+  - web `1.3.0` `sha256:d60e2ae20079ccc975bd38b6fe58a02b568ee7103804f6f079e7a7060e720121`
 
 ## Pending before publish
 

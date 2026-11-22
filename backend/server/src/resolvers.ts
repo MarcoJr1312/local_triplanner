@@ -752,7 +752,7 @@ export const resolvers: {
           username: input.username,
           password: input.password,
           displayName: input.displayName,
-          language: input.language ?? 'es',
+          language: input.language ?? 'en',
         }),
       );
     },

@@ -13,7 +13,7 @@ All services should show `healthy`.
 
 Open http://localhost:3000/login and sign in with **`demo` / `demo123`**.
 
-The UI starts in Spanish (the recruiter can switch to English in
+The UI starts in English (the recruiter can switch to Spanish in
 **Settings → Language**). The login screen also lets you create and delete local
 accounts; `demo` and `demo-friend` are protected.
 

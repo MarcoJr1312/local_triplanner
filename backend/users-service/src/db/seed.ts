@@ -73,7 +73,7 @@ export async function seedDemoUsers(db: Db): Promise<SeedResult> {
       if (!hash) continue;
       created += await tx.run(
         `INSERT INTO users (id, username, email, password_hash, display_name, color, language)
-         VALUES ($1, $2, $3, $4, $5, $6, 'es')
+         VALUES ($1, $2, $3, $4, $5, $6, 'en')
          ON CONFLICT DO NOTHING`,
         [user.id, user.username, user.email, hash, user.displayName, user.color],
       );

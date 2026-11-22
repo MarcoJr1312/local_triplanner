@@ -83,7 +83,7 @@ describe('create and login', () => {
       username: 'alice',
       display_name: 'Alice',
       email: null,
-      language: 'es',
+      language: 'en',
       deleted_at: null,
     });
     expect(user.id).toMatch(/^[0-9a-f-]{36}$/);

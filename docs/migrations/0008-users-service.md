@@ -88,7 +88,7 @@ invitations; a new local invitation channel has no email and no outbox.
   returned in plain text.
 - `email` is optional in storage for migrated demo rows; **account creation does
   not accept email**. New accounts have `email = NULL`.
-- `language` is `es` or `en`; new accounts default to `es` (product default).
+- `language` is `es` or `en`; new accounts default to `en` (product default).
 - No JWT. Login is `username + password`; the users service verifies the hash
   and returns the profile. The browser stores the UUID and sends
   `x-user-id: <uuid>`; the API validates the account on profile operations and
@@ -137,7 +137,7 @@ CREATE TABLE IF NOT EXISTS users (
   display_name  text NOT NULL,
   color         text,
   avatar_url    text,
-  language      text NOT NULL DEFAULT 'es',
+  language      text NOT NULL DEFAULT 'en',
   created_at    timestamptz NOT NULL DEFAULT now(),
   deleted_at    timestamptz
 );
@@ -399,7 +399,7 @@ The users service also rejects the protected UUIDs; it does not know trips.
 - **Members**: show username/display name; `email` may be null.
 - **Users admin**: create/delete from the login screen or Settings; protected
   demo users are not deletable; owner-blocked deletes show a clear message.
-- Spanish default with mirrored es/en keys for every new string.
+- English default with mirrored es/en keys for every new string.
 
 ## 12. Migration and cutover
 

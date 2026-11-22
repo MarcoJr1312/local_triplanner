@@ -107,7 +107,7 @@ export class UsersService {
     }
     const password = requiredPassword(body.password);
     const displayName = requiredString(body.display_name, 'display_name', 1, 80);
-    const language = optionalLanguage(body.language) ?? 'es';
+    const language = optionalLanguage(body.language) ?? 'en';
 
     const passwordHash = await Bun.password.hash(password, { algorithm: 'argon2id' });
 
