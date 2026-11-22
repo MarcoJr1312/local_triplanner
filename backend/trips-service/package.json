@@ -10,6 +10,7 @@
     "db:migrate": "bun src/db/migrate.ts",
     "db:seed": "bun src/db/seed.ts",
     "db:replay-outbox": "bun src/db/replay-outbox.ts",
+    "db:import-legacy": "bun scripts/import-legacy.ts",
     "test": "bun test",
     "typecheck": "tsc --noEmit"
   },

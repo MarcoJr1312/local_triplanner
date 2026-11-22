@@ -14,6 +14,7 @@ RUN bun install --frozen-lockfile --production
 
 COPY backend/trips-service/src ./src
 COPY backend/trips-service/db ./db
+COPY backend/trips-service/scripts ./scripts
 
 RUN chown -R app:app /app
 
