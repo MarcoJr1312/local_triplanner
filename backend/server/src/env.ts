@@ -33,6 +33,14 @@ export const EMAIL_SERVICE_URL = (process.env.EMAIL_SERVICE_URL ?? 'http://127.0
 export const BROKER_URL = (process.env.BROKER_URL ?? 'http://127.0.0.1:8080').replace(/\/+$/, '');
 export const BROKER_TOPIC = process.env.BROKER_TOPIC ?? 'TripInvitation';
 
+// ---- Trips service (:4400) ----
+// `local` keeps the legacy Postgres tables during the cutover; `remote` sends
+// every trip read/write to the trips service.
+export const TRIPS_MODE: 'local' | 'remote' =
+  process.env.TRIPS_MODE === 'remote' ? 'remote' : 'local';
+export const TRIPS_URL = (process.env.TRIPS_URL ?? 'http://127.0.0.1:4400').replace(/\/+$/, '');
+export const TRIPS_TIMEOUT_MS = Number(process.env.TRIPS_TIMEOUT_MS ?? 2000);
+
 // ---- Token interno (endpoints REST /internal/*) ----
 export const INTERNAL_TOKEN = process.env.INTERNAL_TOKEN ?? 'dev-internal-token';
 

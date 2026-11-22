@@ -105,9 +105,13 @@ CREATE INDEX IF NOT EXISTS idx_invitations_trip ON invitations(trip_id);
 CREATE INDEX IF NOT EXISTS idx_invitations_email ON invitations(email);
 
 -- ======================== ITEM ATTACHMENTS ========================
+-- Attachments belong to a trip item, but the item may live in the trips
+-- service. Keep trip_id here and do NOT use a foreign key to trip_items: the
+-- trips service owns that table after the M9 cutover.
 CREATE TABLE IF NOT EXISTS item_attachments (
   id         text PRIMARY KEY,
-  item_id    text NOT NULL REFERENCES trip_items(id),
+  trip_id    text,
+  item_id    text NOT NULL,
   file_name  text NOT NULL,
   mime_type  text NOT NULL,
   size_bytes integer NOT NULL,
@@ -117,7 +121,24 @@ CREATE TABLE IF NOT EXISTS item_attachments (
   visibility text NOT NULL DEFAULT 'legacy'
 );
 
+-- Existing databases: add trip_id, drop the old FK and backfill from the
+-- legacy trip_items table while it still exists.
+ALTER TABLE item_attachments ADD COLUMN IF NOT EXISTS trip_id text;
+ALTER TABLE item_attachments DROP CONSTRAINT IF EXISTS item_attachments_item_id_fkey;
+
+DO $$
+BEGIN
+  IF to_regclass('public.trip_items') IS NOT NULL THEN
+    UPDATE item_attachments a
+       SET trip_id = i.trip_id
+      FROM trip_items i
+     WHERE a.item_id = i.id
+       AND a.trip_id IS NULL;
+  END IF;
+END $$;
+
 CREATE INDEX IF NOT EXISTS idx_item_attachments_item ON item_attachments(item_id);
+CREATE INDEX IF NOT EXISTS idx_item_attachments_trip ON item_attachments(trip_id);
 
 -- ======================= ATTACHMENT VIEWERS ========================
 CREATE TABLE IF NOT EXISTS attachment_viewers (

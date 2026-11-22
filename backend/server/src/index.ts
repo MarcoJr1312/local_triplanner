@@ -16,9 +16,13 @@ import {
   INTERNAL_TOKEN,
   isUsingDefaultInternalToken,
   BOOTSTRAP_LOCAL,
+  TRIPS_MODE,
+  TRIPS_URL,
+  TRIPS_TIMEOUT_MS,
 } from './env.ts';
 import { createInternalRouter } from './internal.ts';
 import { serveUploads } from './uploads.ts';
+import { createTripsStore } from './trips/index.ts';
 
 const databaseUrl = await resolveDatabaseUrl();
 const db = await PgDb.connect(databaseUrl);
@@ -34,7 +38,15 @@ const gqlCatalogue = guardCatalogue(catalogue);
 const storage = defaultStorage();
 const pubsub = createPubSub() as unknown as PubSub;
 
-const internalRouter = createInternalRouter({ db, catalogue, internalToken: INTERNAL_TOKEN });
+const trips = createTripsStore({
+  mode: TRIPS_MODE,
+  db,
+  baseUrl: TRIPS_URL,
+  internalToken: INTERNAL_TOKEN,
+  timeoutMs: TRIPS_TIMEOUT_MS,
+});
+
+const internalRouter = createInternalRouter({ db, catalogue, internalToken: INTERNAL_TOKEN, trips });
 
 const schema = createSchema({
   typeDefs: loadTypeDefs(),
@@ -48,6 +60,7 @@ const yoga = createYoga({
     catalogue: gqlCatalogue,
     storage,
     pubsub,
+    trips,
     currentUserId: getCurrentUserId(request),
   }),
   graphiql: true,
@@ -72,6 +85,7 @@ const server = createServer((req, res) => {
 
 server.listen(PORT, () => {
   console.log(`[triplanner-local] GraphQL en http://localhost:${PORT}/graphql`);
+  console.log(`[triplanner-local] trips mode=${TRIPS_MODE}${TRIPS_MODE === 'remote' ? ` url=${TRIPS_URL}` : ''}`);
   if (isUsingDefaultInternalToken()) {
     console.warn(
       '[triplanner-local] INTERNAL_TOKEN no definido: usando default de desarrollo (define INTERNAL_TOKEN en backend/.env)',

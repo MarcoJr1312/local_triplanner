@@ -11,6 +11,7 @@ import { migrate } from './db/migrate.ts';
 import { PgDb } from './pg/db.ts';
 import { resolveDatabaseUrl } from './pg/config.ts';
 import { uploadsRoot } from './storage.ts';
+import { TRIPS_MODE } from './env.ts';
 import type { AsyncDb } from './pg/db.ts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -97,7 +98,29 @@ function pickDemoActivities(activities: SeedActivity[]): SeedActivity[] {
   return picked.slice(0, 9);
 }
 
+export async function seedDemoUsers(db: AsyncDb): Promise<void> {
+  await db
+    .prepare(
+      `INSERT INTO users (id, email, display_name, color, language)
+       VALUES ('demo-user', 'demo@triplanner.local', 'Demo', '#6366f1', 'en')
+       ON CONFLICT DO NOTHING`,
+    )
+    .run();
+
+  // Second identity for invite/collaboration flows. It is not a trip member
+  // until the owner invites it.
+  await db
+    .prepare(
+      `INSERT INTO users (id, email, display_name, color, language)
+       VALUES ('demo-friend', 'friend@triplanner.local', 'Demo Friend', '#10b981', 'en')
+       ON CONFLICT DO NOTHING`,
+    )
+    .run();
+}
+
 export async function seedDemo(db: AsyncDb, activities: SeedActivity[] = []): Promise<void> {
+  await seedDemoUsers(db);
+
   await db
     .prepare(
       `INSERT INTO users (id, email, display_name, color, language)
@@ -155,6 +178,12 @@ export async function seedDemo(db: AsyncDb, activities: SeedActivity[] = []): Pr
 }
 
 export async function seedAll(db: AsyncDb, data: SeedData): Promise<void> {
+  // In remote mode the trips service owns the demo trip and seeds it itself
+  // (SEED_DEMO=true). The API only creates the demo identities.
+  if (TRIPS_MODE === 'remote') {
+    await seedDemoUsers(db);
+    return;
+  }
   await seedDemo(db, data.destinations[0]?.activities ?? []);
 }
 
@@ -167,7 +196,9 @@ if (import.meta.main) {
   try {
     const images = copySeedImages();
     await seedAll(db, data);
-    console.log(`Seed OK — Postgres listo; catálogo en locations-service, ${images} imágenes`);
+    console.log(
+      `Seed OK — Postgres listo (trips=${TRIPS_MODE}); catálogo en locations-service, ${images} imágenes`,
+    );
   } finally {
     await db.close();
   }

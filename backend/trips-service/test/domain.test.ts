@@ -58,6 +58,7 @@ interface StoredEventPayload {
   memberName?: string;
   tripName?: string;
   language?: string;
+  joinUrl?: string;
 }
 
 interface StoredEvent {
@@ -82,7 +83,7 @@ function inviteNotify() {
   return {
     inviter_name: 'Marco',
     language: 'es',
-    join_url: 'http://localhost:3000/join?trip=demo-trip&code=ABC',
+    app_url: 'http://localhost:3000',
     demo: true,
   };
 }
@@ -488,6 +489,9 @@ describe('invitations and outbox', () => {
     expect(rows[0]?.payload.payload.to).toBe('friend@example.com');
     expect(rows[0]?.payload.payload.code).toBe(result.invitation.code);
     expect(rows[0]?.payload.payload.ownerName).toBe('Marco');
+    expect(rows[0]?.payload.payload.joinUrl).toBe(
+      `http://localhost:3000/join?trip=${id}&code=${result.invitation.code}&auto=1`,
+    );
     expect(await countPendingOutbox(db)).toBe(1);
   });
 

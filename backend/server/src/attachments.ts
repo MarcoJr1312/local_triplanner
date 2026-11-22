@@ -4,6 +4,7 @@ export type AttachmentVisibilityMode = 'private' | 'shared' | 'legacy';
 
 export interface AttachmentRow {
   id: string;
+  trip_id: string | null;
   item_id: string;
   file_name: string;
   mime_type: string;

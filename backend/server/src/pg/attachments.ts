@@ -43,15 +43,23 @@ async function hasViewerRows(db: AsyncDb, attachmentId: string): Promise<boolean
 // - granted viewer sees it
 // - legacy attachment with no viewer rows: any trip member sees it
 // - otherwise nobody (not even the owner)
-export async function canViewAttachment(db: AsyncDb, attachmentId: string, userId: string): Promise<boolean> {
+//
+// Membership lives in the trips service, so the caller supplies the check.
+export async function canViewAttachment(
+  db: AsyncDb,
+  attachmentId: string,
+  userId: string,
+  isMember: (tripId: string) => Promise<boolean>,
+): Promise<boolean> {
   const row = await db
     .prepare(
-      `SELECT a.created_by AS created_by, a.visibility AS visibility, i.trip_id AS trip_id
-       FROM item_attachments a
-       JOIN trip_items i ON i.id = a.item_id
-       WHERE a.id = ?`,
+      `SELECT created_by, visibility, trip_id
+         FROM item_attachments
+        WHERE id = ?`,
     )
-    .get<{ created_by: string; visibility: AttachmentVisibilityMode; trip_id: string }>(attachmentId);
+    .get<{ created_by: string; visibility: AttachmentVisibilityMode; trip_id: string | null }>(
+      attachmentId,
+    );
   if (!row) return false;
   if (row.created_by === userId) return true;
 
@@ -60,8 +68,8 @@ export async function canViewAttachment(db: AsyncDb, attachmentId: string, userI
     .get(attachmentId, userId);
   if (isViewer) return true;
 
-  if (row.visibility === 'legacy') {
-    return isTripMember(db, row.trip_id, userId);
+  if (row.visibility === 'legacy' && row.trip_id) {
+    return isMember(row.trip_id);
   }
   return false;
 }
@@ -95,6 +103,7 @@ export async function listAttachmentsByItem(
   storage: Storage,
   itemId: string,
   userId?: string | null,
+  isMember?: (tripId: string) => Promise<boolean>,
 ): Promise<AttachmentGql[]> {
   const rows = await db
     .prepare(`${ATTACHMENT_SELECT} WHERE a.item_id = ? ORDER BY a.created_at ASC`)
@@ -102,7 +111,9 @@ export async function listAttachmentsByItem(
 
   const visible: AttachmentGql[] = [];
   for (const row of rows) {
-    if (userId && !(await canViewAttachment(db, row.id, userId))) continue;
+    if (userId && !(await canViewAttachment(db, row.id, userId, isMember ?? (async () => false)))) {
+      continue;
+    }
     visible.push(await toAttachmentGql(db, storage, row, userId ?? null));
   }
   return visible;
@@ -120,16 +131,18 @@ export async function getAttachmentForUser(
   storage: Storage,
   attachmentId: string,
   userId: string,
+  isMember: (tripId: string) => Promise<boolean>,
 ): Promise<AttachmentGql | null> {
   const row = await findAttachment(db, attachmentId);
   if (!row) return null;
-  if (!(await canViewAttachment(db, attachmentId, userId))) return null;
+  if (!(await canViewAttachment(db, attachmentId, userId, isMember))) return null;
   return toAttachmentGql(db, storage, row, userId, true);
 }
 
 export async function addAttachment(
   db: AsyncDb,
   storage: Storage,
+  tripId: string,
   itemId: string,
   createdBy: string,
   input: AddAttachmentInput,
@@ -154,10 +167,11 @@ export async function addAttachment(
 
   await db
     .prepare(
-      `INSERT INTO item_attachments (id, item_id, file_name, mime_type, size_bytes, path, created_by, visibility)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO item_attachments
+         (id, trip_id, item_id, file_name, mime_type, size_bytes, path, created_by, visibility)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
-    .run(id, itemId, name, input.mimeType, buffer.length, key, createdBy, visibility);
+    .run(id, tripId, itemId, name, input.mimeType, buffer.length, key, createdBy, visibility);
 
   for (const viewerId of uniqueViewers) {
     await db
@@ -169,18 +183,6 @@ export async function addAttachment(
   if (!row) throw new Error('No se pudo guardar el adjunto');
   // Internal call: relative URL; the resolver re-reads a signed one for the caller.
   return toAttachmentGql(db, storage, row, createdBy, false);
-}
-
-export async function invalidAttachmentViewers(
-  db: AsyncDb,
-  tripId: string,
-  viewerIds: readonly string[],
-): Promise<string[]> {
-  const invalid: string[] = [];
-  for (const viewerId of new Set(viewerIds)) {
-    if (!(await isTripMember(db, tripId, viewerId))) invalid.push(viewerId);
-  }
-  return invalid;
 }
 
 export async function replaceAttachmentViewers(
@@ -222,49 +224,52 @@ export async function findAttachmentItemTrip(
   attachmentId: string,
 ): Promise<{ itemId: string; tripId: string } | null> {
   const row = await db
-    .prepare(
-      `SELECT a.item_id AS "itemId", i.trip_id AS "tripId"
-       FROM item_attachments a
-       JOIN trip_items i ON i.id = a.item_id
-       WHERE a.id = ?`,
-    )
-    .get<{ itemId: string; tripId: string }>(attachmentId);
-  return row ?? null;
-}
-
-export async function findItemTrip(db: AsyncDb, itemId: string): Promise<string | null> {
-  const row = await db.prepare('SELECT trip_id FROM trip_items WHERE id = ?').get<{ trip_id: string }>(itemId);
-  return row?.trip_id ?? null;
+    .prepare('SELECT item_id, trip_id FROM item_attachments WHERE id = ?')
+    .get<{ item_id: string; trip_id: string | null }>(attachmentId);
+  if (!row?.trip_id) return null;
+  return { itemId: row.item_id, tripId: row.trip_id };
 }
 
 // Removes every attachment of a trip: rows first, then bytes (best effort).
 export async function removeAttachmentsByTrip(db: AsyncDb, storage: Storage, tripId: string): Promise<void> {
   const rows = await db
-    .prepare(
-      `SELECT a.path AS path
-       FROM item_attachments a
-       JOIN trip_items i ON i.id = a.item_id
-       WHERE i.trip_id = ?`,
-    )
+    .prepare('SELECT path FROM item_attachments WHERE trip_id = ?')
     .all<{ path: string }>(tripId);
 
   await db.transaction(async (tx) => {
     await tx
       .prepare(
-        'DELETE FROM attachment_viewers WHERE attachment_id IN (SELECT a.id FROM item_attachments a JOIN trip_items i ON i.id = a.item_id WHERE i.trip_id = ?)',
+        'DELETE FROM attachment_viewers WHERE attachment_id IN (SELECT id FROM item_attachments WHERE trip_id = ?)',
       )
       .run(tripId);
-    await tx
-      .prepare('DELETE FROM item_attachments WHERE item_id IN (SELECT id FROM trip_items WHERE trip_id = ?)')
-      .run(tripId);
+    await tx.prepare('DELETE FROM item_attachments WHERE trip_id = ?').run(tripId);
   });
 
   for (const row of rows) await storage.delete(row.path);
 }
 
-export async function isTripMember(db: AsyncDb, tripId: string, userId: string): Promise<boolean> {
-  const row = await db
-    .prepare('SELECT 1 AS ok FROM trip_members WHERE trip_id = ? AND user_id = ?')
-    .get(tripId, userId);
-  return Boolean(row);
+// Removes every attachment of one item before the item leaves the trips
+// service. Metadata lives here; the service only knows the item id.
+export async function removeAttachmentsByItem(
+  db: AsyncDb,
+  storage: Storage,
+  tripId: string,
+  itemId: string,
+): Promise<void> {
+  const rows = await db
+    .prepare('SELECT path FROM item_attachments WHERE trip_id = ? AND item_id = ?')
+    .all<{ path: string }>(tripId, itemId);
+
+  await db.transaction(async (tx) => {
+    await tx
+      .prepare(
+        'DELETE FROM attachment_viewers WHERE attachment_id IN (SELECT id FROM item_attachments WHERE trip_id = ? AND item_id = ?)',
+      )
+      .run(tripId, itemId);
+    await tx
+      .prepare('DELETE FROM item_attachments WHERE trip_id = ? AND item_id = ?')
+      .run(tripId, itemId);
+  });
+
+  for (const row of rows) await storage.delete(row.path);
 }

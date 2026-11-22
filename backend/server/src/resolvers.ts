@@ -13,29 +13,24 @@ import {
   addAttachment,
   removeAttachment,
   listAttachmentsByItem,
-  findAttachmentItemTrip,
   findAttachment,
-  findItemTrip,
-  invalidAttachmentViewers,
   replaceAttachmentViewers,
   getAttachmentForUser,
   removeAttachmentsByTrip,
+  removeAttachmentsByItem,
 } from './pg/attachments.ts';
 import { setFavorite, favoriteIdsForUser, isFavorite } from './pg/favorites.ts';
 import { listUserInterests, replaceUserInterests } from './pg/interests.ts';
 import { syncInterestsToAgent, type InterestsSync } from './interests.ts';
 import { listSuggestionChats, upsertSuggestionChat } from './pg/chats.ts';
 import { isValidMessages } from './chats.ts';
-import { recomputeItemReminder } from './pg/reminders.ts';
-import { isValidCoverPreset, writeCoverPhoto, removeTripCoverFiles } from './pg/covers.ts';
+import { isValidCoverPreset, writeCoverPhoto, removeTripCoverFiles, removeCoverPhoto } from './pg/covers.ts';
 import { locationRowToGraphQL } from './catalogue/presenter.ts';
 import { searchLocationsWithCatalogue } from './catalogue/search.ts';
 import { buildSuggestions } from './pg/recommend.ts';
-import { createInvitation, findInvitationByCode, acceptInvitation } from './pg/invitations.ts';
 import { isEmailMatch, isInviteCodeValid } from './invitations.ts';
 import { decodeAvatarDataUrl } from './pg/profile.ts';
-import { AGENT_BASE_URL, INTERNAL_TOKEN } from './env.ts';
-import { brokerPublisher } from './broker.ts';
+import { AGENT_BASE_URL, APP_URL, INTERNAL_TOKEN } from './env.ts';
 import {
   emailSettingsClient,
   EmailSettingsError,
@@ -48,32 +43,8 @@ import {
   type LocationsSettingsGql,
   type UpdateLocationsSettingsInput,
 } from './locations-settings.ts';
-import {
-  addInvitedMember,
-  addItem as addItemRow,
-  computeTripStats,
-  createTrip as createTripRow,
-  deleteTripCascade,
-  getItem,
-  getMemberRole,
-  getTrip,
-  inviteMember as inviteMemberRow,
-  isTripMember,
-  listItems,
-  listMembers,
-  listTripsForUser,
-  moveItem as moveItemRow,
-  removeItem as removeItemRow,
-  removeMember as removeMemberRow,
-  setBudget as setBudgetRow,
-  setItemCost as setItemCostRow,
-  transferOwnershipAndLeave,
-  updateItemFields,
-  updateMemberRole as updateMemberRoleRow,
-  updateTripSettings as updateTripSettingsRow,
-  type TripItemRow,
-  type TripRowFull,
-} from './pg/trips.ts';
+import type { TripItemRow, TripMemberRow, TripRowFull } from './pg/trips.ts';
+import type { TripData, TripRole, TripsStore, UpdateTripInput } from './trips/types.ts';
 import type { LocationRow, Profile, TripRow, UserRow } from './schema-types.ts';
 
 export interface PubSub {
@@ -87,6 +58,7 @@ export interface Ctx {
   storage: Storage;
   currentUserId: string;
   pubsub: PubSub;
+  trips: TripsStore;
   syncInterests?: InterestsSync;
 }
 
@@ -432,18 +404,45 @@ async function agentLlmConfig(
   };
 }
 
-async function assertTripMember(db: AsyncDb, tripId: string, userId: string): Promise<void> {
-  if (!(await isTripMember(db, tripId, userId))) {
-    throw gqlError('NOT_TRIP_MEMBER', 'No eres miembro de este viaje.');
+function assertEditorRole(role: TripRole | null): void {
+  if (!role) throw gqlError('NOT_TRIP_MEMBER', 'No eres miembro de este viaje.');
+  if (role === 'viewer') {
+    throw gqlError('FORBIDDEN_EDIT', 'Solo el propietario o un editor puede modificar el itinerario.');
   }
 }
 
-async function assertCanEditTrip(db: AsyncDb, tripId: string, userId: string): Promise<void> {
-  await assertTripMember(db, tripId, userId);
-  const role = await getMemberRole(db, tripId, userId);
-  if (role !== 'owner' && role !== 'editor') {
-    throw gqlError('FORBIDDEN_EDIT', 'Solo el propietario o un editor puede modificar el itinerario.');
+async function resolveDestination(
+  ctx: Ctx,
+  destinationId: string | null | undefined,
+  destinationName: string | null | undefined,
+): Promise<{
+  destinationId: string | null;
+  destinationName: string | null;
+  destinationLat: number | null;
+  destinationLng: number | null;
+}> {
+  if (!destinationId) {
+    return {
+      destinationId: null,
+      destinationName: destinationName ?? null,
+      destinationLat: null,
+      destinationLng: null,
+    };
   }
+
+  let row: LocationRow | null = null;
+  try {
+    row = await ctx.catalogue.getById(destinationId);
+  } catch {
+    row = null;
+  }
+
+  return {
+    destinationId,
+    destinationName: destinationName ?? row?.name ?? null,
+    destinationLat: row?.lat ?? null,
+    destinationLng: row?.lng ?? null,
+  };
 }
 
 function publishTrip(ctx: Ctx, tripId: string, mutationType: string, entity: unknown, actorId: string): void {
@@ -452,53 +451,67 @@ function publishTrip(ctx: Ctx, tripId: string, mutationType: string, entity: unk
   });
 }
 
-async function buildTrip(db: AsyncDb, tripRow: TripFullRow, currentUserId: string): Promise<TripGql> {
-  const members = (await listMembersWithUser(db, tripRow.id)).map(toMember);
-  const items = (await listItems(db, tripRow.id)).map(toTripItem);
-  const { spent, spentByCategory } = computeTripStats(items);
-  const myRole = await getMemberRole(db, tripRow.id, currentUserId);
+async function enrichMembers(db: AsyncDb, members: TripMemberRow[]): Promise<MemberRow[]> {
+  if (members.length === 0) return [];
+
+  const ids = members.map((member) => member.user_id);
+  const placeholders = ids.map(() => '?').join(',');
+  const users = await db
+    .prepare(
+      `SELECT id, display_name, email, color, avatar_url
+         FROM users
+        WHERE id IN (${placeholders})`,
+    )
+    .all<{
+      id: string;
+      display_name: string | null;
+      email: string | null;
+      color: string | null;
+      avatar_url: string | null;
+    }>(...ids);
+
+  const byId = new Map(users.map((user) => [user.id, user]));
+  return members.map((member) => {
+    const user = byId.get(member.user_id);
+    return {
+      user_id: member.user_id,
+      display_name: user?.display_name ?? member.user_id,
+      email: user?.email ?? '',
+      invited_email: member.invited_email,
+      role: member.role,
+      joined_at: member.joined_at,
+      color: user?.color ?? null,
+      avatar_url: user?.avatar_url ?? null,
+    };
+  });
+}
+
+async function buildTrip(ctx: Ctx, data: TripData): Promise<TripGql> {
+  const members = (await enrichMembers(ctx.db, data.members)).map(toMember);
 
   return {
-    id: tripRow.id,
-    name: tripRow.name,
-    destinationId: tripRow.destination_id ?? '',
-    destinationName: tripRow.destination_name ?? '',
-    destinationLat: tripRow.destination_lat ?? null,
-    destinationLng: tripRow.destination_lng ?? null,
-    timezone: tripRow.timezone ?? 'UTC',
-    startDate: tripRow.start_date,
-    endDate: tripRow.end_date,
-    totalBudget: tripRow.total_budget ?? 0,
-    coverPreset: tripRow.cover_preset ?? null,
-    coverPhotoUrl: tripRow.cover_photo_url ?? null,
-    spent,
-    spentByCategory,
-    ownerId: tripRow.owner_id,
-    inviteCode: tripRow.invite_code,
+    id: data.trip.id,
+    name: data.trip.name,
+    destinationId: data.trip.destination_id ?? '',
+    destinationName: data.trip.destination_name ?? '',
+    destinationLat: data.trip.destination_lat ?? null,
+    destinationLng: data.trip.destination_lng ?? null,
+    timezone: data.trip.timezone ?? 'UTC',
+    startDate: data.trip.start_date ?? '',
+    endDate: data.trip.end_date ?? '',
+    totalBudget: data.trip.total_budget ?? 0,
+    coverPreset: data.trip.cover_preset ?? null,
+    coverPhotoUrl: data.trip.cover_photo_url ?? null,
+    spent: data.spent,
+    spentByCategory: data.spentByCategory,
+    ownerId: data.trip.owner_id,
+    inviteCode: data.trip.invite_code ?? '',
     members,
-    items,
-    myRole: myRole ?? 'viewer',
-    createdAt: tripRow.created_at,
-    updatedAt: tripRow.updated_at,
+    items: data.items.map(toTripItem),
+    myRole: data.myRole,
+    createdAt: data.trip.created_at,
+    updatedAt: data.trip.updated_at,
   };
-}
-
-async function listMembersWithUser(db: AsyncDb, tripId: string): Promise<MemberRow[]> {
-  return db
-    .prepare(
-      `SELECT m.user_id, m.role, m.joined_at, m.invited_email, u.display_name, u.email, u.color, u.avatar_url
-       FROM trip_members m
-       JOIN users u ON u.id = m.user_id
-       WHERE m.trip_id = ?
-       ORDER BY m.joined_at ASC`,
-    )
-    .all<MemberRow>(tripId);
-}
-
-async function tripOrThrow(db: AsyncDb, tripId: string): Promise<TripFullRow> {
-  const trip = await getTrip(db, tripId);
-  if (!trip) throw gqlError('TRIP_NOT_FOUND', 'Trip not found');
-  return trip;
 }
 
 export const resolvers: {
@@ -510,7 +523,7 @@ export const resolvers: {
 } = {
   Query: {
     listMyTrips: async (_, __, ctx) => {
-      const rows = await listTripsForUser(ctx.db, ctx.currentUserId);
+      const rows = await ctx.trips.listMyTrips(ctx.currentUserId);
       return rows.map((r) => ({
         tripId: r.id,
         tripName: r.name,
@@ -524,9 +537,7 @@ export const resolvers: {
 
     getTrip: async (_, args, ctx) => {
       const { id } = args as Args<{ id: string }>;
-      await assertTripMember(ctx.db, id, ctx.currentUserId);
-      const row = await getTrip(ctx.db, id);
-      return row ? buildTrip(ctx.db, row, ctx.currentUserId) : null;
+      return buildTrip(ctx, await ctx.trips.getTrip(ctx.currentUserId, id));
     },
 
     listDestinations: async (_, __, ctx) => {
@@ -592,24 +603,27 @@ export const resolvers: {
     getTripByCode: async (_, args, ctx) => {
       const { code } = args as Args<{ code: string }>;
       if (!isInviteCodeValid(code)) return null;
-      const row = await ctx.db
-        .prepare(
-          `SELECT t.id, t.name, t.destination_name, u.display_name AS owner_name, i.email AS invited_email
-           FROM invitations i
-           JOIN trips t ON t.id = i.trip_id
-           JOIN users u ON u.id = t.owner_id
-           WHERE i.code = ?`,
-        )
-        .get<{ id: string; name: string; destination_name: string | null; owner_name: string | null; invited_email: string }>(
-          code,
-        );
-      if (!row) return null;
+
+      let preview;
+      try {
+        preview = await ctx.trips.previewInvitation(code);
+      } catch (error) {
+        if (error instanceof GraphQLError && error.extensions.code === 'INVITE_CODE_NOT_FOUND') {
+          return null;
+        }
+        throw error;
+      }
+
+      const owner = await ctx.db
+        .prepare('SELECT display_name FROM users WHERE id = ?')
+        .get<{ display_name: string | null }>(preview.trip.owner_id);
+
       return {
-        id: row.id,
-        name: row.name,
-        destinationName: row.destination_name ?? '',
-        ownerName: row.owner_name ?? '',
-        invitedEmail: row.invited_email,
+        id: preview.trip.id,
+        name: preview.trip.name,
+        destinationName: preview.trip.destination_name ?? '',
+        ownerName: owner?.display_name ?? '',
+        invitedEmail: preview.invitation.email,
       };
     },
 
@@ -679,40 +693,50 @@ export const resolvers: {
     },
 
     createTrip: async (_, args, ctx) => {
-      const { input } = args as Args<{ input: CreateTripInput }>;
-      const trip = await createTripRow(ctx.db, ctx.currentUserId, {
+      const { input } = args as Args<{ input: CreateTripInput & { timezone?: string | null } }>;
+      const destination = await resolveDestination(ctx, input.destinationId, input.destinationName);
+      const data = await ctx.trips.createTrip(ctx.currentUserId, {
         name: input.name,
-        destinationId: input.destinationId,
-        destinationName: input.destinationName,
+        destinationId: destination.destinationId,
+        destinationName: destination.destinationName,
+        destinationLat: destination.destinationLat,
+        destinationLng: destination.destinationLng,
         startDate: input.startDate,
         endDate: input.endDate,
         totalBudget: input.totalBudget,
-        timezone: normalizeTimeZone(null),
+        timezone: normalizeTimeZone(input.timezone),
       });
-      publishTrip(ctx, trip.id, 'createTrip', { id: trip.id, name: input.name }, ctx.currentUserId);
-      return buildTrip(ctx.db, trip, ctx.currentUserId);
+      publishTrip(ctx, data.trip.id, 'createTrip', { id: data.trip.id, name: input.name }, ctx.currentUserId);
+      return buildTrip(ctx, data);
     },
 
     updateTripSettings: async (_, args, ctx) => {
       const { id, input } = args as Args<{ id: string; input: UpdateTripSettingsInput }>;
-      const trip = await tripOrThrow(ctx.db, id);
-      const name = input.name ?? trip.name;
-      await updateTripSettingsRow(ctx.db, id, {
-        name,
-        startDate: input.startDate ?? trip.start_date,
-        endDate: input.endDate ?? trip.end_date,
-        destinationId: input.destinationId ?? trip.destination_id,
-        destinationName: input.destinationName ?? trip.destination_name,
-      });
-      publishTrip(ctx, id, 'updateTripSettings', { id, name }, ctx.currentUserId);
-      return buildTrip(ctx.db, await tripOrThrow(ctx.db, id), ctx.currentUserId);
+      const patch: UpdateTripInput = {};
+      if (input.name != null) patch.name = input.name;
+      if (input.startDate != null) patch.startDate = input.startDate;
+      if (input.endDate != null) patch.endDate = input.endDate;
+
+      if (input.destinationId != null && input.destinationId !== '') {
+        const destination = await resolveDestination(ctx, input.destinationId, input.destinationName);
+        patch.destinationId = destination.destinationId;
+        patch.destinationName = destination.destinationName;
+        patch.destinationLat = destination.destinationLat;
+        patch.destinationLng = destination.destinationLng;
+      } else if (input.destinationName != null) {
+        patch.destinationName = input.destinationName;
+      }
+
+      const data = await ctx.trips.updateTrip(ctx.currentUserId, id, patch);
+      publishTrip(ctx, id, 'updateTripSettings', { id, name: data.trip.name }, ctx.currentUserId);
+      return buildTrip(ctx, data);
     },
 
     setBudget: async (_, args, ctx) => {
       const { tripId, totalBudget } = args as Args<{ tripId: string; totalBudget: number }>;
-      await setBudgetRow(ctx.db, tripId, totalBudget);
+      const data = await ctx.trips.updateTrip(ctx.currentUserId, tripId, { totalBudget });
       publishTrip(ctx, tripId, 'setBudget', { tripId, totalBudget }, ctx.currentUserId);
-      return buildTrip(ctx.db, await tripOrThrow(ctx.db, tripId), ctx.currentUserId);
+      return buildTrip(ctx, data);
     },
 
     inviteMember: async (_, args, ctx) => {
@@ -723,88 +747,48 @@ export const resolvers: {
         displayName?: string | null;
         role: string;
       }>;
+      if (role !== 'editor' && role !== 'viewer') {
+        throw gqlError('INVALID_MEMBER_ROLE', 'Rol de miembro no válido.');
+      }
       const user = await ensureUser(ctx.db, { userId, email, displayName });
-      await inviteMemberRow(ctx.db, tripId, user.id, role);
+      const data = await ctx.trips.inviteMember(ctx.currentUserId, tripId, user.id, role);
       publishTrip(ctx, tripId, 'inviteMember', { tripId, userId: user.id, role }, ctx.currentUserId);
-      return buildTrip(ctx.db, await tripOrThrow(ctx.db, tripId), ctx.currentUserId);
+      return buildTrip(ctx, data);
     },
 
     updateMemberRole: async (_, args, ctx) => {
       const { tripId, userId, role } = args as Args<{ tripId: string; userId: string; role: string }>;
-      await assertTripMember(ctx.db, tripId, ctx.currentUserId);
-      const trip = await tripOrThrow(ctx.db, tripId);
-      if (trip.owner_id !== ctx.currentUserId) {
-        throw gqlError('NOT_TRIP_OWNER', 'Solo el propietario puede cambiar los roles.');
-      }
       if (role !== 'editor' && role !== 'viewer') {
-        throw gqlError('INVALID_MEMBER_ROLE', 'Rol de miembro no vÃ¡lido.');
+        throw gqlError('INVALID_MEMBER_ROLE', 'Rol de miembro no válido.');
       }
-      if (userId === trip.owner_id) {
-        throw gqlError('OWNER_ROLE_PROTECTED', 'El rol del propietario no se puede cambiar.');
-      }
-      if (!(await isTripMember(ctx.db, tripId, userId))) {
-        throw gqlError('MEMBER_NOT_FOUND', 'Miembro no encontrado.');
-      }
-      await updateMemberRoleRow(ctx.db, tripId, userId, role);
+      const data = await ctx.trips.updateMemberRole(ctx.currentUserId, tripId, userId, role);
       publishTrip(ctx, tripId, 'updateMemberRole', { tripId, userId, role }, ctx.currentUserId);
-      return buildTrip(ctx.db, await tripOrThrow(ctx.db, tripId), ctx.currentUserId);
+      return buildTrip(ctx, data);
     },
 
     removeMember: async (_, args, ctx) => {
       const { tripId, userId } = args as Args<{ tripId: string; userId: string }>;
-      await assertTripMember(ctx.db, tripId, ctx.currentUserId);
-      const trip = await tripOrThrow(ctx.db, tripId);
-      if (trip.owner_id !== ctx.currentUserId) {
-        throw gqlError('NOT_TRIP_OWNER', 'Solo el propietario puede eliminar miembros.');
-      }
-      if (userId === trip.owner_id) {
-        throw gqlError('OWNER_CANNOT_BE_REMOVED', 'El propietario no se puede eliminar: transfiere la propiedad primero.');
-      }
-      if (!(await isTripMember(ctx.db, tripId, userId))) {
-        throw gqlError('MEMBER_NOT_FOUND', 'Miembro no encontrado.');
-      }
-      await removeMemberRow(ctx.db, tripId, userId);
+      const data = await ctx.trips.removeMember(ctx.currentUserId, tripId, userId);
       publishTrip(ctx, tripId, 'removeMember', { tripId, userId }, ctx.currentUserId);
-      return buildTrip(ctx.db, await tripOrThrow(ctx.db, tripId), ctx.currentUserId);
+      return buildTrip(ctx, data);
     },
 
     leaveTrip: async (_, args, ctx) => {
       const { tripId, newOwnerId } = args as Args<{ tripId: string; newOwnerId?: string | null }>;
-      const trip = await tripOrThrow(ctx.db, tripId);
-      const role = await getMemberRole(ctx.db, tripId, ctx.currentUserId);
-      if (!role) throw gqlError('NOT_TRIP_MEMBER', 'Solo los miembros pueden salir del viaje.');
-
-      if (trip.owner_id !== ctx.currentUserId) {
-        await removeMemberRow(ctx.db, tripId, ctx.currentUserId);
-        publishTrip(ctx, tripId, 'leaveTrip', { tripId, userId: ctx.currentUserId }, ctx.currentUserId);
-        return buildTrip(ctx.db, await tripOrThrow(ctx.db, tripId), ctx.currentUserId);
-      }
-
-      if (!newOwnerId) throw gqlError('OWNER_MUST_TRANSFER', 'Debes transferir la propiedad antes de salir.');
-      if (newOwnerId === ctx.currentUserId) {
-        throw gqlError('INVALID_TRANSFER_TARGET', 'El nuevo propietario debe ser otro miembro del viaje.');
-      }
-      try {
-        await transferOwnershipAndLeave(ctx.db, tripId, ctx.currentUserId, newOwnerId);
-      } catch (e) {
-        throw gqlError('INVALID_TRANSFER_TARGET', e instanceof Error ? e.message : 'Transferencia no vÃ¡lida.');
-      }
+      const data = await ctx.trips.leaveTrip(ctx.currentUserId, tripId, newOwnerId);
       publishTrip(ctx, tripId, 'leaveTrip', { tripId, userId: ctx.currentUserId, newOwnerId }, ctx.currentUserId);
-      return buildTrip(ctx.db, await tripOrThrow(ctx.db, tripId), ctx.currentUserId);
+      return buildTrip(ctx, data);
     },
 
     deleteTrip: async (_, args, ctx) => {
       const { tripId } = args as Args<{ tripId: string }>;
-      const trip = await tripOrThrow(ctx.db, tripId);
-      if (!(await isTripMember(ctx.db, tripId, ctx.currentUserId))) {
-        throw gqlError('NOT_TRIP_MEMBER', 'Solo los miembros del viaje pueden eliminarlo.');
-      }
-      if (trip.owner_id !== ctx.currentUserId) {
+      const data = await ctx.trips.getTrip(ctx.currentUserId, tripId);
+      if (data.trip.owner_id !== ctx.currentUserId) {
         throw gqlError('NOT_TRIP_OWNER', 'Solo el propietario puede eliminar el viaje.');
       }
       await removeAttachmentsByTrip(ctx.db, ctx.storage, tripId);
       await removeTripCoverFiles(ctx.storage, tripId);
-      await deleteTripCascade(ctx.db, tripId);
+      await ctx.trips.deleteTrip(ctx.currentUserId, tripId);
       publishTrip(ctx, tripId, 'deleteTrip', { id: tripId }, ctx.currentUserId);
       return tripId;
     },
@@ -814,51 +798,90 @@ export const resolvers: {
         tripId: string;
         input: { coverPreset?: string | null; coverPhotoDataUrl?: string | null; removePhoto?: boolean | null };
       }>;
-      const trip = await tripOrThrow(ctx.db, tripId);
-      if (trip.owner_id !== ctx.currentUserId) {
+      const current = await ctx.trips.getTrip(ctx.currentUserId, tripId);
+      if (current.trip.owner_id !== ctx.currentUserId) {
         throw gqlError('NOT_TRIP_OWNER', 'Solo el propietario puede cambiar la portada.');
       }
 
       if (input.coverPreset != null && input.coverPreset !== '') {
         if (!isValidCoverPreset(input.coverPreset)) {
-          throw gqlError('INVALID_COVER_PRESET', 'Preset de portada no vÃ¡lido.');
+          throw gqlError('INVALID_COVER_PRESET', 'Preset de portada no válido.');
         }
+        const data = await ctx.trips.updateTrip(ctx.currentUserId, tripId, {
+          coverPreset: input.coverPreset,
+        });
         await removeTripCoverFiles(ctx.storage, tripId);
-        await ctx.db
-          .prepare('UPDATE trips SET cover_preset = ?, cover_photo_url = NULL, updated_at = now() WHERE id = ?')
-          .run(input.coverPreset, tripId);
-      } else if (input.coverPhotoDataUrl) {
+        publishTrip(ctx, tripId, 'updateTripCover', { tripId }, ctx.currentUserId);
+        return buildTrip(ctx, data);
+      }
+
+      if (input.coverPhotoDataUrl) {
         let decoded: { ext: string; buffer: Buffer };
         try {
           decoded = decodeAvatarDataUrl(input.coverPhotoDataUrl);
         } catch {
-          throw gqlError('INVALID_IMAGE', 'Formato de imagen no vÃ¡lido: usa PNG, JPG o WebP (mÃ¡x 2MB).');
+          throw gqlError('INVALID_IMAGE', 'Formato de imagen no válido: usa PNG, JPG o WebP (máx 2MB).');
         }
-        await removeTripCoverFiles(ctx.storage, tripId);
+
         let relPath: string;
         try {
           relPath = await writeCoverPhoto(ctx.storage, tripId, decoded.ext, decoded.buffer);
         } catch (e) {
           throw gqlError('COVER_UPLOAD_FAILED', e instanceof Error ? e.message : 'No se pudo guardar la portada.');
         }
-        await ctx.db
-          .prepare('UPDATE trips SET cover_photo_url = ?, updated_at = now() WHERE id = ?')
-          .run(relPath, tripId);
-      } else if (input.removePhoto) {
-        await removeTripCoverFiles(ctx.storage, tripId);
-        await ctx.db.prepare('UPDATE trips SET cover_photo_url = NULL, updated_at = now() WHERE id = ?').run(tripId);
+
+        let data;
+        try {
+          data = await ctx.trips.updateTrip(ctx.currentUserId, tripId, { coverPhotoUrl: relPath });
+        } catch (error) {
+          await removeCoverPhoto(ctx.storage, relPath);
+          throw error;
+        }
+
+        await removeCoverPhoto(ctx.storage, current.trip.cover_photo_url);
+        publishTrip(ctx, tripId, 'updateTripCover', { tripId }, ctx.currentUserId);
+        return buildTrip(ctx, data);
       }
 
-      publishTrip(ctx, tripId, 'updateTripCover', { tripId }, ctx.currentUserId);
-      return buildTrip(ctx.db, await tripOrThrow(ctx.db, tripId), ctx.currentUserId);
+      if (input.removePhoto) {
+        const data = await ctx.trips.updateTrip(ctx.currentUserId, tripId, { removePhoto: true });
+        await removeTripCoverFiles(ctx.storage, tripId);
+        publishTrip(ctx, tripId, 'updateTripCover', { tripId }, ctx.currentUserId);
+        return buildTrip(ctx, data);
+      }
+
+      return buildTrip(ctx, current);
     },
 
     addItem: async (_, args, ctx) => {
       const { tripId, input } = args as Args<{ tripId: string; input: AddItemInput }>;
-      await assertCanEditTrip(ctx.db, tripId, ctx.currentUserId);
-      const row = await addItemRow(ctx.db, tripId, ctx.currentUserId, {
-        locationId: input.activityId ?? null,
+      const locationId = input.activityId ?? null;
+      let locationName: string | null = null;
+      let locationAddress: string | null = null;
+      let lat: number | null = null;
+      let lng: number | null = null;
+
+      if (locationId) {
+        try {
+          const row = await ctx.catalogue.getById(locationId);
+          if (row) {
+            locationName = row.name;
+            locationAddress = row.address;
+            lat = row.lat;
+            lng = row.lng;
+          }
+        } catch {
+          // Best effort: the item keeps the supplied text.
+        }
+      }
+
+      const item = await ctx.trips.addItem(ctx.currentUserId, tripId, {
+        locationId,
         locationText: normalizeLocationText(input.locationText),
+        locationName,
+        locationAddress,
+        lat,
+        lng,
         title: input.title,
         category: input.category,
         cost: input.cost ?? 0,
@@ -868,79 +891,53 @@ export const resolvers: {
         notes: input.notes ?? null,
         imageUrl: input.imageUrl ?? null,
       });
-      await recomputeItemReminder(ctx.db, row.id);
-      publishTrip(ctx, tripId, 'addItem', { id: row.id, tripId, title: input.title }, ctx.currentUserId);
-      return toTripItem(row);
+      publishTrip(ctx, tripId, 'addItem', { id: item.id, tripId, title: input.title }, ctx.currentUserId);
+      return toTripItem(item);
     },
 
     updateItem: async (_, args, ctx) => {
       const { tripId, itemId, input } = args as Args<{ tripId: string; itemId: string; input: UpdateItemInput }>;
-      await assertCanEditTrip(ctx.db, tripId, ctx.currentUserId);
-      const item = await getItem(ctx.db, tripId, itemId);
-      if (!item) throw gqlError('ITEM_NOT_FOUND', 'Item not found');
-      const nextStartTime = input.startTime === undefined ? item.start_time : input.startTime?.trim() || null;
-      const nextLocationText =
-        input.locationText === undefined ? item.location_text : normalizeLocationText(input.locationText);
-      await updateItemFields(ctx.db, itemId, {
-        day: input.day ?? item.day,
-        order: input.order ?? item.order,
-        startTime: nextStartTime,
-        notes: input.notes ?? item.notes,
-        title: input.title ?? item.title,
-        locationText: nextLocationText,
+      const item = await ctx.trips.updateItem(ctx.currentUserId, tripId, itemId, {
+        day: input.day ?? undefined,
+        order: input.order ?? undefined,
+        startTime: input.startTime === undefined ? undefined : input.startTime?.trim() || null,
+        notes: input.notes ?? undefined,
+        title: input.title ?? undefined,
+        locationText:
+          input.locationText === undefined ? undefined : normalizeLocationText(input.locationText),
       });
-      await recomputeItemReminder(ctx.db, itemId);
       publishTrip(ctx, tripId, 'updateItem', { itemId, tripId }, ctx.currentUserId);
-      const updated = await getItem(ctx.db, tripId, itemId);
-      return toTripItem(updated as ItemRow);
+      return toTripItem(item);
     },
 
     setItemReminder: async (_, args, ctx) => {
       const { itemId, enabled } = args as Args<{ itemId: string; enabled: boolean }>;
-      const item = await ctx.db.prepare('SELECT * FROM trip_items WHERE id = ?').get<ItemRow>(itemId);
-      if (!item) throw gqlError('ITEM_NOT_FOUND', 'Item not found');
-      await assertCanEditTrip(ctx.db, item.trip_id, ctx.currentUserId);
-      if (!enabled) {
-        await ctx.db
-          .prepare('UPDATE trip_items SET reminder_enabled = 0, reminder_sent = 1, reminder_due_at = NULL WHERE id = ?')
-          .run(itemId);
-      } else {
-        await ctx.db.prepare('UPDATE trip_items SET reminder_enabled = 1 WHERE id = ?').run(itemId);
-        await recomputeItemReminder(ctx.db, itemId);
-      }
-      publishTrip(ctx, item.trip_id, 'setItemReminder', { itemId, tripId: item.trip_id, enabled }, ctx.currentUserId);
-      const updated = await ctx.db.prepare('SELECT * FROM trip_items WHERE id = ?').get<ItemRow>(itemId);
-      return toTripItem(updated as ItemRow);
+      const { tripId } = await ctx.trips.getItemForActor(ctx.currentUserId, itemId);
+      const item = await ctx.trips.setItemReminder(ctx.currentUserId, tripId, itemId, enabled);
+      publishTrip(ctx, tripId, 'setItemReminder', { itemId, tripId, enabled }, ctx.currentUserId);
+      return toTripItem(item);
     },
 
     setItemCost: async (_, args, ctx) => {
       const { tripId, itemId, cost } = args as Args<{ tripId: string; itemId: string; cost: number }>;
-      await assertCanEditTrip(ctx.db, tripId, ctx.currentUserId);
-      const item = await getItem(ctx.db, tripId, itemId);
-      if (!item) throw gqlError('ITEM_NOT_FOUND', 'Item not found');
-      await setItemCostRow(ctx.db, itemId, cost);
+      const item = await ctx.trips.setItemCost(ctx.currentUserId, tripId, itemId, cost);
       publishTrip(ctx, tripId, 'setItemCost', { itemId, tripId, cost }, ctx.currentUserId);
-      const updated = await getItem(ctx.db, tripId, itemId);
-      return toTripItem(updated as ItemRow);
+      return toTripItem(item);
     },
 
     moveItem: async (_, args, ctx) => {
       const { tripId, itemId, day, order } = args as Args<{ tripId: string; itemId: string; day: string; order: number }>;
-      await assertCanEditTrip(ctx.db, tripId, ctx.currentUserId);
-      const item = await getItem(ctx.db, tripId, itemId);
-      if (!item) throw gqlError('ITEM_NOT_FOUND', 'Item not found');
-      await moveItemRow(ctx.db, itemId, day, order);
+      const item = await ctx.trips.moveItem(ctx.currentUserId, tripId, itemId, day, order);
       publishTrip(ctx, tripId, 'moveItem', { itemId, tripId, day, order }, ctx.currentUserId);
-      const updated = await getItem(ctx.db, tripId, itemId);
-      return toTripItem(updated as ItemRow);
+      return toTripItem(item);
     },
 
     removeItem: async (_, args, ctx) => {
       const { tripId, itemId } = args as Args<{ tripId: string; itemId: string }>;
-      await assertCanEditTrip(ctx.db, tripId, ctx.currentUserId);
-      const item = await getItem(ctx.db, tripId, itemId);
-      if (!item) throw gqlError('ITEM_NOT_FOUND', 'Item not found');
-      await removeItemRow(ctx.db, itemId);
+      const role = await ctx.trips.getMemberRole(ctx.currentUserId, tripId);
+      assertEditorRole(role);
+      await removeAttachmentsByItem(ctx.db, ctx.storage, tripId, itemId);
+      const item = await ctx.trips.removeItem(ctx.currentUserId, tripId, itemId);
       publishTrip(ctx, tripId, 'removeItem', { itemId, tripId }, ctx.currentUserId);
       return toTripItem(item);
     },
@@ -949,7 +946,7 @@ export const resolvers: {
       const { input } = args as Args<{
         input: { tripId: string; displayName: string; color: string | null; editingItemId?: string | null };
       }>;
-      await assertTripMember(ctx.db, input.tripId, ctx.currentUserId);
+      await ctx.trips.assertMember(ctx.currentUserId, input.tripId);
       const entry = touchPresence({
         userId: ctx.currentUserId,
         tripId: input.tripId,
@@ -963,15 +960,15 @@ export const resolvers: {
 
     requestSuggestions: async (_, args, ctx) => {
       const { tripId, day } = args as Args<{ tripId: string; day?: number | null }>;
-      await assertTripMember(ctx.db, tripId, ctx.currentUserId);
-      const trip = await getTrip(ctx.db, tripId);
-      const items = await ctx.db
-        .prepare('SELECT location_id, title, cost FROM trip_items WHERE trip_id = ?')
-        .all<{ location_id: string | null; title: string | null; cost: number | null }>(tripId);
+      const data = await ctx.trips.getTrip(ctx.currentUserId, tripId);
       const suggestions = await buildSuggestions(
         ctx.catalogue,
-        trip as TripRow | null,
-        items.map((i) => ({ activity_id: i.location_id, title: i.title, cost: i.cost })),
+        data.trip,
+        data.items.map((item) => ({
+          activity_id: item.location_id,
+          title: item.title,
+          cost: item.cost,
+        })),
       );
       return { day, items: suggestions };
     },
@@ -980,61 +977,41 @@ export const resolvers: {
       const { tripId, email, role } = args as Args<{ tripId: string; email: string; role?: string | null }>;
       const normalized = email.trim().toLowerCase();
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) {
-        throw gqlError('INVALID_EMAIL', 'Email no vÃ¡lido');
+        throw gqlError('INVALID_EMAIL', 'Email no válido');
       }
       const requestedRole = (typeof role === 'string' ? role.trim().toLowerCase() : '') || 'viewer';
       if (requestedRole !== 'editor' && requestedRole !== 'viewer') {
-        throw gqlError('INVALID_INVITE_ROLE', 'Rol de invitaciÃ³n no vÃ¡lido');
+        throw gqlError('INVALID_INVITE_ROLE', 'Rol de invitación no válido');
       }
       const inviteRole = requestedRole as 'editor' | 'viewer';
-      const trip = await tripOrThrow(ctx.db, tripId);
-      const myRole = await getMemberRole(ctx.db, tripId, ctx.currentUserId);
+
+      const myRole = await ctx.trips.getMemberRole(ctx.currentUserId, tripId);
       if (myRole !== 'owner' && myRole !== 'editor') {
         throw gqlError('FORBIDDEN_INVITE', 'Solo el propietario o un editor puede invitar');
       }
 
-      const invitation = await createInvitation(ctx.db, {
-        tripId,
-        email: normalized,
-        role: inviteRole,
-        createdBy: ctx.currentUserId,
-      });
-      const joinUrl = buildJoinUrl(tripId, invitation.code);
-      const emailJoinUrl = buildJoinUrl(tripId, invitation.code, { autoAccept: true });
       const inviter = await ctx.db
         .prepare('SELECT display_name, language FROM users WHERE id = ?')
         .get<{ display_name: string | null; language: string | null }>(ctx.currentUserId);
-      try {
-        await brokerPublisher.publish({
-          id: invitation.id,
-          type: 'email.invite.v1',
-          version: 1,
-          occurredAt: new Date().toISOString(),
-          source: 'triplanner-api',
-          payload: {
-            to: invitation.email,
-            tripName: trip.name,
-            ownerName: inviter?.display_name?.trim() || 'DemoUser',
-            code: invitation.code,
-            joinUrl: emailJoinUrl,
-            role: inviteRole,
-            language: inviter?.language === 'en' ? 'en' : 'es',
-            demo: true,
-          },
-        });
-      } catch (error) {
-        // The invite remains usable through the copyable link if the broker is down.
-        console.error('[invite] broker publish failed', {
-          invitationId: invitation.id,
-          reason: error instanceof Error ? error.message : 'unknown error',
-        });
-      }
-      publishTrip(ctx, tripId, 'inviteSent', { tripId, email: invitation.email }, ctx.currentUserId);
+
+      const result = await ctx.trips.createInvitation(ctx.currentUserId, tripId, {
+        email: normalized,
+        role: inviteRole,
+        notify: {
+          inviterName: inviter?.display_name?.trim() || 'DemoUser',
+          language: inviter?.language === 'en' ? 'en' : 'es',
+          appUrl: APP_URL,
+          demo: true,
+        },
+      });
+
+      const joinUrl = buildJoinUrl(tripId, result.invitation.code);
+      publishTrip(ctx, tripId, 'inviteSent', { tripId, email: result.invitation.email }, ctx.currentUserId);
       return {
-        invitationId: invitation.id,
-        status: invitation.status,
-        email: invitation.email,
-        code: invitation.code,
+        invitationId: result.invitation.id,
+        status: result.invitation.status,
+        email: result.invitation.email,
+        code: result.invitation.code,
         joinUrl,
       };
     },
@@ -1045,11 +1022,11 @@ export const resolvers: {
         email: string;
         memberId?: string | null;
       }>;
-      if (!isInviteCodeValid(code)) throw gqlError('INVALID_INVITE_CODE', 'CÃ³digo de invitaciÃ³n no vÃ¡lido');
-      const invitation = await findInvitationByCode(ctx.db, code);
-      if (!invitation) throw gqlError('INVITE_CODE_NOT_FOUND', 'CÃ³digo de invitaciÃ³n no encontrado');
-      if (invitation.status !== 'pending') throw gqlError('INVITE_ALREADY_USED', 'Esta invitaciÃ³n ya fue usada');
-      if (!isEmailMatch(invitation, email)) throw gqlError('INVITE_EMAIL_MISMATCH', 'El email no coincide con la invitaciÃ³n');
+      if (!isInviteCodeValid(code)) {
+        throw gqlError('INVALID_INVITE_CODE', 'Código de invitación no válido');
+      }
+
+      const preview = await ctx.trips.previewInvitation(code);
 
       // Email invitations target the seeded Demo Friend, so clicking the email
       // link does not attach the invited address to the root Demo owner. The
@@ -1063,22 +1040,41 @@ export const resolvers: {
         if (!target) throw gqlError('MEMBER_NOT_FOUND', 'El miembro demo no existe.');
       }
 
-      await addInvitedMember(
-        ctx.db,
-        invitation.trip_id,
-        targetUserId,
-        invitation.role,
-        invitation.email,
-      );
-      await acceptInvitation(ctx.db, invitation.id);
-      publishTrip(
-        ctx,
-        invitation.trip_id,
-        'joinTrip',
-        { tripId: invitation.trip_id, userId: ctx.currentUserId },
-        ctx.currentUserId,
-      );
-      return buildTrip(ctx.db, await tripOrThrow(ctx.db, invitation.trip_id), ctx.currentUserId);
+      const owner = await ctx.db
+        .prepare('SELECT display_name, email, language FROM users WHERE id = ?')
+        .get<{ display_name: string | null; email: string | null; language: string | null }>(
+          preview.trip.owner_id,
+        );
+      const member = await ctx.db
+        .prepare('SELECT display_name FROM users WHERE id = ?')
+        .get<{ display_name: string | null }>(targetUserId);
+
+      const notify = owner?.email
+        ? {
+            ownerEmail: owner.email,
+            ownerName: owner.display_name ?? 'Demo',
+            memberName: member?.display_name ?? 'Demo Friend',
+            language: owner.language === 'en' ? ('en' as const) : ('es' as const),
+          }
+        : undefined;
+
+      const result = await ctx.trips.joinTrip(ctx.currentUserId, preview.trip.id, {
+        userId: targetUserId,
+        email,
+        code,
+        notify,
+      });
+
+      if (result.joined) {
+        publishTrip(
+          ctx,
+          preview.trip.id,
+          'joinTrip',
+          { tripId: preview.trip.id, userId: ctx.currentUserId },
+          ctx.currentUserId,
+        );
+      }
+      return buildTrip(ctx, result.data);
     },
 
     updateMyProfile: async (_, args, ctx) => {
@@ -1114,30 +1110,40 @@ export const resolvers: {
         input: { fileName: string; mimeType: string; dataUrl: string };
         viewerIds?: string[] | null;
       }>;
-      const tripId = await findItemTrip(ctx.db, itemId);
-      if (!tripId || (requestedTripId && requestedTripId !== tripId)) {
+
+      const { tripId } = await ctx.trips.getItemForActor(ctx.currentUserId, itemId);
+      if (requestedTripId && requestedTripId !== tripId) {
         throw gqlError('ITEM_NOT_FOUND', 'Actividad no encontrada.');
       }
-      if (!(await isTripMember(ctx.db, tripId, ctx.currentUserId))) {
-        throw gqlError('NOT_TRIP_MEMBER', 'Solo los miembros del viaje pueden subir boletos.');
-      }
+
+      const memberIds = new Set(await ctx.trips.listMemberIds(ctx.currentUserId, tripId));
       const viewerIds = [...new Set(rawViewerIds ?? [])];
-      if ((await invalidAttachmentViewers(ctx.db, tripId, viewerIds)).length > 0) {
+      if (viewerIds.some((viewerId) => !memberIds.has(viewerId))) {
         throw gqlError('INVALID_VIEWER', 'Todos los viewers deben ser miembros del viaje.');
       }
+
       try {
         const created = await addAttachment(
           ctx.db,
           ctx.storage,
+          tripId,
           itemId,
           ctx.currentUserId,
           { fileName: input.fileName, mimeType: input.mimeType, dataUrl: input.dataUrl },
           viewerIds,
         );
-        const attachment = (await getAttachmentForUser(ctx.db, ctx.storage, created.id, ctx.currentUserId)) ?? created;
+        const attachment =
+          (await getAttachmentForUser(
+            ctx.db,
+            ctx.storage,
+            created.id,
+            ctx.currentUserId,
+            (trip) => ctx.trips.isMember(ctx.currentUserId, trip),
+          )) ?? created;
         publishTrip(ctx, tripId, 'addAttachment', { itemId, attachmentId: attachment.id }, ctx.currentUserId);
         return attachment;
       } catch (e) {
+        if (e instanceof GraphQLError) throw e;
         throw gqlError('ATTACHMENT_UPLOAD_FAILED', e instanceof Error ? e.message : 'No se pudo subir el archivo.');
       }
     },
@@ -1148,35 +1154,49 @@ export const resolvers: {
         viewerIds?: string[] | null;
       }>;
       const row = await findAttachment(ctx.db, attachmentId);
-      const info = await findAttachmentItemTrip(ctx.db, attachmentId);
-      if (!row || !info) throw gqlError('ATTACHMENT_NOT_FOUND', 'Archivo no encontrado.');
+      if (!row?.trip_id) throw gqlError('ATTACHMENT_NOT_FOUND', 'Archivo no encontrado.');
       if (row.created_by !== ctx.currentUserId) {
-        throw gqlError('FORBIDDEN_ATTACHMENT', 'Solo quien subiÃ³ el archivo puede editar sus permisos.');
+        throw gqlError('FORBIDDEN_ATTACHMENT', 'Solo quien subió el archivo puede editar sus permisos.');
       }
-      const viewerIds = [...new Set(rawViewerIds ?? [])].filter((viewerId) => viewerId !== ctx.currentUserId);
-      if ((await invalidAttachmentViewers(ctx.db, info.tripId, viewerIds)).length > 0) {
+      await ctx.trips.assertMember(ctx.currentUserId, row.trip_id);
+
+      const memberIds = new Set(await ctx.trips.listMemberIds(ctx.currentUserId, row.trip_id));
+      const viewerIds = [...new Set(rawViewerIds ?? [])].filter(
+        (viewerId) => viewerId !== ctx.currentUserId,
+      );
+      if (viewerIds.some((viewerId) => !memberIds.has(viewerId))) {
         throw gqlError('INVALID_VIEWER', 'Todos los viewers deben ser miembros del viaje.');
       }
+
       await replaceAttachmentViewers(ctx.db, attachmentId, viewerIds);
-      const attachment = await getAttachmentForUser(ctx.db, ctx.storage, attachmentId, ctx.currentUserId);
-      publishTrip(ctx, info.tripId, 'updateAttachmentViewers', { attachmentId }, ctx.currentUserId);
+      const attachment = await getAttachmentForUser(
+        ctx.db,
+        ctx.storage,
+        attachmentId,
+        ctx.currentUserId,
+        (trip) => ctx.trips.isMember(ctx.currentUserId, trip),
+      );
+      publishTrip(ctx, row.trip_id, 'updateAttachmentViewers', { attachmentId }, ctx.currentUserId);
       return attachment;
     },
 
     removeItemAttachment: async (_, args, ctx) => {
       const { attachmentId } = args as Args<{ attachmentId: string }>;
       const row = await findAttachment(ctx.db, attachmentId);
-      const info = await findAttachmentItemTrip(ctx.db, attachmentId);
-      if (!row || !info) throw gqlError('ATTACHMENT_NOT_FOUND', 'Archivo no encontrado.');
-      if (!(await isTripMember(ctx.db, info.tripId, ctx.currentUserId))) {
-        throw gqlError('NOT_TRIP_MEMBER', 'Solo los miembros del viaje pueden quitar boletos.');
-      }
+      if (!row?.trip_id) throw gqlError('ATTACHMENT_NOT_FOUND', 'Archivo no encontrado.');
+      await ctx.trips.assertMember(ctx.currentUserId, row.trip_id);
       if (row.created_by !== ctx.currentUserId) {
-        throw gqlError('FORBIDDEN_ATTACHMENT', 'Solo quien subiÃ³ el archivo puede eliminarlo.');
+        throw gqlError('FORBIDDEN_ATTACHMENT', 'Solo quien subió el archivo puede eliminarlo.');
       }
-      const attachment = await getAttachmentForUser(ctx.db, ctx.storage, attachmentId, ctx.currentUserId);
+      const attachment = await getAttachmentForUser(
+        ctx.db,
+        ctx.storage,
+        attachmentId,
+        ctx.currentUserId,
+        (trip) => ctx.trips.isMember(ctx.currentUserId, trip),
+      );
       await removeAttachment(ctx.db, ctx.storage, attachmentId);
-      publishTrip(ctx, info.tripId, 'removeAttachment', { attachmentId }, ctx.currentUserId);
+      publishTrip(ctx, row.trip_id, 'removeAttachment', { attachmentId }, ctx.currentUserId);
       return attachment;
     },
 
@@ -1252,10 +1272,7 @@ export const resolvers: {
         day: string;
         messages: { role: string; content: string }[];
       }>;
-      await tripOrThrow(ctx.db, tripId);
-      if (!(await isTripMember(ctx.db, tripId, ctx.currentUserId))) {
-        throw gqlError('NOT_TRIP_MEMBER', 'Solo los miembros del viaje pueden guardar el chat.');
-      }
+      await ctx.trips.assertMember(ctx.currentUserId, tripId);
       if (!isValidMessages(messages)) {
         throw gqlError('INVALID_MESSAGES', 'messages debe ser un array no vacÃ­o de {role, content}.');
       }
@@ -1268,14 +1285,14 @@ export const resolvers: {
     onTripChanged: {
       subscribe: async (_, args, ctx) => {
         const { tripId } = args as Args<{ tripId: string }>;
-        await assertTripMember(ctx.db, tripId, ctx.currentUserId);
+        await ctx.trips.assertMember(ctx.currentUserId, tripId);
         return ctx.pubsub.subscribe(`trip:${tripId}`);
       },
     },
     onPresenceChanged: {
       subscribe: async (_, args, ctx) => {
         const { tripId } = args as Args<{ tripId: string }>;
-        await assertTripMember(ctx.db, tripId, ctx.currentUserId);
+        await ctx.trips.assertMember(ctx.currentUserId, tripId);
         return ctx.pubsub.subscribe(`presence:${tripId}`);
       },
     },
@@ -1301,7 +1318,9 @@ export const resolvers: {
   TripItem: {
     attachments: (parent, __, ctx) => {
       const { id } = parent as { id: string };
-      return listAttachmentsByItem(ctx.db, ctx.storage, id, ctx.currentUserId);
+      return listAttachmentsByItem(ctx.db, ctx.storage, id, ctx.currentUserId, (tripId) =>
+        ctx.trips.isMember(ctx.currentUserId, tripId),
+      );
     },
     isFavorite: (parent, __, ctx) => {
       const { activityId } = parent as { activityId?: string | null };

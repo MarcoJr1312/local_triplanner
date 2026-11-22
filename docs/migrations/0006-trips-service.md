@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **Gate 1 approved 2026-11-21 — M9.1 to M9.5b implemented** |
+| Status | **Gate 1 approved 2026-11-21 — M9.1 to M9.6 implemented** |
 | Integration branch | `refactor/helm` |
 | Work branch | `refactor/helm-trips-service` |
 | Runtime | Bun + TypeScript |
@@ -322,11 +322,14 @@ and null coordinates.
   "notify": {
     "inviter_name": "Marco",
     "language": "es",
-    "join_url": "http://localhost:3000/join?trip=demo-trip&code=...&auto=1",
+    "app_url": "http://localhost:3000",
     "demo": true
   }
 }
 ```
+
+The service builds the email join URL from `app_url`, the trip id and the
+generated code: `${app_url}/join?trip=...&code=...&auto=1`.
 
 Returns:
 
@@ -587,6 +590,23 @@ The public schema does not change.
 - Verifies row counts and a per-table checksum; exits non-zero on mismatch.
 - Requires a write freeze: stop the API, copy, start with `TRIPS_MODE=remote`.
 - The legacy tables stay until M9.11 (decommission) for rollback.
+
+### 10.5 Implementation notes (M9.6)
+
+- `TRIPS_MODE=local|remote` is live. `remote` uses `TRIPS_URL` (:4400) and
+  `TRIPS_TIMEOUT_MS`; outages map to `TRIPS_UNAVAILABLE`.
+- The API still owns identity: members from trips are enriched from `users`
+  before they reach GraphQL.
+- `item_attachments` now stores `trip_id` and no longer has a foreign key to
+  `trip_items`. The migration backfills existing rows while the legacy table
+  exists. The API validates the item through the trips store and deletes
+  attachments before the item or trip.
+- `email.invite.v1` notify context passes `app_url`; the producer builds the
+  final join URL from the trip id and the generated code.
+- Seed split: the API seeds `demo-user`/`demo-friend`; with `remote` the trips
+  service seeds the demo trip (`SEED_DEMO=true`).
+- Evidence: API suite 82 tests pass in local mode; live remote smoke created a
+  trip through the API, read it back, and verified the row in the trips database.
 
 ## 11. Seeding
 

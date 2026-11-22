@@ -1,7 +1,12 @@
 // Deterministic suggestions from the destination catalogue (no external calls).
 
 import type { LocationCatalogue } from '../catalogue/types.ts';
-import type { LocationRow, TripRow } from '../schema-types.ts';
+import type { LocationRow } from '../schema-types.ts';
+
+type Tripish = {
+  destination_id: string | null;
+  total_budget?: number | null;
+};
 
 const CATEGORY_DEFAULT_COST: Record<string, number> = { food: 30, sight: 20, activity: 35, nightlife: 25 };
 
@@ -35,7 +40,7 @@ type Itemish = {
 
 export async function buildSuggestions(
   catalogue: LocationCatalogue,
-  trip: TripRow | null | undefined,
+  trip: Tripish | null | undefined,
   allItems: Itemish[],
   target = 5,
 ): Promise<LocalSuggestion[]> {

@@ -35,10 +35,12 @@ the only external integrations.
 | API | Bun + graphql-yoga |
 | Relational | PostgreSQL 17 + pgvector |
 | Locations | Bun/TS `locations` service + MongoDB 7, optional HasData BYOK with Mongo cache |
+| Trips | Bun/TS `trips` service + PostgreSQL 17, own credentials and outbox |
 | Agent | Python 3.12 + FastAPI + Agno + pgvector |
 | Orchestration | Docker Compose, built from source |
 
-Runtime services: `web`, `api`, `locations`, `agent`, `postgres`, `mongo`.
+Runtime services: `web`, `api`, `locations`, `trips`, `agent`, `postgres`,
+`trips-postgres`, `mongo`.
 
 ## Hard constraints
 
@@ -118,6 +120,10 @@ auth and Dockerfiles.
   `triplanner-mongo-credentials` Secret from the demo `values.yaml`; production
   overrides `mongo.auth.existingSecret` with Vault/External Secrets.
 - Known limitation: macOS clean-clone QA is pending.
+- M9.1–M9.6 (trips service, PostgreSQL): contract, skeleton, schema/migrations,
+  trips/members/items, invitations + transactional outbox, and the API cutover
+  behind `TRIPS_MODE=local|remote`. The service is not wired into Compose/Helm
+  yet; that is M9.8–M9.9.
 Do not assume the target architecture is already implemented — check the
 current tree.
 

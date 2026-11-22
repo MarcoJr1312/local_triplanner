@@ -782,7 +782,7 @@ export class TripsService {
     return {
       inviter_name: requiredString(notify, 'inviter_name', 200),
       language: optionalLanguage(notify, 'language') ?? 'es',
-      join_url: requiredUrl(notify, 'join_url', 2_048),
+      app_url: requiredUrl(notify, 'app_url', 2_048),
       demo: optionalBoolean(notify, 'demo') ?? true,
     };
   }

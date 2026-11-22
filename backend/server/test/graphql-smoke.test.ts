@@ -11,6 +11,7 @@ import { MemoryLocationCatalogue } from './helpers/memory-catalogue.ts';
 import type { PgDb } from '../src/pg/db.ts';
 import { LocalDiskStorage } from '../src/storage.ts';
 import { deleteTripCascade } from '../src/pg/trips.ts';
+import { LocalTripsStore } from '../src/trips/local.ts';
 import { resolvers, type Ctx } from '../src/resolvers.ts';
 
 let db: PgDb | null = null;
@@ -55,6 +56,7 @@ beforeEach(async () => {
         catalogue,
         storage,
         currentUserId: userId,
+        trips: new LocalTripsStore(db),
         pubsub: {
           publish: () => {},
           subscribe: async function* () {

@@ -6,7 +6,7 @@ import type { InvitationRow, TripRow } from './types.ts';
 export interface InviteNotify {
   inviter_name: string;
   language: 'es' | 'en';
-  join_url: string;
+  app_url: string;
   demo: boolean;
 }
 
@@ -32,6 +32,9 @@ export function buildInviteEvent(
   notify: InviteNotify,
   now: Date = new Date(),
 ): EventEnvelope {
+  const appUrl = notify.app_url.replace(/\/+$/, '');
+  const joinUrl = `${appUrl}/join?trip=${encodeURIComponent(trip.id)}&code=${encodeURIComponent(invitation.code)}&auto=1`;
+
   return {
     id: invitation.id,
     type: 'email.invite.v1',
@@ -43,7 +46,7 @@ export function buildInviteEvent(
       tripName: trip.name,
       ownerName: notify.inviter_name,
       code: invitation.code,
-      joinUrl: notify.join_url,
+      joinUrl,
       role: invitation.role,
       language: notify.language,
       demo: notify.demo,
