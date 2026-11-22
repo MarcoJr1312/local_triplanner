@@ -29,15 +29,9 @@ export const AGENT_BASE_URL = (process.env.AGENT_BASE_URL ?? 'http://127.0.0.1:4
 // ---- Servicio de email (Kafka consumer + BYOK settings, :4200) ----
 export const EMAIL_SERVICE_URL = (process.env.EMAIL_SERVICE_URL ?? 'http://127.0.0.1:4200').replace(/\/+$/, '');
 
-// ---- Go demo broker (HTTP topic/offset/ack, :8080) ----
-export const BROKER_URL = (process.env.BROKER_URL ?? 'http://127.0.0.1:8080').replace(/\/+$/, '');
-export const BROKER_TOPIC = process.env.BROKER_TOPIC ?? 'TripInvitation';
-
 // ---- Trips service (:4400) ----
-// `local` keeps the legacy Postgres tables during the cutover; `remote` sends
-// every trip read/write to the trips service.
-export const TRIPS_MODE: 'local' | 'remote' =
-  process.env.TRIPS_MODE === 'remote' ? 'remote' : 'local';
+// The service owns trips, memberships, items and invitations. The API always
+// calls it (remote-only after the M9.11 decommission).
 export const TRIPS_URL = (process.env.TRIPS_URL ?? 'http://127.0.0.1:4400').replace(/\/+$/, '');
 // Must exceed the trips service's own locations timeout (2 s) plus DB work.
 export const TRIPS_TIMEOUT_MS = Number(process.env.TRIPS_TIMEOUT_MS ?? 5000);

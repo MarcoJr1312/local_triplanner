@@ -50,27 +50,9 @@ export async function insertUser(db: AsyncDb, displayName = 'Test User'): Promis
   return id;
 }
 
-export async function insertTrip(db: AsyncDb, ownerId: string): Promise<string> {
-  const id = randomUUID();
-  await db
-    .prepare(
-      `INSERT INTO trips (id, name, start_date, end_date, owner_id, invite_code)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-    )
-    .run(id, 'Trip de prueba', '2026-01-01', '2026-01-05', ownerId, randomUUID().replaceAll('-', '').slice(0, 12));
-  return id;
-}
-
-export async function deleteTrip(db: AsyncDb, tripId: string): Promise<void> {
-  await db.prepare('DELETE FROM invitations WHERE trip_id = ?').run(tripId);
-  await db.prepare('DELETE FROM trips WHERE id = ?').run(tripId);
-}
-
 export async function deleteUser(db: AsyncDb, userId: string): Promise<void> {
   await db.prepare('DELETE FROM user_favorites WHERE user_id = ?').run(userId);
   await db.prepare('DELETE FROM user_interests WHERE user_id = ?').run(userId);
   await db.prepare('DELETE FROM suggestion_chats WHERE user_id = ?').run(userId);
-  await db.prepare('DELETE FROM trips WHERE owner_id = ?').run(userId);
   await db.prepare('DELETE FROM users WHERE id = ?').run(userId);
 }
-

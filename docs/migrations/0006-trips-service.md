@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **Gate 1 approved 2026-11-21 — M9.1 to M9.6 implemented** |
+| Status | **M9 complete — decommissioned (M9.11) and released (M9.12)** |
 | Integration branch | `refactor/helm` |
 | Work branch | `refactor/helm-trips-service` |
 | Runtime | Bun + TypeScript |
@@ -50,8 +50,9 @@ agent --/internal/*--> api
 4. **Locations**: trips calls locations directly for destination and place
    snapshots. A locations outage degrades to the text supplied by the client; it
    never blocks a trip write.
-5. **Cutover**: `TRIPS_MODE=remote|local` behind a `TripsStore` adapter. The
-   local path is deleted after QA sign-off.
+5. **Cutover**: completed. The `TripsStore` port ran behind
+   `TRIPS_MODE=remote|local`; M9.11 removed the local adapter and the legacy
+   tables, so the API is remote-only.
 6. **Join**: `POST /internal/v1/trips/{id}/join`. The invite email keeps the web
    join link (`APP_URL/join?...`); the web calls the API, the API calls trips.
    A successful join queues `email.member.joined.v1` to the trip owner through
@@ -59,6 +60,9 @@ agent --/internal/*--> api
    does not own identity.
 
 ## 3. Current state
+
+This is the pre-migration inventory. The four tables and the direct SQL were
+removed in M9.11.
 
 - `backend/db/pg/schema.sql` owns `trips`, `trip_members`, `trip_items` and
   `invitations` in the platform Postgres, with foreign keys to `users`.
@@ -86,7 +90,8 @@ agent --/internal/*--> api
 - Derived stats: `spent`, `spentByCategory`.
 - Internal REST v1 contract and its contract tests.
 - Compose + Helm deployment, including the Postgres StatefulSet and Secret.
-- Legacy data copy and `TRIPS_MODE` cutover.
+- Legacy data copy and cutover (completed; the local adapter and legacy tables
+  were removed in M9.11).
 - Decommission of the legacy tables and code path.
 
 ### Out of scope
@@ -528,8 +533,8 @@ Mirror `0005`:
   `pg_isready`, no published port.
 - `trips`: build `backend/trips-service/Dockerfile`, depends on
   `trips-postgres` healthy and `locations` healthy, image healthcheck `/ready`.
-- API: `TRIPS_URL=http://trips:4400`, `TRIPS_MODE=remote`,
-  `TRIPS_TIMEOUT_MS=2000`.
+- API: `TRIPS_URL=http://trips:4400`, `TRIPS_TIMEOUT_MS=5000` (the API must
+  outlast the service's 2 s locations timeout).
 - The base Compose still has no broker or email service; the trips broker URL
   falls back to `127.0.0.1:8080` and publishing fails soft. The local-cluster
   overlay points at the in-cluster broker.
@@ -540,16 +545,14 @@ Mirror `0005`:
 
 `backend/server/src/trips/`:
 
-- `types.ts` — `TripsStore` port matching the current `pg/trips` +
-  `pg/invitations` capabilities.
-- `local.ts` — wraps the existing Postgres functions.
+- `types.ts` — `TripsStore` port, row types and the request/response shapes.
 - `remote.ts` — calls the service with `TRIPS_URL`, `TRIPS_TIMEOUT_MS`,
   `x-internal-token`, `x-actor-id`; maps transport failures to
   `TRIPS_UNAVAILABLE`.
-- `index.ts` — factory from `TRIPS_MODE` (`local` default until cutover).
+- `index.ts` — factory returning `RemoteTripsStore`. The local adapter existed
+  during the cutover and was removed in M9.11.
 
-`Ctx.trips` replaces direct `pg/trips` imports and the direct SQL in
-`resolvers.ts` / `internal.ts`.
+`Ctx.trips` replaced the direct trip SQL in `resolvers.ts` / `internal.ts`.
 
 ### 10.2 GraphQL composition
 
@@ -588,30 +591,56 @@ The public schema does not change.
 - Copies `trips` → `trip_members` → `trip_items` → `invitations`.
 - `ON CONFLICT DO NOTHING`; rerunnable.
 - Verifies row counts and a per-table checksum; exits non-zero on mismatch.
-- Requires a write freeze: stop the API, copy, start with `TRIPS_MODE=remote`.
-- The legacy tables stay until M9.11 (decommission) for rollback.
+- Requires a write freeze: stop the API, copy, then start the API pointed at the
+  trips service.
+- The legacy tables were retained until M9.11 for rollback and have now been
+  dropped (see 10.6).
 
 ### 10.5 Implementation notes (M9.6)
 
-- `TRIPS_MODE=local|remote` is live. `remote` uses `TRIPS_URL` (:4400) and
+- The API is remote-only after M9.11. It uses `TRIPS_URL` (:4400) and
   `TRIPS_TIMEOUT_MS`; outages map to `TRIPS_UNAVAILABLE`.
 - The API still owns identity: members from trips are enriched from `users`
   before they reach GraphQL.
-- `item_attachments` now stores `trip_id` and no longer has a foreign key to
-  `trip_items`. The migration backfills existing rows while the legacy table
-  exists. The API validates the item through the trips store and deletes
+- `item_attachments` stores `trip_id` and no longer has a foreign key to
+  `trip_items`. The migration backfilled existing rows while the legacy table
+  existed. The API validates the item through the trips store and deletes
   attachments before the item or trip.
 - `email.invite.v1` notify context passes `app_url`; the producer builds the
   final join URL from the trip id and the generated code.
-- Seed split: the API seeds `demo-user`/`demo-friend`; with `remote` the trips
-  service seeds the demo trip (`SEED_DEMO=true`).
-- Evidence: API suite 82 tests pass in local mode; live remote smoke created a
-  trip through the API, read it back, and verified the row in the trips database.
+- Seed split: the API seeds `demo-user`/`demo-friend`; the trips service seeds
+  the demo trip (`SEED_DEMO=true`).
+- Evidence: API suite 82 tests passed in local+remote mode before the
+  decommission; the remote-only suite is 59. Live remote and Compose smokes
+  created trips through the API and verified the rows in the trips database.
+
+### 10.6 Decommission (M9.11)
+
+Gate 2 was approved on 2026-11-21. Before dropping anything:
+
+- `legacy-trips-20261121-214500.sql` (21,828 bytes, SHA256
+  `CEBE6636...C7798E`) — pg_dump of the four legacy tables.
+- `trips-full-20261121-214500.sql` (26,848 bytes, SHA256
+  `B09F8CCC...C8D58`) — full pg_dump of the trips database.
+
+Then:
+
+- `backend/db/pg/decommission-trips.sql` drops `invitations`, `trip_items`,
+  `trip_members` and `trips` from the platform database.
+- `TRIPS_MODE`, `trips/local.ts`, `pg/trips.ts`, `pg/invitations.ts`,
+  `pg/reminders.ts`, the API broker publisher and the local-only tests were
+  removed.
+- `schema.sql` no longer creates the four tables.
+- Verified: platform and test databases return `null` for all four
+  `to_regclass` checks; the API starts with `trips url=...`; the demo trip still
+  serves 9 items and `spent=413` through the trips service.
+
+Rollback after M9.11 is the previous image/tag plus a restore from the dumps.
+
 
 ## 11. Seeding
 
-- API `db:seed` keeps `ensureDemoUsers` and stops inserting trips when
-  `TRIPS_MODE=remote`.
+- API `db:seed` seeds only `demo-user`/`demo-friend`; it never inserts trips.
 - The trips service seeds the demo trip, owner membership and 9 items when
   `SEED_DEMO=true`; idempotent on fixed ids (`demo-trip`, `demo-item-1..9`).
 - The trips seed does not need `demo-user`/`demo-friend` to exist in its DB
@@ -660,7 +689,7 @@ The public schema does not change.
 - Attachment add/remove and cover update ordering.
 - `requestSuggestions` reads items through the store.
 - `getTripByCode` and the web join flow (including the owner notification).
-- Legacy `TRIPS_MODE=local` still passes while the flag exists.
+- The legacy local mode was removed in M9.11; the remote-only suite passes.
 
 ### Email service
 

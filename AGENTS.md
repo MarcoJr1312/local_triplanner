@@ -120,13 +120,12 @@ auth and Dockerfiles.
   `triplanner-mongo-credentials` Secret from the demo `values.yaml`; production
   overrides `mongo.auth.existingSecret` with Vault/External Secrets.
 - Known limitation: macOS clean-clone QA is pending.
-- M9.1–M9.6 (trips service, PostgreSQL): contract, skeleton, schema/migrations,
-  trips/members/items, invitations + transactional outbox, and the API cutover
-  behind `TRIPS_MODE=local|remote`.
-- M9.7–M9.9: idempotent legacy import, Compose stack (`trips` +
-  `trips-postgres`), and Helm chart 0.6.0 accepted on Docker Desktop (pods
-  ready, `helm test` passes). QA evidence and the Gate 2 brief are in
-  `docs/migrations/0007-trips-qa.md`.
+- M9 (trips service, PostgreSQL) complete: contract, schema/migrations,
+  trips/members/items, invitations + transactional outbox, API cutover,
+  idempotent legacy import, Compose stack (`trips` + `trips-postgres`) and Helm
+  chart 0.6.0 accepted on Docker Desktop. `TRIPS_MODE` and the legacy trip
+  tables were removed in M9.11; the API is remote-only. Evidence:
+  `docs/migrations/0006-trips-service.md` and `0007-trips-qa.md`.
 Do not assume the target architecture is already implemented — check the
 current tree.
 

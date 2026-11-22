@@ -1,9 +1,9 @@
-// Remote adapter: calls the trips service. This is the target path after the
-// TRIPS_MODE cutover and the only path after M9.11.
+// Remote adapter: calls the trips service. This is the only path after the
+// M9.11 decommission; the local Postgres adapter no longer exists.
 
 import { GraphQLError } from 'graphql';
 import type { InvitationRow } from '../schema-types.ts';
-import type { TripItemRow, TripMemberRow, TripRowFull } from '../pg/trips.ts';
+import type { TripItemRow, TripMemberRow, TripRowFull } from './types.ts';
 import { tripError } from './errors.ts';
 import type {
   AddItemInput,

@@ -16,7 +16,6 @@ import {
   INTERNAL_TOKEN,
   isUsingDefaultInternalToken,
   BOOTSTRAP_LOCAL,
-  TRIPS_MODE,
   TRIPS_URL,
   TRIPS_TIMEOUT_MS,
 } from './env.ts';
@@ -39,8 +38,6 @@ const storage = defaultStorage();
 const pubsub = createPubSub() as unknown as PubSub;
 
 const trips = createTripsStore({
-  mode: TRIPS_MODE,
-  db,
   baseUrl: TRIPS_URL,
   internalToken: INTERNAL_TOKEN,
   timeoutMs: TRIPS_TIMEOUT_MS,
@@ -85,7 +82,7 @@ const server = createServer((req, res) => {
 
 server.listen(PORT, () => {
   console.log(`[triplanner-local] GraphQL en http://localhost:${PORT}/graphql`);
-  console.log(`[triplanner-local] trips mode=${TRIPS_MODE}${TRIPS_MODE === 'remote' ? ` url=${TRIPS_URL}` : ''}`);
+  console.log(`[triplanner-local] trips url=${TRIPS_URL}`);
   if (isUsingDefaultInternalToken()) {
     console.warn(
       '[triplanner-local] INTERNAL_TOKEN no definido: usando default de desarrollo (define INTERNAL_TOKEN en backend/.env)',

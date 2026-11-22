@@ -1,4 +1,5 @@
-// Invitation helpers. Persistence lives in pg/invitations.
+// Invitation helpers. Persistence is owned by the trips service; the API only
+// validates codes and matches emails before/after calling it.
 
 import { randomBytes } from 'node:crypto';
 import type { InvitationRow } from './schema-types.ts';

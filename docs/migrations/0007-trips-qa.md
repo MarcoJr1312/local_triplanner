@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **QA complete — Gate 2 pending explicit approval** |
+| Status | **Gate 2 approved 2026-11-21 — M9.11 complete; M9.12 pending** |
 | Date | 2026-11-21 |
 | Environment | Windows 11, Docker Desktop, Compose stack, Kubernetes `docker-desktop` |
 | Branch | `refactor/helm-trips-service` |
@@ -16,9 +16,9 @@ Verified the M9 delivery: trips service ownership of trips/members/items/
 invitations, the API cutover behind `TRIPS_MODE`, the transactional outbox,
 Compose integration, the legacy data import and the Helm workload.
 
-Out of scope: M9.11 decommission (blocked by Gate 2), M9.12 image publication,
-macOS clean-clone QA (pre-existing), and the agent-owned recommendation
-microservice.
+Out of scope: M9.12 image publication (release step), macOS clean-clone QA
+(pre-existing), and the agent-owned recommendation microservice. M9.11
+decommission is complete and recorded in section 8.
 
 ## 2. Automated suites
 
@@ -136,26 +136,34 @@ No P1/P2 defects found.
 | Item | Severity | Note |
 |---|---|---|
 | Base Compose has no broker/email; invites queue in the outbox | P3 | Copyable link works; the local-cluster overlay covers the cluster broker/email |
-| Legacy platform trip tables still exist until M9.11 | P3 | The API is `TRIPS_MODE=remote`; one stale `demo-trip` row in the platform DB is not read |
+| Legacy platform trip tables | Resolved | Dropped in M9.11 after the Gate 2 backup; see section 8.1 |
 | API is not deployed by the Helm chart | P3 | Pre-existing; the trips workload is verified via probes and `helm test` |
 | `networkPolicy.enabled` defaults to false | P3 | Policies render and validate with the flag on |
 | macOS clean-clone QA | P3 | Pre-existing limitation |
 | Trips image is locally tagged, not published | P3 | M9.12 |
 
-## 8. Gate 2 decision
+## 8. Gate 2 decision and decommission
 
-**Recommendation: approve M9.11 decommission.**
+**Approved 2026-11-21. M9.11 executed.**
 
-Before decommission, the rollback path is `TRIPS_MODE=local` plus the untouched
-legacy tables. M9.11 removes that path, drops the four legacy tables after a
-verified backup, and deletes the local adapter and its tests. After M9.11,
-rollback is the previous image/tag plus a database restore.
+Before decommission the rollback path was `TRIPS_MODE=local` plus the untouched
+legacy tables. After M9.11 rollback is the previous image/tag plus a database
+restore.
 
-Approval means:
+### 8.1 Decommission evidence
 
-- Remove `TRIPS_MODE`, `trips/local.ts` and the legacy `pg/trips.ts` /
-  `pg/invitations.ts` path.
-- Drop `trips`, `trip_members`, `trip_items` and `invitations` from the platform
-  schema after a backup.
-- Delete the local-only tests that exercise the removed tables.
-- Update AGENTS.md and the migration README.
+- Backups:
+  - `legacy-trips-20261121-214500.sql` — 21,828 bytes, SHA256
+    `CEBE6636...C7798E`.
+  - `trips-full-20261121-214500.sql` — 26,848 bytes, SHA256
+    `B09F8CCC...C8D58`.
+- `backend/db/pg/decommission-trips.sql` applied to the Compose platform DB and
+  the test DB. All four `to_regclass` checks return `null`.
+- `TRIPS_MODE`, `trips/local.ts`, `pg/trips.ts`, `pg/invitations.ts`,
+  `pg/reminders.ts`, the API broker publisher and the local-only tests were
+  removed.
+- `schema.sql` no longer creates the four tables.
+- API suite after decommission: 59 pass, 0 fail (the removed local-only tests
+  account for the difference from 82).
+- Compose API restarted remote-only; the demo trip still returns 9 items and
+  `spent=413`; API logs show only the platform tables.

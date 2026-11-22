@@ -127,7 +127,6 @@ services:
       INTERNAL_TOKEN: ${INTERNAL_TOKEN:-dev-internal-token}
       AGENT_BASE_URL: http://agent:4100
       BOOTSTRAP_LOCAL: "1"
-      TRIPS_MODE: remote
       TRIPS_URL: http://trips:4400
       TRIPS_TIMEOUT_MS: "5000"
     volumes:

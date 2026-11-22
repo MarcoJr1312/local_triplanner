@@ -43,9 +43,9 @@ import {
   type LocationsSettingsGql,
   type UpdateLocationsSettingsInput,
 } from './locations-settings.ts';
-import type { TripItemRow, TripMemberRow, TripRowFull } from './pg/trips.ts';
+import type { TripItemRow, TripMemberRow, TripRowFull } from './trips/types.ts';
 import type { TripData, TripRole, TripsStore, UpdateTripInput } from './trips/types.ts';
-import type { LocationRow, Profile, TripRow, UserRow } from './schema-types.ts';
+import type { LocationRow, Profile, UserRow } from './schema-types.ts';
 
 export interface PubSub {
   publish(topic: string, payload: Record<string, unknown>): void;

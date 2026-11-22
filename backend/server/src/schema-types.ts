@@ -17,28 +17,6 @@ export interface UserRow {
   created_at: string;
 }
 
-export interface TripRow {
-  id: string;
-  name: string;
-  description: string | null;
-  start_date: string | null;
-  end_date: string | null;
-  cover_image_url: string | null;
-  cover_preset: string | null;
-  cover_photo_url: string | null;
-  created_at: string;
-  updated_at: string;
-  owner_id: string;
-  status: string;
-  currency: string;
-  destination_id: string | null;
-  destination_name?: string | null;
-  destination_lat?: number | null;
-  destination_lng?: number | null;
-  total_budget: number | null;
-  timezone: string;
-}
-
 export interface LocationRow {
   id: string;
   source: string | null;
@@ -68,49 +46,6 @@ export interface LocationRow {
   last_updated: string | null;
   created_at?: string | null;
   expires_at?: number | null;
-}
-
-export interface TripItemRow {
-  id: string;
-  trip_id: string;
-  title: string;
-  category: string;
-  start_time: string | null;
-  end_time: string | null;
-  location_id: string | null;
-  location_text: string | null;
-  location_name: string | null;
-  location_address: string | null;
-  cost: number | null;
-  notes: string | null;
-  day_number: number | null;
-  reminder_enabled: number;
-  reminder_sent: number;
-  reminder_due_at: string | null;
-  created_at: string;
-}
-
-export interface TripMemberRow {
-  trip_id: string;
-  user_id: string;
-  role: string;
-  joined_at: string | null;
-}
-
-export interface PresenceRow {
-  trip_id: string;
-  user_id: string;
-  last_seen_at: string;
-}
-
-export interface SuggestionRow {
-  id: string;
-  trip_id: string;
-  title: string;
-  category: string;
-  reason: string;
-  price_level: number | null;
-  created_at: string;
 }
 
 export interface InvitationRow {

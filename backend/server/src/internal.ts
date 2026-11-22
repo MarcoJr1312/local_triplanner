@@ -12,7 +12,7 @@ import { searchLocationsWithCatalogue } from './catalogue/search.ts';
 import { CatalogueUnavailableError } from './catalogue/remote.ts';
 import type { LocationCatalogue } from './catalogue/types.ts';
 import type { AsyncDb } from './pg/db.ts';
-import type { TripMemberRow } from './pg/trips.ts';
+import type { TripMemberRow } from './trips/types.ts';
 import type { TripsStore } from './trips/types.ts';
 import type { LocationRow } from './schema-types.ts';
 

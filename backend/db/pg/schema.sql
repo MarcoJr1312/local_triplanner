@@ -1,12 +1,12 @@
--- Triplanner Postgres schema (local + AWS RDS).
+-- Triplanner platform Postgres schema.
 -- Canonical DDL for the relational store. Idempotent: re-runnable.
 --
--- ARCHITECTURE (decided 2026-11-12):
---   * DynamoDB owns the `locations` catalogue (HasData results, TTL, source of truth).
---   * Postgres owns everything relational and keeps a denormalized snapshot of the
---     place fields it needs for reads (name/address/lat/lng on trips and items).
---   * No foreign keys point at locations; location_id columns are plain references.
---   * SQLite is no longer the local engine.
+-- ARCHITECTURE:
+--   * MongoDB (locations service) owns the catalogue; no FKs point at it.
+--   * The trips service owns trips, members, items and invitations in its own
+--     PostgreSQL database (backend/trips-service).
+--   * Postgres here owns users, favorites, interests, chats, attachment
+--     metadata and agent vectors. SQLite is no longer the local engine.
 
 CREATE EXTENSION IF NOT EXISTS vector;
 
@@ -21,88 +21,10 @@ CREATE TABLE IF NOT EXISTS users (
   created_at      timestamptz NOT NULL DEFAULT now()
 );
 
--- ============================= TRIPS =============================
-CREATE TABLE IF NOT EXISTS trips (
-  id               text PRIMARY KEY,
-  name             text NOT NULL,
-  -- DynamoDB location id. No FK: the catalogue lives outside Postgres.
-  destination_id   text,
-  destination_name text,
-  destination_lat  double precision,
-  destination_lng  double precision,
-  start_date       text NOT NULL,
-  end_date         text NOT NULL,
-  total_budget     double precision NOT NULL DEFAULT 0,
-  cover_preset     text,
-  cover_photo_url  text,
-  timezone         text NOT NULL DEFAULT 'UTC',
-  owner_id         text NOT NULL REFERENCES users(id),
-  invite_code      text NOT NULL UNIQUE,
-  created_at       timestamptz NOT NULL DEFAULT now(),
-  updated_at       timestamptz NOT NULL DEFAULT now()
-);
-
-CREATE INDEX IF NOT EXISTS idx_trips_owner ON trips(owner_id);
-
--- ========================== TRIP MEMBERS ==========================
-CREATE TABLE IF NOT EXISTS trip_members (
-  trip_id   text NOT NULL REFERENCES trips(id),
-  user_id   text NOT NULL REFERENCES users(id),
-  role      text NOT NULL CHECK (role IN ('owner', 'editor', 'viewer')),
-  joined_at timestamptz NOT NULL DEFAULT now(),
-  PRIMARY KEY (trip_id, user_id)
-);
-
--- Preserve the address the recruiter typed, even if the demo user later edits
--- their profile email. Nullable for owners/direct members.
-ALTER TABLE trip_members ADD COLUMN IF NOT EXISTS invited_email text;
-
-CREATE INDEX IF NOT EXISTS idx_trip_members_user ON trip_members(user_id);
-
--- =========================== TRIP ITEMS ===========================
--- location_name/address/lat/lng are a snapshot taken when the item is added, so
--- rendering a trip never fans out to DynamoDB.
-CREATE TABLE IF NOT EXISTS trip_items (
-  id               text PRIMARY KEY,
-  trip_id          text NOT NULL REFERENCES trips(id),
-  location_id      text,
-  location_text    text,
-  location_name    text,
-  location_address text,
-  lat              double precision,
-  lng              double precision,
-  title            text NOT NULL,
-  category         text,
-  cost             double precision NOT NULL DEFAULT 0,
-  day              text NOT NULL,
-  "order"          integer NOT NULL DEFAULT 0,
-  start_time       text,
-  notes            text,
-  image_url        text,
-  created_by       text,
-  reminder_enabled integer NOT NULL DEFAULT 1,
-  reminder_sent    integer NOT NULL DEFAULT 0,
-  reminder_due_at  timestamptz,
-  created_at       timestamptz NOT NULL DEFAULT now()
-);
-
-CREATE INDEX IF NOT EXISTS idx_trip_items_trip ON trip_items(trip_id);
-
--- =========================== INVITATIONS ==========================
-CREATE TABLE IF NOT EXISTS invitations (
-  id          text PRIMARY KEY,
-  trip_id     text NOT NULL REFERENCES trips(id),
-  email       text NOT NULL,
-  code        text NOT NULL UNIQUE,
-  role        text NOT NULL DEFAULT 'viewer' CHECK (role IN ('owner', 'editor', 'viewer')),
-  status      text NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'revoked')),
-  created_by  text NOT NULL,
-  created_at  timestamptz NOT NULL DEFAULT now(),
-  accepted_at timestamptz
-);
-
-CREATE INDEX IF NOT EXISTS idx_invitations_trip ON invitations(trip_id);
-CREATE INDEX IF NOT EXISTS idx_invitations_email ON invitations(email);
+-- ============================ TRIPS =============================
+-- Trips, memberships, items and invitations are owned by the trips service
+-- (backend/trips-service) in its own PostgreSQL database. They are no longer
+-- created here. Run decommission-trips.sql once on an existing database.
 
 -- ======================== ITEM ATTACHMENTS ========================
 -- Attachments belong to a trip item, but the item may live in the trips

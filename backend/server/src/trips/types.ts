@@ -3,10 +3,59 @@
 // calls the trips service. Resolvers only see this interface.
 
 import type { InvitationRow } from '../schema-types.ts';
-import type { TripItemRow, TripMemberRow, TripRowFull } from '../pg/trips.ts';
 
 export type TripRole = 'owner' | 'editor' | 'viewer';
 export type InviteRole = 'editor' | 'viewer';
+
+export interface TripRowFull {
+  id: string;
+  name: string;
+  destination_id: string | null;
+  destination_name: string | null;
+  destination_lat: number | null;
+  destination_lng: number | null;
+  start_date: string | null;
+  end_date: string | null;
+  total_budget: number | null;
+  cover_preset: string | null;
+  cover_photo_url: string | null;
+  timezone: string | null;
+  owner_id: string;
+  invite_code: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TripMemberRow {
+  user_id: string;
+  role: string;
+  joined_at: string | null;
+  invited_email: string | null;
+}
+
+export interface TripItemRow {
+  id: string;
+  trip_id: string;
+  day: string | null;
+  order: number | null;
+  location_id: string | null;
+  location_text: string | null;
+  location_name: string | null;
+  location_address: string | null;
+  lat: number | null;
+  lng: number | null;
+  title: string;
+  category: string | null;
+  cost: number | null;
+  start_time: string | null;
+  notes: string | null;
+  image_url: string | null;
+  created_by: string | null;
+  reminder_enabled: number;
+  reminder_sent: number;
+  reminder_due_at: string | null;
+  created_at: string;
+}
 
 export interface TripData {
   trip: TripRowFull;

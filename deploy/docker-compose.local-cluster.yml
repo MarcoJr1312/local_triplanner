@@ -11,11 +11,8 @@
 services:
   api:
     environment:
-      BROKER_URL: http://host.docker.internal:8080
-      BROKER_TOPIC: TripInvitation
       EMAIL_SERVICE_URL: http://host.docker.internal:4200
       LOCATIONS_URL: http://host.docker.internal:4300
-      TRIPS_MODE: remote
       TRIPS_URL: http://host.docker.internal:4400
     extra_hosts:
       - "host.docker.internal:host-gateway"
