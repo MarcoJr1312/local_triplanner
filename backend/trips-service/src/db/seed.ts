@@ -8,7 +8,8 @@ import { connect, type Db } from '../db.ts';
 import { loadConfig, loadDotEnv } from '../env.ts';
 
 export const DEMO_TRIP_ID = 'demo-trip';
-export const DEMO_OWNER_ID = 'demo-user';
+// Fixed demo UUID from the users service (M10.10).
+export const DEMO_OWNER_ID = '11111111-1111-4111-8111-111111111111';
 
 interface DemoItem {
   id: string;

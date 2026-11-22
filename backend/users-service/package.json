@@ -9,6 +9,7 @@
     "dev": "bun --watch src/index.ts",
     "db:migrate": "bun src/db/migrate.ts",
     "db:seed": "bun src/db/seed.ts",
+    "db:migrate-users": "bun scripts/migrate-users.ts",
     "test": "bun test",
     "typecheck": "tsc --noEmit"
   },

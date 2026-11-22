@@ -2,8 +2,8 @@
 # Usage: powershell -ExecutionPolicy Bypass -File scripts/smoke.ps1
 $ErrorActionPreference = 'Stop'
 $Base = if ($env:WEB_URL) { $env:WEB_URL.TrimEnd('/') } else { 'http://localhost:3000' }
-$HeadersUser = @{ 'x-user-id' = 'demo-user'; 'Content-Type' = 'application/json' }
-$HeadersFriend = @{ 'x-user-id' = 'demo-friend'; 'Content-Type' = 'application/json' }
+$HeadersUser = @{ 'x-user-id' = '11111111-1111-4111-8111-111111111111'; 'Content-Type' = 'application/json' }
+$HeadersFriend = @{ 'x-user-id' = '22222222-2222-4222-8222-222222222222'; 'Content-Type' = 'application/json' }
 
 function Fail([string]$Message) {
   Write-Host "FAIL: $Message" -ForegroundColor Red
@@ -28,7 +28,7 @@ Pass "web /login"
 
 $profileBody = @{ query = 'query { getMyProfile { userId email displayName } }' } | ConvertTo-Json
 $profile = Invoke-RestMethod -Uri "$Base/api/graphql" -Method Post -Headers $HeadersFriend -Body $profileBody
-if ($profile.data.getMyProfile.userId -ne 'demo-friend') { Fail "demo-friend profile" }
+if ($profile.data.getMyProfile.userId -ne '22222222-2222-4222-8222-222222222222') { Fail "demo-friend profile" }
 Pass "GraphQL profile via web proxy"
 
 $searchBody = @{ query = 'query { searchLocations(q: "CN Tower") { id name placeId imageUrl } }' } | ConvertTo-Json

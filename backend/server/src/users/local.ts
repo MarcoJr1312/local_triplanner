@@ -128,6 +128,16 @@ export async function ensureLocalDemoUsers(db: AsyncDb): Promise<void> {
          ON CONFLICT DO NOTHING`,
       )
       .run(user.id, user.username, user.email, hash, user.name, user.color);
+
+    const inserted = await db
+      .prepare('SELECT id FROM users WHERE id = ?')
+      .get(user.id);
+    if (!inserted) {
+      throw new Error(
+        `[users] legacy demo identity "${user.username}" blocks ${user.id}; ` +
+          'run backend/users-service/scripts/migrate-users.ts before starting USERS_MODE=local',
+      );
+    }
   }
 }
 

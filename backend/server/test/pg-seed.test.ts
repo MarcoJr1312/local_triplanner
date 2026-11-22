@@ -1,14 +1,14 @@
 import { after, before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { connectPg } from './helpers/pg.ts';
+import { connectPg, cleanDemoUsers } from './helpers/pg.ts';
 import type { PgDb } from '../src/pg/db.ts';
 import { seedAll } from '../src/seed.ts';
+import { DEMO_FRIEND_ID, DEMO_USER_ID } from '../src/pg/auth.ts';
 
 let db: PgDb | null = null;
 
 async function cleanDemo(conn: PgDb) {
-  await conn.prepare("DELETE FROM users WHERE id = 'demo-user'").run();
-  await conn.prepare("DELETE FROM users WHERE id = 'demo-friend'").run();
+  await cleanDemoUsers(conn);
 }
 
 before(async () => {
@@ -30,9 +30,9 @@ describe('demo seed on Postgres', () => {
         .prepare(
           `SELECT count(*)::int AS users
              FROM users
-            WHERE id IN ('demo-user', 'demo-friend')`,
+            WHERE id IN (?, ?)`,
         )
-        .get<{ users: number }>()) ?? { users: 0 };
+        .get<{ users: number }>(DEMO_USER_ID, DEMO_FRIEND_ID)) ?? { users: 0 };
 
     await seedAll(db);
     assert.equal((await counts()).users, 2);

@@ -4,7 +4,7 @@ import { after, before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { GraphQLError } from 'graphql';
-import { connectPg, deleteUser } from './helpers/pg.ts';
+import { connectPg, cleanDemoUsers, deleteUser } from './helpers/pg.ts';
 import type { PgDb } from '../src/pg/db.ts';
 import { LocalUsersStore, ensureLocalDemoUsers } from '../src/users/local.ts';
 
@@ -87,7 +87,7 @@ describe('LocalUsersStore accounts', () => {
       (error) => codeOf(error) === 'USERNAME_TAKEN',
     );
 
-    for (const id of ['demo-user', 'demo-friend']) {
+    for (const id of ['demo-user', 'demo-friend', '11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222']) {
       await assert.rejects(
         () => store.deleteUser(id),
         (error) => codeOf(error) === 'PROTECTED_USER',
@@ -141,15 +141,16 @@ describe('LocalUsersStore accounts', () => {
 
   test('seeds and logs in the protected demo accounts', async () => {
     if (!db) return;
+    await cleanDemoUsers(db);
     await ensureLocalDemoUsers(db);
 
     const demo = await store.login('demo', 'demo123');
-    assert.equal(demo.id, 'demo-user');
+    assert.equal(demo.id, '11111111-1111-4111-8111-111111111111');
     assert.equal(demo.username, 'demo');
     assert.equal(demo.display_name, 'Demo');
 
     const friend = await store.login('DEMO-FRIEND', 'demo123');
-    assert.equal(friend.id, 'demo-friend');
+    assert.equal(friend.id, '22222222-2222-4222-8222-222222222222');
     assert.equal(friend.username, 'demo-friend');
   });
 });

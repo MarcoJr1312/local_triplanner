@@ -12,6 +12,7 @@ import { migrate } from './db/migrate.ts';
 import { PgDb } from './pg/db.ts';
 import { resolveDatabaseUrl } from './pg/config.ts';
 import { uploadsRoot } from './storage.ts';
+import { ensureLocalDemoUsers } from './users/local.ts';
 import type { AsyncDb } from './pg/db.ts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -39,23 +40,8 @@ export function copySeedImages(): number {
 }
 
 export async function seedDemoUsers(db: AsyncDb): Promise<void> {
-  await db
-    .prepare(
-      `INSERT INTO users (id, email, display_name, color, language)
-       VALUES ('demo-user', 'demo@triplanner.local', 'Demo', '#6366f1', 'en')
-       ON CONFLICT DO NOTHING`,
-    )
-    .run();
-
-  // Second identity for invite/collaboration flows. It is not a trip member
-  // until the owner invites it.
-  await db
-    .prepare(
-      `INSERT INTO users (id, email, display_name, color, language)
-       VALUES ('demo-friend', 'friend@triplanner.local', 'Demo Friend', '#10b981', 'en')
-       ON CONFLICT DO NOTHING`,
-    )
-    .run();
+  // Same fixed UUIDs, usernames and Argon2id hashes as the users service.
+  await ensureLocalDemoUsers(db);
 }
 
 export async function seedAll(db: AsyncDb): Promise<void> {

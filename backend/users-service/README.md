@@ -15,8 +15,9 @@ Contract: [`docs/migrations/0008-users-service.md`](../../docs/migrations/0008-u
 | GET | `/ready` | Postgres ping + migrated; 503 until ready |
 | * | `/internal/v1/*` | `x-internal-token`; actor routes add `x-actor-id` |
 
-Planned v1 (M10.4/M10.5): user CRUD/search/batch, `auth/login`, notifications.
-The service never reads the platform database and has no foreign keys to trips.
+Implemented v1: user CRUD/search/batch, `auth/login`, notifications and the
+fixed-UUID migration. The service never reads the platform database and has no
+foreign keys to trips.
 
 ## Commands
 
@@ -30,6 +31,23 @@ bun src/index.ts
 
 The service migrates its own schema and seeds the protected demo accounts on
 boot (`SEED_DEMO=true`). `db:migrate` and `db:seed` run the same steps manually.
+
+## Fixed-UUID data migration
+
+`scripts/migrate-users.ts` copies platform users into this service and rewrites
+every platform and trips reference to UUIDs. It is a dry-run by default:
+
+```bash
+LEGACY_DATABASE_URL=postgres://.../triplanner \
+TRIPS_DATABASE_URL=postgres://.../trips \
+USERS_DATABASE_URL=postgres://.../users \
+bun scripts/migrate-users.ts
+
+# apply (stop the API and this service first; back up both databases)
+APPLY=1 ... bun scripts/migrate-users.ts
+```
+
+See [`docs/migrations/0009-users-cutover.md`](../../docs/migrations/0009-users-cutover.md).
 
 ## Configuration
 

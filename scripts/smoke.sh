@@ -27,19 +27,19 @@ curl -fsS "$BASE/login" >/dev/null || fail "GET /login"
 pass "web /login"
 
 profile="$(curl -fsS -X POST "$BASE/api/graphql" \
-  -H 'x-user-id: demo-friend' -H 'Content-Type: application/json' \
+  -H 'x-user-id: 22222222-2222-4222-8222-222222222222' -H 'Content-Type: application/json' \
   -d '{"query":"query { getMyProfile { userId email displayName } }"}')"
-echo "$profile" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["data"]["getMyProfile"]["userId"]=="demo-friend"'
+echo "$profile" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["data"]["getMyProfile"]["userId"]=="22222222-2222-4222-8222-222222222222"'
 pass "GraphQL profile via web proxy"
 
 search="$(curl -fsS -X POST "$BASE/api/graphql" \
-  -H 'x-user-id: demo-user' -H 'Content-Type: application/json' \
+  -H 'x-user-id: 11111111-1111-4111-8111-111111111111' -H 'Content-Type: application/json' \
   -d '{"query":"query { searchLocations(q: \"CN Tower\") { id name placeId imageUrl } }"}')"
 echo "$search" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert len(d["data"]["searchLocations"])>0'
 pass "Toronto place search"
 
 activities="$(curl -fsS -X POST "$BASE/api/graphql" \
-  -H 'x-user-id: demo-user' -H 'Content-Type: application/json' \
+  -H 'x-user-id: 11111111-1111-4111-8111-111111111111' -H 'Content-Type: application/json' \
   -d '{"query":"query { listActivities(destSlug: \"toronto\", category: \"food\") { id name } }"}')"
 echo "$activities" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert len(d["data"]["listActivities"])>0'
 pass "Toronto activities"
@@ -50,7 +50,7 @@ print(next((i["placeId"] for i in items if i.get("placeId")), ""))')"
 if [ -n "$place_id" ]; then
   details_payload="$(python3 -c 'import json,sys; pid=sys.argv[1]; print(json.dumps({"query":"query { locationDetails(placeId: \""+pid+"\") { id name } }"}))' "$place_id")"
   details="$(curl -fsS -X POST "$BASE/api/graphql" \
-    -H 'x-user-id: demo-user' -H 'Content-Type: application/json' -d "$details_payload")"
+    -H 'x-user-id: 11111111-1111-4111-8111-111111111111' -H 'Content-Type: application/json' -d "$details_payload")"
   echo "$details" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["data"]["locationDetails"]["id"]'
   pass "location details"
 fi
@@ -71,24 +71,24 @@ echo "$config" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert "de
 pass "agent provider config"
 
 llm="$(curl -fsS -X POST "$BASE/api/graphql" \
-  -H 'x-user-id: demo-user' -H 'Content-Type: application/json' \
+  -H 'x-user-id: 11111111-1111-4111-8111-111111111111' -H 'Content-Type: application/json' \
   -d '{"query":"query { getLlmSettings { provider model baseUrl hasKey demo } }"}')"
 echo "$llm" | python3 -c 'import json,sys; d=json.load(sys.stdin)["data"]["getLlmSettings"]; assert "provider" in d and "demo" in d'
 pass "LLM settings"
 
 curl -fsS -X POST "$BASE/api/graphql" \
-  -H 'x-user-id: demo-user' -H 'Content-Type: application/json' \
+  -H 'x-user-id: 11111111-1111-4111-8111-111111111111' -H 'Content-Type: application/json' \
   -d '{"query":"mutation { setMyInterests(terms: [\"museums\", \"food\", \"views\"]) }"}' >/dev/null
 pass "set demo interests"
 
 auto="$(curl -fsS --max-time 120 -X POST "$BASE/api/agent/auto-suggest" \
-  -H 'x-user-id: demo-user' -H 'Content-Type: application/json' \
+  -H 'x-user-id: 11111111-1111-4111-8111-111111111111' -H 'Content-Type: application/json' \
   -d '{"tripId":"demo-trip","offset":0,"limit":5}')"
 echo "$auto" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert len(d.get("items",[]))>0'
 pass "agent auto-suggest"
 
 suggestions="$(curl -fsS --max-time 120 -X POST "$BASE/api/agent/suggestions" \
-  -H 'x-user-id: demo-user' -H 'Content-Type: application/json' \
+  -H 'x-user-id: 11111111-1111-4111-8111-111111111111' -H 'Content-Type: application/json' \
   -d '{"tripId":"demo-trip","locale":"es","day":"2026-12-04","messages":[{"role":"user","content":"Hola, que me recomiendas?"}]}')"
 echo "$suggestions" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert isinstance(d.get("answer"),str) and d["answer"]'
 pass "agent suggestions"

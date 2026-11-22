@@ -5,13 +5,13 @@
 
 import type { Profile } from '../schema-types.ts';
 
-export const DEMO_USER_ID = 'demo-user';
-export const DEMO_FRIEND_ID = 'demo-friend';
-
-// Fixed UUIDs from the users contract; used by the users service, the M10.10
-// migration and the frontend after cutover.
 export const DEMO_USER_UUID = '11111111-1111-4111-8111-111111111111';
 export const DEMO_FRIEND_UUID = '22222222-2222-4222-8222-222222222222';
+
+// The API now uses UUIDs everywhere; the legacy text ids only stay as aliases
+// for the pre-migration data and the local rollback adapter.
+export const DEMO_USER_ID = DEMO_USER_UUID;
+export const DEMO_FRIEND_ID = DEMO_FRIEND_UUID;
 
 export const DEMO_PASSWORD = 'demo123';
 

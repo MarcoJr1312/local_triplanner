@@ -12,11 +12,12 @@ import {
   toProfile,
 } from '../src/pg/auth.ts';
 import { ensureLocalDemoUsers } from '../src/users/local.ts';
+import { cleanDemoUsers } from './helpers/pg.ts';
 
 let db: PgDb | null = null;
 
 async function cleanDemo(conn: PgDb) {
-  await conn.prepare('DELETE FROM users WHERE id IN (?, ?)').run(DEMO_USER_ID, DEMO_FRIEND_ID);
+  await cleanDemoUsers(conn);
 }
 
 before(async () => {
