@@ -27,7 +27,7 @@ Port-forward the Triplanner Helm services.
 Options:
   -n, --namespace NAME   Kubernetes namespace (default: triplanner)
       --bind ADDRESS     Bind address for app ports (default: 0.0.0.0)
-      --proxy            Also forward the RBAC proxies (127.0.0.1:8443/8444/8445/8446)
+      --proxy            Also forward the RBAC proxies (127.0.0.1:8443/8444/8445/8446/8447)
       --mongo            Also forward MongoDB (127.0.0.1:27018)
       --postgres         Also forward the trips PostgreSQL (127.0.0.1:5433)
       --strict           Fail when a local port is already in use
@@ -170,7 +170,7 @@ done
 if ((PROXY)); then
   echo ""
   echo "RBAC proxies are 127.0.0.1 only. Example:"
-  echo "  curl -i http://localhost:8446/ready    # trips: 401 without a token"
+  echo "  curl -i http://localhost:8447/ready    # users: 401 without a token"
 fi
 echo ""
 echo "Press Ctrl+C to stop. If the forwards survive, run: bash scripts/port-forward.sh --stop"

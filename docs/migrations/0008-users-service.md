@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **Proposed — pending Gate 1** |
+| Status | **Approved; M10.1–M10.11 implemented; Gate 2 pending** |
 | Integration branch | `refactor/helm` |
 | Work branch | `refactor/helm-users-service` |
 | Runtime | Bun + TypeScript |
@@ -233,6 +233,7 @@ New routes:
 | POST | `/internal/v1/trips/{id}/local-invite` | `{invitee_user_id, role, created_by}` → pending local invitation, no outbox |
 | POST | `/internal/v1/trips/{id}/join-local` | `{user_id, invitation_id}` → membership + accepted in one transaction |
 | POST | `/internal/v1/trips/{id}/local-invite/{invitationId}/decline` | `{user_id}` → declined |
+| POST | `/internal/v1/trips/{id}/local-invite/{invitationId}/revoke` | editor/owner cancels a pending local invite (notification compensation) |
 
 The existing email routes (`POST /invitations`, `/invitations/by-code`,
 `/join`) and the outbox are unchanged.
@@ -263,8 +264,9 @@ UI: invite by username
 - The API checks the actor is owner/editor and the target is not a member; the
   trips service re-checks both.
 - If the notification creation fails after the trip invitation is created, the
-  API calls the trips decline route as compensation and returns
-  `NOTIFICATION_FAILED`.
+  API calls the trips revoke route as compensation and returns
+  `NOTIFICATION_FAILED`. Revoke is editor/owner-scoped; decline stays
+  invitee-scoped.
 - Accept is idempotent: a repeated call returns the trip; a declined/revoked
   invitation returns `INVITE_ALREADY_USED`.
 - No email, code or outbox row is created for a local invite.
@@ -477,7 +479,7 @@ Cutover:
 | Header spoofing | Local demo only; the password gates login, but `x-user-id` is not production auth |
 | Password handling | Argon2id hashes; never log/return; local HTTP inside the cluster only |
 | Delete keeps memberships | Soft delete; members show the last display name; owner delete blocked |
-| Notification/invitation divergence | Compensating decline; accept idempotent; unique `(user, invitation)` |
+| Notification/invitation divergence | Compensating revoke; accept idempotent; unique `(user, invitation)` |
 | Live subscription single-replica | API is one local process; shared bus is a later concern |
 | Username reuse after delete | Partial unique indexes; old memberships keep the old profile |
 | Users service down | API maps to `USERS_UNAVAILABLE`; login/profile fail clearly |

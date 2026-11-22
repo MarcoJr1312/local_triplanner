@@ -51,7 +51,7 @@ jobs:
         run: |
           for attempt in $(seq 1 60); do
             ok=1
-            for svc in postgres mongo locations api agent web; do
+            for svc in postgres trips-postgres users-postgres mongo locations trips users api agent web; do
               status="$(docker inspect --format '{{.State.Health.Status}}' "local_triplanner-$svc" 2>/dev/null || true)"
               [ "$status" = "healthy" ] || ok=0
             done

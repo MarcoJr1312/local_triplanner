@@ -87,7 +87,7 @@ the client.
 | Users (`backend/users-service/`) | TypeScript on Bun, internal REST v1, PostgreSQL (`pg`), Argon2id (`Bun.password`) |
 | Agent (`backend/agent-service/`) | Python 3.12, uv, FastAPI, Agno, pgvector |
 | Data (`backend/db/`) | Postgres `pg/schema.sql` + idempotent seed; Toronto catalogue JSON |
-| Local infra | Docker Compose: web, api, locations, agent, PostgreSQL 17 + pgvector, MongoDB 7 |
+| Local infra | Docker Compose: web, api, locations, trips, users, agent, PostgreSQL 17 + pgvector, two service PostgreSQL databases, MongoDB 7 |
 
 ## Repository layout
 
@@ -118,9 +118,10 @@ cd local_triplanner
 docker compose -f deploy/docker-compose.yml up --build
 ```
 
-Open http://localhost:3000/login and choose **Demo (owner)** or **Demo Friend**.
+Open http://localhost:3000/login and sign in with **`demo` / `demo123`** (or
+**`demo-friend` / `demo123`**).
 
-The first build takes a few minutes. All six services become healthy:
+The first build takes a few minutes. All services become healthy:
 
 ```bash
 docker compose -f deploy/docker-compose.yml ps
@@ -131,8 +132,12 @@ docker compose -f deploy/docker-compose.yml ps
 | `web` | Next.js UI on http://localhost:3000 |
 | `api` | GraphQL API (internal) |
 | `locations` | Destinations/activities catalogue (internal, owns MongoDB) |
+| `trips` | Trips, members, items and invitations (internal, owns its PostgreSQL) |
+| `users` | Accounts, password login and notifications (internal, owns its PostgreSQL) |
 | `agent` | FastAPI suggestions (internal) |
 | `postgres` | Relational data + pgvector |
+| `trips-postgres` | Trips service database |
+| `users-postgres` | Users service database |
 | `mongo` | Toronto location catalogue |
 
 Useful commands:
@@ -145,9 +150,10 @@ docker compose logs -f api
 
 ### Cluster demo (optional)
 
-The chart in `helm/helm-triplanner` runs the broker, email, locations and MongoDB
-on a local cluster. See the [chart README](helm/helm-triplanner/README.md), then
-forward the services with one command:
+The chart in `helm/helm-triplanner` runs the broker, email, locations, trips,
+users and their PostgreSQL databases plus MongoDB on a local cluster. See the
+[chart README](helm/helm-triplanner/README.md), then forward the services with
+one command:
 
 ```bash
 powershell -ExecutionPolicy Bypass -File scripts/port-forward.ps1 -Proxy
@@ -159,8 +165,8 @@ bash scripts/port-forward.sh --proxy
 
 1. Open the seeded Toronto trip (Dec 4–6, 2026).
 2. Search for **CN Tower**, **ROM** or a restaurant.
-3. Invite **Demo Friend** from the trip and open the copied link in an
-   incognito window.
+3. Invite **`demo-friend`** from the trip's **Invitar → Por usuario** tab, then
+   sign in as `demo-friend` / `demo123` and accept from the bell.
 4. Upload an avatar or an activity attachment.
 5. Ask the AI agent for suggestions.
 

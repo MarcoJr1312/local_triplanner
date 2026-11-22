@@ -12,7 +12,6 @@ Each service has its own workflow and test command.
 | `locations.yml` | Locations service | `bun audit` + `bun test` (MongoDB) | `triplanner-locations` |
 | `trips.yml` | Trips service | `bun audit` + `bun test` (PostgreSQL) | `triplanner-trips` |
 | `users.yml` | Users service | `bun audit` + `bun test` (PostgreSQL, including the UUID migration) | `triplanner-users` |
-| `email.yml` | Email consumer | `bun audit` + `bun test` | `triplanner-email` |
 | `compose-smoke.yml` | Full stack | builds all images, boots Compose, runs `scripts/smoke.sh` | no push |
 
 Every test job audits its dependencies before running the tests:

@@ -16,7 +16,7 @@ function Pass([string]$Message) {
 
 Write-Host "Smoke test against $Base"
 
-foreach ($svc in @('postgres', 'mongo', 'locations', 'api', 'agent', 'web')) {
+foreach ($svc in @('postgres', 'trips-postgres', 'users-postgres', 'mongo', 'locations', 'trips', 'users', 'api', 'agent', 'web')) {
   $name = "local_triplanner-$svc"
   $status = docker inspect --format '{{.State.Health.Status}}' $name 2>$null
   if ($status -ne 'healthy') { Fail "$name is '$status'" }
@@ -26,10 +26,15 @@ $login = Invoke-WebRequest -Uri "$Base/login" -UseBasicParsing
 if ($login.StatusCode -ne 200) { Fail "GET /login -> $($login.StatusCode)" }
 Pass "web /login"
 
-$profileBody = @{ query = 'query { getMyProfile { userId email displayName } }' } | ConvertTo-Json
+$profileBody = @{ query = 'query { getMyProfile { userId username email displayName } }' } | ConvertTo-Json
 $profile = Invoke-RestMethod -Uri "$Base/api/graphql" -Method Post -Headers $HeadersFriend -Body $profileBody
 if ($profile.data.getMyProfile.userId -ne '22222222-2222-4222-8222-222222222222') { Fail "demo-friend profile" }
 Pass "GraphQL profile via web proxy"
+
+$loginBody = @{ query = 'mutation { login(username: "demo", password: "demo123") { userId username } }' } | ConvertTo-Json
+$login = Invoke-RestMethod -Uri "$Base/api/graphql" -Method Post -Headers $HeadersUser -Body $loginBody
+if ($login.data.login.userId -ne '11111111-1111-4111-8111-111111111111') { Fail "users login" }
+Pass "users service login via web proxy"
 
 $searchBody = @{ query = 'query { searchLocations(q: "CN Tower") { id name placeId imageUrl } }' } | ConvertTo-Json
 $search = Invoke-RestMethod -Uri "$Base/api/graphql" -Method Post -Headers $HeadersUser -Body $searchBody

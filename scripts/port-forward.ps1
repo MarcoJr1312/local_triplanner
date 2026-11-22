@@ -8,7 +8,7 @@
   services. App ports bind on -BindAddress (default 0.0.0.0) so Docker Compose
   containers can reach them through host.docker.internal.
   Proxy ports bind on 127.0.0.1 only and use distinct local ports
-  (8443/8444/8445/8446) because each sidecar listens on 8443 inside its pod.
+  (8443/8444/8445/8446/8447) because each sidecar listens on 8443 inside its pod.
 
   Re-running the script stops the forwards it started previously and skips
   ports that are already in use (use -Strict to fail instead).
@@ -20,7 +20,7 @@
   Address for the app ports. Default: 0.0.0.0.
 
 .PARAMETER Proxy
-  Also forward the kube-rbac-proxy ports on 127.0.0.1:8443/8444/8445/8446.
+  Also forward the kube-rbac-proxy ports on 127.0.0.1:8443/8444/8445/8446/8447.
 
 .PARAMETER Mongo
   Also forward MongoDB on 127.0.0.1:27018. The chart runs Mongo as a

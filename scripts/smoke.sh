@@ -17,7 +17,7 @@ pass() {
 
 echo "Smoke test against $BASE"
 
-for svc in postgres mongo locations api agent web; do
+for svc in postgres trips-postgres users-postgres mongo locations trips users api agent web; do
   name="local_triplanner-$svc"
   status="$(docker inspect --format '{{.State.Health.Status}}' "$name" 2>/dev/null || true)"
   [ "$status" = "healthy" ] || fail "$name is '$status'"
@@ -28,9 +28,15 @@ pass "web /login"
 
 profile="$(curl -fsS -X POST "$BASE/api/graphql" \
   -H 'x-user-id: 22222222-2222-4222-8222-222222222222' -H 'Content-Type: application/json' \
-  -d '{"query":"query { getMyProfile { userId email displayName } }"}')"
+  -d '{"query":"query { getMyProfile { userId username email displayName } }"}')"
 echo "$profile" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["data"]["getMyProfile"]["userId"]=="22222222-2222-4222-8222-222222222222"'
 pass "GraphQL profile via web proxy"
+
+login="$(curl -fsS -X POST "$BASE/api/graphql" \
+  -H 'x-user-id: 11111111-1111-4111-8111-111111111111' -H 'Content-Type: application/json' \
+  -d '{"query":"mutation { login(username: \"demo\", password: \"demo123\") { userId username } }"}')"
+echo "$login" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["data"]["login"]["userId"]=="11111111-1111-4111-8111-111111111111"'
+pass "users service login via web proxy"
 
 search="$(curl -fsS -X POST "$BASE/api/graphql" \
   -H 'x-user-id: 11111111-1111-4111-8111-111111111111' -H 'Content-Type: application/json' \
