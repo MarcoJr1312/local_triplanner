@@ -66,6 +66,9 @@
 
 - Users 61/61, trips 66/66, API 70/70, frontend 22/22; typechecks and production
   build pass.
+- Full Compose stack: `docker compose -f deploy/docker-compose.yml up --build -d`
+  built and started all ten services healthy; `scripts/smoke.ps1` passed
+  (profile, users-service login, place search, agent demo suggestions).
 - Helm `lint`/`test` 4/4; users and trips pods ready at revision 22.
 - Playwright full UI: Spanish default, create account, username invite, bell
   accept, protected demo users, owner-delete guard, account delete, no console
