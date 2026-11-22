@@ -13,6 +13,8 @@ Migrations:
 - [`0004-hasdata-byok.md`](./0004-hasdata-byok.md) — optional HasData BYOK +
   MongoDB cache
 - [`0005-mongo-auth.md`](./0005-mongo-auth.md) — MongoDB credentials and Secret
+- [`0006-trips-service.md`](./0006-trips-service.md) — trips service over
+  PostgreSQL (proposed, pending Gate 1)
 
 ## Branching (local only)
 
