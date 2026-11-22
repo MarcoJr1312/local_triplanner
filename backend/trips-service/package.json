@@ -1,0 +1,22 @@
+{
+  "name": "triplanner-trips-service",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Trips, memberships, itinerary items and invitations for Triplanner. Owns its PostgreSQL database.",
+  "scripts": {
+    "start": "bun src/index.ts",
+    "dev": "bun --watch src/index.ts",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "pg": "^8.23.1"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.4.5",
+    "@types/node": "^26.6.5",
+    "@types/pg": "^8.23.1",
+    "typescript": "^7.0.2"
+  }
+}
