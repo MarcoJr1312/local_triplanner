@@ -18,5 +18,6 @@ export function isInviteCodeValid(code: unknown): code is string {
 
 // Case-insensitive match between the invitation email and the caller email.
 export function isEmailMatch(invitation: InvitationRow, email: string): boolean {
+  if (!invitation.email) return false;
   return invitation.email.toLowerCase() === email.trim().toLowerCase();
 }

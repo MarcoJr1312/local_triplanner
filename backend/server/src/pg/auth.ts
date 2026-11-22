@@ -50,6 +50,7 @@ export function getCurrentUserId(
 
 interface ProfileSource {
   id: string;
+  username: string;
   email: string | null;
   display_name: string;
   color?: string | null;
@@ -60,6 +61,7 @@ interface ProfileSource {
 export function toProfile(row: ProfileSource): Profile {
   return {
     userId: row.id,
+    username: row.username,
     // GraphQL keeps `email: String!` until the M10.9 frontend switch.
     email: row.email ?? '',
     displayName: row.display_name,

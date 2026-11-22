@@ -136,6 +136,53 @@ describe('RemoteTripsStore', () => {
     assert.equal(result.data.trip.id, 't1');
   });
 
+  test('maps local invitation create, join and decline', async () => {
+    const calls: { url: string; body: Record<string, unknown> }[] = [];
+    const localInvitation = {
+      id: 'local-1',
+      trip_id: 't1',
+      email: null,
+      code: null,
+      role: 'viewer',
+      status: 'pending',
+      created_by: 'demo-user',
+      created_at: '2026-11-21T00:00:00.000Z',
+      accepted_at: null,
+      channel: 'local',
+      invitee_user_id: 'u2',
+    };
+
+    const store = storeWith(async (input, init) => {
+      const url = String(input);
+      calls.push({
+        url,
+        body: init?.body ? JSON.parse(String(init.body)) : {},
+      });
+      if (url.endsWith('/join-local')) {
+        return Response.json({ joined: true, trip: AGGREGATE });
+      }
+      if (url.endsWith('/decline')) {
+        return Response.json({ ...localInvitation, status: 'declined' });
+      }
+      return Response.json(localInvitation, { status: 201 });
+    });
+
+    const created = await store.createLocalInvitation('demo-user', 't1', 'u2', 'viewer');
+    assert.equal(created.channel, 'local');
+    assert.equal(created.email, null);
+    assert.equal(created.invitee_user_id, 'u2');
+    assert.deepEqual(calls[0]?.body, { invitee_user_id: 'u2', role: 'viewer' });
+
+    const joined = await store.joinLocal('u2', 't1', created.id);
+    assert.equal(joined.joined, true);
+    assert.equal(joined.data.trip.id, 't1');
+    assert.deepEqual(calls[1]?.body, { user_id: 'u2', invitation_id: 'local-1' });
+
+    const declined = await store.declineLocalInvitation('u2', 't1', created.id);
+    assert.equal(declined.status, 'declined');
+    assert.deepEqual(calls[2]?.body, { user_id: 'u2' });
+  });
+
   test('maps a service outage to TRIPS_UNAVAILABLE', async () => {
     const store = storeWith(
       async () =>

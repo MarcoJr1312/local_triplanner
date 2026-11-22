@@ -75,6 +75,7 @@ describe('demo auth on Postgres', () => {
   test('toProfile maps the row to the GraphQL shape', () => {
     const profile = toProfile({
       id: 'u1',
+      username: 'demo',
       email: 'a@b.c',
       display_name: 'Ana',
       color: null,
@@ -83,6 +84,7 @@ describe('demo auth on Postgres', () => {
     });
     assert.deepEqual(profile, {
       userId: 'u1',
+      username: 'demo',
       email: 'a@b.c',
       displayName: 'Ana',
       color: null,

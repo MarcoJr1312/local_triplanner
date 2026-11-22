@@ -45,8 +45,14 @@ import {
 import type { TripItemRow, TripMemberRow, TripRowFull } from './trips/types.ts';
 import type { TripData, TripRole, TripsStore, UpdateTripInput } from './trips/types.ts';
 import type { LocationRow, Profile } from './schema-types.ts';
-import type { UserRecord, UsersStore } from './users/types.ts';
-import { DEMO_FRIEND_ID, DEMO_FRIEND_UUID, toProfile } from './pg/auth.ts';
+import type { UserRecord, UsersStore, NotificationRecord } from './users/types.ts';
+import {
+  DEMO_FRIEND_ID,
+  DEMO_FRIEND_UUID,
+  DEMO_USER_ID,
+  DEMO_USER_UUID,
+  toProfile,
+} from './pg/auth.ts';
 
 export interface PubSub {
   publish(topic: string, payload: Record<string, unknown>): void;
@@ -74,6 +80,7 @@ interface ItemRow extends TripItemRow {}
 
 interface MemberRow {
   user_id: string;
+  username: string | null;
   display_name: string | null;
   email: string | null;
   invited_email: string | null;
@@ -85,6 +92,7 @@ interface MemberRow {
 
 interface MemberGql {
   userId: string;
+  username: string | null;
   displayName: string | null;
   email: string | null;
   invitedEmail: string | null;
@@ -265,6 +273,7 @@ const toTripItem = (row: ItemRow): ItemGql => ({
 
 const toMember = (row: MemberRow): MemberGql => ({
   userId: row.user_id,
+  username: row.username,
   displayName: row.display_name,
   email: row.email,
   invitedEmail: row.invited_email,
@@ -464,6 +473,16 @@ function publishTrip(ctx: Ctx, tripId: string, mutationType: string, entity: unk
   });
 }
 
+function publishNotification(
+  ctx: Ctx,
+  userId: string,
+  record: NotificationRecord,
+): void {
+  ctx.pubsub.publish(`notify:${userId}`, {
+    onNotification: toNotificationGql(record, null),
+  });
+}
+
 async function enrichMembers(users: UsersStore, members: TripMemberRow[]): Promise<MemberRow[]> {
   if (members.length === 0) return [];
 
@@ -473,6 +492,7 @@ async function enrichMembers(users: UsersStore, members: TripMemberRow[]): Promi
     const user = byId.get(member.user_id);
     return {
       user_id: member.user_id,
+      username: user?.username ?? null,
       display_name: user?.display_name ?? member.user_id,
       email: user?.email ?? '',
       invited_email: member.invited_email,
@@ -491,6 +511,72 @@ function uploaderNames(ctx: Ctx) {
     return new Map(rows.map((user) => [user.id, user.display_name]));
   };
 }
+
+interface NotificationGql {
+  id: string;
+  type: string;
+  tripId: string;
+  tripName: string;
+  invitationId: string;
+  inviterUserId: string | null;
+  inviter: Profile | null;
+  role: string;
+  status: string;
+  createdAt: string;
+  readAt: string | null;
+}
+
+function toNotificationGql(record: NotificationRecord, inviter: Profile | null): NotificationGql {
+  return {
+    id: record.id,
+    type: record.type,
+    tripId: record.trip_id,
+    tripName: record.trip_name,
+    invitationId: record.invitation_id,
+    inviterUserId: record.inviter_user_id,
+    inviter,
+    role: record.role,
+    status: record.status,
+    createdAt: record.created_at,
+    readAt: record.read_at,
+  };
+}
+
+async function buildNotifications(
+  ctx: Ctx,
+  records: NotificationRecord[],
+): Promise<NotificationGql[]> {
+  const ids = [
+    ...new Set(
+      records
+        .map((record) => record.inviter_user_id)
+        .filter((id): id is string => Boolean(id)),
+    ),
+  ];
+  const inviters = ids.length > 0 ? await ctx.users.batchUsers(ids) : [];
+  const byId = new Map(inviters.map((user) => [user.id, user]));
+
+  return records.map((record) => {
+    const inviter = record.inviter_user_id
+      ? byId.get(record.inviter_user_id)
+      : undefined;
+    return toNotificationGql(record, inviter ? toProfile(inviter) : null);
+  });
+}
+
+async function buildNotification(ctx: Ctx, record: NotificationRecord): Promise<NotificationGql> {
+  const inviter = record.inviter_user_id
+    ? await ctx.users.getUser(record.inviter_user_id)
+    : null;
+  return toNotificationGql(record, inviter ? toProfile(inviter) : null);
+}
+
+const PROTECTED_USER_IDS = new Set([
+  DEMO_USER_ID,
+  DEMO_FRIEND_ID,
+  DEMO_USER_UUID,
+  DEMO_FRIEND_UUID,
+]);
 
 async function buildTrip(ctx: Ctx, data: TripData): Promise<TripGql> {
   const members = (await enrichMembers(ctx.users, data.members)).map(toMember);
@@ -524,6 +610,7 @@ export const resolvers: {
   Query: Record<string, Resolver>;
   Mutation: Record<string, Resolver>;
   Subscription: Record<string, { subscribe: Resolver }>;
+  Notification: Record<string, Resolver>;
   Trip: Record<string, Resolver>;
   TripItem: Record<string, Resolver>;
 } = {
@@ -636,6 +723,21 @@ export const resolvers: {
       return user && !user.deleted_at ? toProfile(user) : null;
     },
 
+    listUsers: async (_, args, ctx) => {
+      const { query } = args as Args<{ query?: string | null }>;
+      return (await ctx.users.listUsers(query ?? '')).map(toProfile);
+    },
+
+    getUserByUsername: async (_, args, ctx) => {
+      const { username } = args as Args<{ username: string }>;
+      const user = await ctx.users.getByUsername(username);
+      return user && !user.deleted_at ? toProfile(user) : null;
+    },
+
+    myNotifications: async (_, __, ctx) => {
+      return buildNotifications(ctx, await ctx.users.listNotifications(ctx.currentUserId));
+    },
+
     suggestionChats: (_, args, ctx) => {
       const { tripId, day } = args as Args<{ tripId: string; day?: string | null }>;
       return listSuggestionChats(ctx.db, tripId, ctx.currentUserId, day ?? null);
@@ -683,6 +785,183 @@ export const resolvers: {
   },
 
   Mutation: {
+    login: async (_, args, ctx) => {
+      const { username, password } = args as Args<{ username: string; password: string }>;
+      return toProfile(await ctx.users.login(username, password));
+    },
+
+    createUser: async (_, args, ctx) => {
+      const { input } = args as Args<{
+        input: {
+          username: string;
+          password: string;
+          displayName: string;
+          language?: string | null;
+        };
+      }>;
+      return toProfile(
+        await ctx.users.createUser({
+          username: input.username,
+          password: input.password,
+          displayName: input.displayName,
+          language: input.language ?? 'es',
+        }),
+      );
+    },
+
+    deleteUser: async (_, args, ctx) => {
+      const { userId } = args as Args<{ userId: string }>;
+      if (PROTECTED_USER_IDS.has(userId)) {
+        throw gqlError('PROTECTED_USER', 'Las cuentas demo no se pueden eliminar.');
+      }
+      const owned = await ctx.trips.listMyTrips(userId);
+      if (owned.some((trip) => trip.role === 'owner')) {
+        throw gqlError(
+          'USER_OWNS_TRIPS',
+          'Transfiere o elimina sus viajes antes de borrar la cuenta.',
+        );
+      }
+      await ctx.users.deleteUser(userId);
+      return true;
+    },
+
+    tripLocalInvite: async (_, args, ctx) => {
+      const { tripId, username, role } = args as Args<{
+        tripId: string;
+        username: string;
+        role: string;
+      }>;
+      if (role !== 'editor' && role !== 'viewer') {
+        throw gqlError('INVALID_MEMBER_ROLE', 'Rol de miembro no válido.');
+      }
+
+      const target = await ctx.users.getByUsername(username);
+      if (!target || target.deleted_at) {
+        throw gqlError('USER_NOT_FOUND', 'Usuario no encontrado.');
+      }
+      if (target.id === ctx.currentUserId) {
+        throw gqlError('INVALID_ARGUMENT', 'No puedes invitarte a ti mismo.');
+      }
+
+      const trip = await ctx.trips.getTrip(ctx.currentUserId, tripId);
+      if (trip.members.some((member) => member.user_id === target.id)) {
+        throw gqlError('ALREADY_MEMBER', 'El usuario ya es miembro de este viaje.');
+      }
+
+      const invitation = await ctx.trips.createLocalInvitation(
+        ctx.currentUserId,
+        tripId,
+        target.id,
+        role,
+      );
+
+      try {
+        const result = await ctx.users.createNotification({
+          userId: target.id,
+          type: 'trip_invite',
+          tripId,
+          tripName: trip.trip.name,
+          invitationId: invitation.id,
+          inviterUserId: ctx.currentUserId,
+          role,
+        });
+        if (result.created) publishNotification(ctx, target.id, result.notification);
+        return {
+          invitationId: invitation.id,
+          notificationId: result.notification.id,
+          user: toProfile(target),
+          status: invitation.status,
+        };
+      } catch (error) {
+        // Compensate: never leave a local invitation the invitee cannot see.
+        await ctx.trips
+          .declineLocalInvitation(ctx.currentUserId, tripId, invitation.id)
+          .catch(() => undefined);
+        if (error instanceof GraphQLError) {
+          const code = error.extensions.code;
+          if (code === 'USER_NOT_FOUND' || code === 'INVALID_ARGUMENT') throw error;
+        }
+        throw gqlError(
+          'NOTIFICATION_FAILED',
+          'No se pudo crear la notificación de la invitación.',
+        );
+      }
+    },
+
+    acceptTripLocalInvite: async (_, args, ctx) => {
+      const { notificationId } = args as Args<{ notificationId: string }>;
+      const notification = await ctx.users.getNotification(
+        ctx.currentUserId,
+        notificationId,
+      );
+      if (notification.status === 'accepted' || notification.status === 'declined') {
+        throw gqlError('INVITE_ALREADY_USED', 'La invitación ya fue utilizada.');
+      }
+
+      const result = await ctx.trips.joinLocal(
+        ctx.currentUserId,
+        notification.trip_id,
+        notification.invitation_id,
+      );
+
+      // Membership is authoritative; a notification write failure must not undo it.
+      await ctx.users
+        .updateNotification(ctx.currentUserId, notification.id, 'accepted')
+        .catch((error: unknown) => {
+          console.error(
+            '[users] could not mark notification accepted:',
+            error instanceof Error ? error.message : error,
+          );
+        });
+
+      if (result.joined) {
+        publishTrip(
+          ctx,
+          notification.trip_id,
+          'acceptLocalInvite',
+          { invitationId: notification.invitation_id, userId: ctx.currentUserId },
+          ctx.currentUserId,
+        );
+      }
+      return buildTrip(ctx, result.data);
+    },
+
+    declineTripLocalInvite: async (_, args, ctx) => {
+      const { notificationId } = args as Args<{ notificationId: string }>;
+      const notification = await ctx.users.getNotification(
+        ctx.currentUserId,
+        notificationId,
+      );
+      if (notification.status === 'accepted') {
+        throw gqlError('INVITE_ALREADY_USED', 'La invitación ya fue utilizada.');
+      }
+      if (notification.status === 'declined') {
+        return buildNotification(ctx, notification);
+      }
+
+      await ctx.trips.declineLocalInvitation(
+        ctx.currentUserId,
+        notification.trip_id,
+        notification.invitation_id,
+      );
+      const updated = await ctx.users.updateNotification(
+        ctx.currentUserId,
+        notification.id,
+        'declined',
+      );
+      return buildNotification(ctx, updated);
+    },
+
+    markNotificationRead: async (_, args, ctx) => {
+      const { notificationId } = args as Args<{ notificationId: string }>;
+      const updated = await ctx.users.updateNotification(
+        ctx.currentUserId,
+        notificationId,
+        'read',
+      );
+      return buildNotification(ctx, updated);
+    },
+
     registerUser: async (_, args, ctx) => {
       const { input } = args as Args<{ input: RegisterUserInput }>;
       const displayName = input.displayName.trim();
@@ -1016,13 +1295,17 @@ export const resolvers: {
         },
       });
 
-      const joinUrl = buildJoinUrl(tripId, result.invitation.code);
+      const code = result.invitation.code;
+      if (!code) {
+        throw gqlError('INVITE_CODE_NOT_FOUND', 'La invitación no tiene código.');
+      }
+      const joinUrl = buildJoinUrl(tripId, code);
       publishTrip(ctx, tripId, 'inviteSent', { tripId, email: result.invitation.email }, ctx.currentUserId);
       return {
         invitationId: result.invitation.id,
         status: result.invitation.status,
         email: result.invitation.email,
-        code: result.invitation.code,
+        code,
         joinUrl,
       };
     },
@@ -1306,6 +1589,19 @@ export const resolvers: {
         await ctx.trips.assertMember(ctx.currentUserId, tripId);
         return ctx.pubsub.subscribe(`presence:${tripId}`);
       },
+    },
+    onNotification: {
+      subscribe: async (_, __, ctx) => ctx.pubsub.subscribe(`notify:${ctx.currentUserId}`),
+    },
+  },
+
+  Notification: {
+    inviter: async (parent, __, ctx) => {
+      const notification = parent as NotificationGql;
+      if (notification.inviter) return notification.inviter;
+      if (!notification.inviterUserId) return null;
+      const user = await ctx.users.getUser(notification.inviterUserId);
+      return user ? toProfile(user) : null;
     },
   },
 

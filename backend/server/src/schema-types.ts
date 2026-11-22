@@ -54,19 +54,22 @@ export interface LocationRow {
 export interface InvitationRow {
   id: string;
   trip_id: string;
-  email: string;
-  code: string;
+  email: string | null;
+  code: string | null;
   role: 'owner' | 'editor' | 'viewer';
-  status: 'pending' | 'accepted' | 'revoked';
+  status: 'pending' | 'accepted' | 'declined' | 'revoked';
   created_by: string;
   created_at: string;
   accepted_at: string | null;
+  channel: 'email' | 'local';
+  invitee_user_id: string | null;
 }
 
 // ---- Tipos GraphQL (camelCase, lo que devuelven los resolvers) ----
 
 export interface Profile {
   userId: string;
+  username: string;
   email: string;
   displayName: string;
   color?: string | null;

@@ -137,18 +137,64 @@ input UpdateMyProfileInput {
 }
 
 extend type UserProfile {
+  username: String!
   color: String
   avatarUrl: String
   language: String
 }
 
 extend type Member {
+  username: String
   color: String
   avatarUrl: String
 }
 
+input CreateUserInput {
+  username: String!
+  password: String!
+  displayName: String!
+  language: String
+}
+
+type Notification {
+  id: ID!
+  type: String!
+  tripId: ID!
+  tripName: String!
+  invitationId: ID!
+  inviter: UserProfile
+  role: MemberRole!
+  status: String!
+  createdAt: AWSDateTime!
+  readAt: AWSDateTime
+}
+
+type LocalInviteResult {
+  invitationId: ID!
+  notificationId: ID!
+  user: UserProfile!
+  status: String!
+}
+
 extend type Query {
   getMyProfile: UserProfile
+  listUsers(query: String): [UserProfile!]!
+  getUserByUsername(username: String!): UserProfile
+  myNotifications: [Notification!]!
+}
+
+extend type Mutation {
+  login(username: String!, password: String!): UserProfile!
+  createUser(input: CreateUserInput!): UserProfile!
+  deleteUser(userId: ID!): Boolean!
+  tripLocalInvite(tripId: ID!, username: String!, role: MemberRole!): LocalInviteResult!
+  acceptTripLocalInvite(notificationId: ID!): Trip!
+  declineTripLocalInvite(notificationId: ID!): Notification!
+  markNotificationRead(notificationId: ID!): Notification!
+}
+
+extend type Subscription {
+  onNotification: Notification!
 }
 
 type InviteResult {

@@ -55,13 +55,15 @@ interface RemoteSummary {
 interface RemoteInvitation {
   id: string;
   trip_id: string;
-  email: string;
-  code: string;
+  email: string | null;
+  code: string | null;
   role: string;
   status: string;
   created_by: string;
   created_at: string;
   accepted_at: string | null;
+  channel?: string;
+  invitee_user_id?: string | null;
 }
 
 function asRole(value: string | null | undefined): TripRole | null {
@@ -72,13 +74,15 @@ function toInvitation(raw: RemoteInvitation): InvitationRow {
   return {
     id: raw.id,
     trip_id: raw.trip_id,
-    email: raw.email,
-    code: raw.code,
+    email: raw.email ?? null,
+    code: raw.code ?? null,
     role: raw.role as InvitationRow['role'],
     status: raw.status as InvitationRow['status'],
     created_by: raw.created_by,
     created_at: raw.created_at,
     accepted_at: raw.accepted_at,
+    channel: raw.channel === 'local' ? 'local' : 'email',
+    invitee_user_id: raw.invitee_user_id ?? null,
   };
 }
 
@@ -414,8 +418,52 @@ export class RemoteTripsStore implements TripsStore {
     };
   }
 
-  async joinTrip(userId: string, tripId: string, input: JoinInput): Promise<JoinResult> {
-    const response = await this.request<{
+  async createLocalInvitation(
+    userId: string,
+    tripId: string,
+    inviteeUserId: string,
+    role: InviteRole,
+  ): Promise<InvitationRow> {
+    return toInvitation(
+      await this.request<RemoteInvitation>(
+        'POST',
+        `/internal/v1/trips/${encodeURIComponent(tripId)}/local-invite`,
+        userId,
+        { invitee_user_id: inviteeUserId, role },
+      ),
+    );
+  }
+
+  async joinLocal(
+    userId: string,
+    tripId: string,
+    invitationId: string,
+  ): Promise<{ joined: boolean; data: TripData }> {
+    const response = await this.request<{ joined: boolean; trip: RemoteAggregate }>(
+      'POST',
+      `/internal/v1/trips/${encodeURIComponent(tripId)}/join-local`,
+      userId,
+      { user_id: userId, invitation_id: invitationId },
+    );
+    return { joined: response.joined, data: this.mapAggregate(response.trip) };
+  }
+
+  async declineLocalInvitation(
+    userId: string,
+    tripId: string,
+    invitationId: string,
+  ): Promise<InvitationRow> {
+    return toInvitation(
+      await this.request<RemoteInvitation>(
+        'POST',
+        `/internal/v1/trips/${encodeURIComponent(tripId)}/local-invite/${encodeURIComponent(invitationId)}/decline`,
+        userId,
+        { user_id: userId },
+      ),
+    );
+  }
+
+  async joinTrip(userId: string, tripId: string, input: JoinInput): Promise<JoinResult> {    const response = await this.request<{
       joined: boolean;
       trip: RemoteAggregate;
       member_email: { queued: boolean; reason?: string };

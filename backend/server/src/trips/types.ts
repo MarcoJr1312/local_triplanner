@@ -242,5 +242,22 @@ export interface TripsStore {
     tripId: string,
     input: CreateInvitationInput,
   ): Promise<InvitationResult>;
+  /** Local channel: no email, no code, no outbox. */
+  createLocalInvitation(
+    userId: string,
+    tripId: string,
+    inviteeUserId: string,
+    role: InviteRole,
+  ): Promise<InvitationRow>;
+  joinLocal(
+    userId: string,
+    tripId: string,
+    invitationId: string,
+  ): Promise<{ joined: boolean; data: TripData }>;
+  declineLocalInvitation(
+    userId: string,
+    tripId: string,
+    invitationId: string,
+  ): Promise<InvitationRow>;
   joinTrip(userId: string, tripId: string, input: JoinInput): Promise<JoinResult>;
 }
