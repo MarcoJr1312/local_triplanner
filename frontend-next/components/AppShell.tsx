@@ -1,14 +1,25 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { Bell, CalendarDays, Compass, LogOut, Map, Search, Settings } from 'lucide-react';
+import { toast } from 'sonner';
 import type { ReactNode } from 'react';
 import { useI18n } from '@/lib/i18n';
+import type { TranslationKey } from '@/lib/i18n';
+import { api, localizeApiError, subscribeNotifications } from '@/lib/api';
 import { useAuth } from '@/hooks/useAuth';
+import type { Notification } from '@/lib/types';
 import ThemeToggle from './ThemeToggle';
 import Modal from './Modal';
+
+const NOTIFICATION_STATUS_KEY: Record<Notification['status'], TranslationKey> = {
+  unread: 'notifications.statusUnread',
+  read: 'notifications.statusRead',
+  accepted: 'notifications.statusAccepted',
+  declined: 'notifications.statusDeclined',
+};
 
 export default function AppShell({ children }: { children: ReactNode }) {
   const { t } = useI18n();
@@ -17,6 +28,89 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [notificationsLoading, setNotificationsLoading] = useState(false);
+
+  const unread = notifications.filter((notification) => notification.status === 'unread').length;
+
+  useEffect(() => {
+    if (!user) {
+      setNotifications([]);
+      return;
+    }
+    let alive = true;
+    const controller = new AbortController();
+    setNotificationsLoading(true);
+    api
+      .myNotifications()
+      .then((rows) => {
+        if (alive) setNotifications(rows);
+      })
+      .catch(() => {
+        if (alive) setNotifications([]);
+      })
+      .finally(() => {
+        if (alive) setNotificationsLoading(false);
+      });
+
+    const stop = subscribeNotifications((notification) => {
+      setNotifications((previous) => {
+        const exists = previous.some((row) => row.id === notification.id);
+        return exists
+          ? previous.map((row) => (row.id === notification.id ? notification : row))
+          : [notification, ...previous];
+      });
+    }, controller.signal);
+
+    return () => {
+      alive = false;
+      controller.abort();
+      stop();
+    };
+  }, [user?.userId]);
+
+  const openNotifications = async () => {
+    setShowNotifications(true);
+    const pending = notifications.filter(
+      (notification) => notification.status === 'unread',
+    );
+    for (const notification of pending) {
+      try {
+        const updated = await api.markNotificationRead(notification.id);
+        setNotifications((previous) =>
+          previous.map((row) => (row.id === updated.id ? updated : row)),
+        );
+      } catch {
+        // The inbox still opens; the next load retries.
+      }
+    }
+  };
+
+  const handleAccept = async (notification: Notification) => {
+    try {
+      const trip = await api.acceptTripLocalInvite(notification.id);
+      setNotifications((previous) =>
+        previous.map((row) =>
+          row.id === notification.id ? { ...row, status: 'accepted' } : row,
+        ),
+      );
+      setShowNotifications(false);
+      router.push(`/trip/${trip.id}`);
+    } catch (error) {
+      toast.error(localizeApiError(error, t));
+    }
+  };
+
+  const handleDecline = async (notification: Notification) => {
+    try {
+      const updated = await api.declineTripLocalInvite(notification.id);
+      setNotifications((previous) =>
+        previous.map((row) => (row.id === notification.id ? updated : row)),
+      );
+    } catch (error) {
+      toast.error(localizeApiError(error, t));
+    }
+  };
 
   const handleLogout = async () => {
     await signOut();
@@ -79,10 +173,17 @@ export default function AppShell({ children }: { children: ReactNode }) {
           <button
             type="button"
             className="icon-btn"
-            onClick={() => setShowNotifications(true)}
+            onClick={openNotifications}
             aria-label={t('premium.nav.notifications')}
           >
-            <Bell className="icon-sm" />
+            <span className="relative inline-flex">
+              <Bell className="icon-sm" />
+              {unread > 0 && (
+                <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--danger)] px-1 text-[9px] font-bold leading-none text-white">
+                  {unread > 9 ? '9+' : unread}
+                </span>
+              )}
+            </span>
           </button>
           <Link
             href="/settings"
@@ -132,7 +233,77 @@ export default function AppShell({ children }: { children: ReactNode }) {
         title={t('notifications.title')}
         size="sm"
       >
-        <p className="text-sm text-muted-foreground">{t('notifications.empty')}</p>
+        {notificationsLoading ? (
+          <p className="text-sm text-muted-foreground">{t('common.loading')}</p>
+        ) : notifications.length === 0 ? (
+          <p className="text-sm text-muted-foreground">{t('notifications.empty')}</p>
+        ) : (
+          <ul className="grid gap-2">
+            {notifications.map((notification) => (
+              <li
+                key={notification.id}
+                className="rounded-xl border border-border bg-muted/30 p-3"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-foreground">
+                      {notification.tripName}
+                    </p>
+                    <p className="truncate text-xs text-muted">
+                      {t('notifications.invitedBy', {
+                        name:
+                          notification.inviter?.displayName ??
+                          notification.inviter?.username ??
+                          '—',
+                      })}
+                    </p>
+                    <p className="text-[11px] text-muted">
+                      {notification.role === 'editor'
+                        ? t('invite.roleEditor')
+                        : t('invite.roleViewer')}
+                    </p>
+                  </div>
+                  <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10.5px] font-semibold text-muted-foreground">
+                    {t(NOTIFICATION_STATUS_KEY[notification.status])}
+                  </span>
+                </div>
+
+                {(notification.status === 'unread' || notification.status === 'read') && (
+                  <div className="mt-2 flex gap-2">
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-sm"
+                      onClick={() => handleAccept(notification)}
+                    >
+                      {t('notifications.accept')}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm"
+                      onClick={() => handleDecline(notification)}
+                    >
+                      {t('notifications.decline')}
+                    </button>
+                  </div>
+                )}
+                {notification.status === 'accepted' && (
+                  <div className="mt-2">
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm"
+                      onClick={() => {
+                        setShowNotifications(false);
+                        router.push(`/trip/${notification.tripId}`);
+                      }}
+                    >
+                      {t('notifications.openTrip')}
+                    </button>
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
         <div className="mt-5 flex justify-end">
           <button
             type="button"

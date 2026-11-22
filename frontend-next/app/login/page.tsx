@@ -1,18 +1,31 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Check, Compass, MapPin, Sparkles, Users } from 'lucide-react';
+import { Check, Compass, MapPin, Sparkles, Trash2, Users } from 'lucide-react';
 import { toast } from 'sonner';
-import { DEMO_FRIEND_ID, DEMO_USER_ID, localizeApiError } from '@/lib/api';
+import { api, localizeApiError, DEMO_FRIEND_ID, DEMO_PASSWORD, DEMO_USER_ID } from '@/lib/api';
 import { useAuth } from '@/hooks/useAuth';
 import { useI18n } from '@/lib/i18n';
+import type { UserProfile } from '@/lib/types';
+
+type Mode = 'login' | 'create';
 
 export default function LoginPage() {
-  const { user, loading, signInDemo } = useAuth();
+  const { user, loading, signIn } = useAuth();
   const { t } = useI18n();
   const router = useRouter();
-  const [submitting, setSubmitting] = useState<string | null>(null);
+
+  const [mode, setMode] = useState<Mode>('login');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [displayName, setDisplayName] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const [managing, setManaging] = useState(false);
+  const [accounts, setAccounts] = useState<UserProfile[]>([]);
+  const [loadingAccounts, setLoadingAccounts] = useState(false);
 
   useEffect(() => {
     if (!loading && user) {
@@ -20,18 +33,88 @@ export default function LoginPage() {
     }
   }, [loading, user, router]);
 
-  if (loading) return null;
-  if (user) return null;
-
-  const handleDemo = async (userId: string) => {
-    setSubmitting(userId);
+  const loadAccounts = useCallback(async () => {
+    setLoadingAccounts(true);
     try {
-      await signInDemo(userId);
+      setAccounts(await api.listUsers());
     } catch (err) {
       toast.error(localizeApiError(err, t));
     } finally {
-      setSubmitting(null);
+      setLoadingAccounts(false);
     }
+  }, [t]);
+
+  useEffect(() => {
+    if (managing) void loadAccounts();
+  }, [managing, loadAccounts]);
+
+  if (loading) return null;
+  if (user) return null;
+
+  const handleLogin = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setError(null);
+    setSubmitting(true);
+    try {
+      await signIn(username, password);
+    } catch (err) {
+      setError(localizeApiError(err, t));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDemo = async (demoUsername: string) => {
+    setError(null);
+    setSubmitting(true);
+    setUsername(demoUsername);
+    setPassword(DEMO_PASSWORD);
+    try {
+      await signIn(demoUsername, DEMO_PASSWORD);
+    } catch (err) {
+      setError(localizeApiError(err, t));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleCreate = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setError(null);
+    setSubmitting(true);
+    try {
+      await api.createUser({ username, password, displayName });
+      toast.success(t('auth.accountCreated', { username }));
+      await signIn(username, password);
+    } catch (err) {
+      setError(localizeApiError(err, t));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (account: UserProfile) => {
+    if (!window.confirm(t('auth.deleteConfirm', { username: account.username }))) return;
+    try {
+      await api.deleteUser(account.userId);
+      toast.success(t('auth.accountDeleted', { username: account.username }));
+      await loadAccounts();
+    } catch (err) {
+      toast.error(localizeApiError(err, t));
+    }
+  };
+
+  const isProtected = (account: UserProfile) =>
+    account.userId === DEMO_USER_ID ||
+    account.userId === DEMO_FRIEND_ID ||
+    account.username === 'demo' ||
+    account.username === 'demo-friend';
+
+  const switchMode = (next: Mode) => {
+    setMode(next);
+    setError(null);
+    setPassword('');
+    setDisplayName('');
   };
 
   return (
@@ -90,29 +173,177 @@ export default function LoginPage() {
             <strong>Triplanner</strong>
           </div>
           <span className="mono">{t('premium.login.eyebrow')}</span>
-          <h2>{t('premium.login.title')}</h2>
-          <p>{t('premium.login.subtitle')}</p>
+          <h2>{mode === 'login' ? t('auth.signInTitle') : t('auth.createTitle')}</h2>
+          <p>{mode === 'login' ? t('auth.signInSubtitle') : t('auth.createSubtitle')}</p>
 
           <div className="login-form">
-            <button
-              type="button"
-              className="btn btn-primary btn-block"
-              onClick={() => handleDemo(DEMO_USER_ID)}
-              disabled={submitting !== null}
-            >
-              {submitting === DEMO_USER_ID ? t('auth.signingIn') : t('auth.demoOwner')}
-            </button>
-            <p className="mt-2 text-center text-xs text-muted-foreground">{t('auth.demoOwnerHint')}</p>
+            {mode === 'login' ? (
+              <form onSubmit={handleLogin} className="grid gap-3">
+                <div className="field">
+                  <label htmlFor="login-username">{t('auth.username')}</label>
+                  <input
+                    id="login-username"
+                    className="input"
+                    autoComplete="username"
+                    autoFocus
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    placeholder={t('auth.usernamePlaceholder')}
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="login-password">{t('auth.password')}</label>
+                  <input
+                    id="login-password"
+                    className="input"
+                    type="password"
+                    autoComplete="current-password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                  />
+                </div>
+                {error && <p className="text-sm text-[var(--danger)]">{error}</p>}
+                <button
+                  type="submit"
+                  className="btn btn-primary btn-block"
+                  disabled={submitting || !username.trim() || !password}
+                >
+                  {submitting ? t('auth.signingIn') : t('auth.signIn')}
+                </button>
+              </form>
+            ) : (
+              <form onSubmit={handleCreate} className="grid gap-3">
+                <div className="field">
+                  <label htmlFor="create-username">{t('auth.username')}</label>
+                  <input
+                    id="create-username"
+                    className="input"
+                    autoComplete="username"
+                    autoFocus
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    placeholder={t('auth.usernamePlaceholder')}
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="create-display-name">{t('auth.displayName')}</label>
+                  <input
+                    id="create-display-name"
+                    className="input"
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                    placeholder={t('auth.displayNamePlaceholder')}
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="create-password">{t('auth.password')}</label>
+                  <input
+                    id="create-password"
+                    className="input"
+                    type="password"
+                    autoComplete="new-password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder={t('auth.passwordHint')}
+                  />
+                </div>
+                {error && <p className="text-sm text-[var(--danger)]">{error}</p>}
+                <button
+                  type="submit"
+                  className="btn btn-primary btn-block"
+                  disabled={submitting || !username.trim() || !displayName.trim() || !password}
+                >
+                  {submitting ? t('auth.creating') : t('auth.createAccount')}
+                </button>
+              </form>
+            )}
 
-            <button
-              type="button"
-              className="btn btn-ghost btn-block"
-              onClick={() => handleDemo(DEMO_FRIEND_ID)}
-              disabled={submitting !== null}
-            >
-              {submitting === DEMO_FRIEND_ID ? t('auth.signingIn') : t('auth.demoFriend')}
-            </button>
-            <p className="mt-2 text-center text-xs text-muted-foreground">{t('auth.demoFriendHint')}</p>
+            <div className="flex items-center justify-between gap-3 text-xs">
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={() => switchMode(mode === 'login' ? 'create' : 'login')}
+              >
+                {mode === 'login' ? t('auth.createAccount') : t('auth.backToSignIn')}
+              </button>
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={() => setManaging((value) => !value)}
+              >
+                {t('auth.manageAccounts')}
+              </button>
+            </div>
+
+            <div className="grid gap-2 border-t border-border pt-3">
+              <button
+                type="button"
+                className="btn btn-ghost btn-block"
+                onClick={() => handleDemo('demo')}
+                disabled={submitting}
+              >
+                {t('auth.demoOwner')}
+              </button>
+              <p className="text-center text-xs text-muted-foreground">
+                {t('auth.demoPasswordHint')}
+              </p>
+              <button
+                type="button"
+                className="btn btn-ghost btn-block"
+                onClick={() => handleDemo('demo-friend')}
+                disabled={submitting}
+              >
+                {t('auth.demoFriend')}
+              </button>
+            </div>
+
+            {managing && (
+              <div className="rounded-xl border border-border bg-muted/30 p-3">
+                <div className="mb-2 flex items-center justify-between">
+                  <strong className="text-xs font-semibold uppercase tracking-wide text-muted">
+                    {t('auth.accounts')}
+                  </strong>
+                  <span className="text-[11px] text-muted">{accounts.length}</span>
+                </div>
+                {loadingAccounts ? (
+                  <p className="text-xs text-muted">{t('common.loading')}</p>
+                ) : accounts.length === 0 ? (
+                  <p className="text-xs text-muted">{t('auth.noAccounts')}</p>
+                ) : (
+                  <ul className="grid gap-1.5">
+                    {accounts.map((account) => (
+                      <li
+                        key={account.userId}
+                        className="flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 hover:bg-muted/50"
+                      >
+                        <span className="flex min-w-0 flex-col">
+                          <strong className="truncate text-[12.5px] text-foreground">
+                            {account.displayName}
+                          </strong>
+                          <span className="truncate text-[11px] text-muted">
+                            @{account.username}
+                          </span>
+                        </span>
+                        {isProtected(account) ? (
+                          <span className="text-[10.5px] text-muted">
+                            {t('auth.protectedAccount')}
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            className="icon-btn text-[var(--danger)]"
+                            aria-label={t('auth.deleteAccount')}
+                            onClick={() => handleDelete(account)}
+                          >
+                            <Trash2 className="icon-sm" />
+                          </button>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="login-foot">

@@ -2,19 +2,17 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { DEMO_USER_ID, api } from '@/lib/api';
+import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import type { UserProfile } from '@/lib/types';
 
 interface AuthContextValue {
   user: UserProfile | null;
   loading: boolean;
-  signInDemo: (userId?: string) => Promise<void>;
+  signIn: (username: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   refreshUser: () => Promise<boolean>;
   setProfile: (profile: UserProfile) => Promise<void>;
-  login: () => Promise<void>;
-  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -24,7 +22,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const { setLocale } = useI18n();
 
-  // Restore the persisted demo session once. No Firebase listener is needed.
+  // Restore the persisted session once. No Firebase listener is needed.
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -54,9 +52,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [setLocale]);
 
-  const signInDemo = useCallback(
-    async (userId: string = DEMO_USER_ID) => {
-      const profile = await api.loginDemo(userId);
+  const signIn = useCallback(
+    async (username: string, password: string) => {
+      const profile = await api.login(username, password);
       setUser(profile);
       setLocale(profile.language ?? 'en');
     },
@@ -86,22 +84,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [setLocale],
   );
 
-  const login = useCallback(async () => {
-    await signInDemo(DEMO_USER_ID);
-  }, [signInDemo]);
-
   const value = useMemo(
     () => ({
       user,
       loading,
-      signInDemo,
+      signIn,
       signOut,
       refreshUser,
       setProfile,
-      login,
-      logout: signOut,
     }),
-    [user, loading, signInDemo, signOut, refreshUser, setProfile, login],
+    [user, loading, signIn, signOut, refreshUser, setProfile],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

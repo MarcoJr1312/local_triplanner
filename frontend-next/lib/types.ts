@@ -6,6 +6,7 @@ export type MemberRole = 'owner' | 'editor' | 'viewer';
 
 export interface UserProfile {
   userId: string;
+  username: string;
   email: string;
   displayName: string;
   color?: string | null;
@@ -15,6 +16,7 @@ export interface UserProfile {
 
 export interface Member {
   userId: string;
+  username?: string | null;
   displayName: string;
   email: string;
   invitedEmail?: string | null;
@@ -22,6 +24,33 @@ export interface Member {
   joinedAt?: string | null;
   color?: string | null;
   avatarUrl?: string | null;
+}
+
+export interface Notification {
+  id: string;
+  type: string;
+  tripId: string;
+  tripName: string;
+  invitationId: string;
+  inviter?: UserProfile | null;
+  role: MemberRole;
+  status: 'unread' | 'read' | 'accepted' | 'declined';
+  createdAt: string;
+  readAt?: string | null;
+}
+
+export interface LocalInviteResult {
+  invitationId: string;
+  notificationId: string;
+  user: UserProfile;
+  status: string;
+}
+
+export interface CreateUserInput {
+  username: string;
+  password: string;
+  displayName: string;
+  language?: 'es' | 'en' | null;
 }
 
 export interface TripItem {
@@ -270,12 +299,15 @@ export interface InviteMemberArgs {
 }
 
 export interface TriplannerApi {
-  loginDemo(userId?: string): Promise<UserProfile>;
+  login(username: string, password: string): Promise<UserProfile>;
   logout(): Promise<void>;
   restoreSession(): Promise<UserProfile | null>;
   getCurrentUser(): UserProfile | null;
   setSessionProfile(profile: UserProfile): Promise<void>;
   findUserByEmail(email: string): Promise<UserProfile | null>;
+  listUsers(query?: string): Promise<UserProfile[]>;
+  createUser(input: CreateUserInput): Promise<UserProfile>;
+  deleteUser(userId: ID): Promise<boolean>;
 
   listMyTrips(): Promise<TripSummary[]>;
   getTrip(id: ID): Promise<Trip | null>;
@@ -294,8 +326,13 @@ export interface TriplannerApi {
   updateTripCover(tripId: ID, input: UpdateTripCoverInput): Promise<Trip>;
 
   sendTripInvite(tripId: ID, email: string, role?: 'viewer' | 'editor'): Promise<InviteResult>;
+  tripLocalInvite(tripId: ID, username: string, role: 'viewer' | 'editor'): Promise<LocalInviteResult>;
   getTripByCode(code: string): Promise<TripPreview | null>;
   joinTripWithCode(code: string, email: string, memberId?: ID): Promise<Trip>;
+  myNotifications(): Promise<Notification[]>;
+  markNotificationRead(notificationId: ID): Promise<Notification>;
+  acceptTripLocalInvite(notificationId: ID): Promise<Trip>;
+  declineTripLocalInvite(notificationId: ID): Promise<Notification>;
   getMyProfile(): Promise<UserProfile | null>;
   updateMyProfile(input: UpdateMyProfileInput): Promise<UserProfile>;
   addItemAttachment(tripId: ID, itemId: ID, input: AddItemAttachmentInput, viewerIds: ID[]): Promise<Attachment>;

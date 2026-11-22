@@ -19,6 +19,9 @@ import type {
   UserProfile,
   TripPreview,
   InviteResult,
+  Notification,
+  LocalInviteResult,
+  CreateUserInput,
   Attachment,
   SuggestionChat,
   AutoSuggestResult,
@@ -79,14 +82,10 @@ export const mode: DataMode = 'local';
 
 const ENDPOINT = '/api/graphql';
 
-export const DEMO_USER_ID = 'demo-user';
-export const DEMO_FRIEND_ID = 'demo-friend';
+export const DEMO_USER_ID = '11111111-1111-4111-8111-111111111111';
+export const DEMO_FRIEND_ID = '22222222-2222-4222-8222-222222222222';
 export const DEMO_FRIEND_EMAIL = 'friend@triplanner.local';
-
-const DEMO_IDENTITIES: Record<string, { email: string; displayName: string }> = {
-  [DEMO_USER_ID]: { email: 'demo@triplanner.local', displayName: 'Demo' },
-  [DEMO_FRIEND_ID]: { email: DEMO_FRIEND_EMAIL, displayName: 'Demo Friend' },
-};
+export const DEMO_PASSWORD = 'demo123';
 
 const SESSION_KEY = 'triplanner.local.session';
 
@@ -163,7 +162,7 @@ const SSE_MAX_BACKOFF_MS = 10_000;
 
 interface SseSubscription<T> {
   query: string;
-  tripId: string;
+  tripId?: string;
   field: string;
   onEvent: (ev: T) => void;
   signal?: AbortSignal;
@@ -237,7 +236,7 @@ async function runSse<T>(sub: SseSubscription<T>, controller: AbortController): 
           Accept: 'text/event-stream',
           ...(await getAuthHeaders()),
         },
-        body: JSON.stringify({ query, variables: { tripId } }),
+        body: JSON.stringify({ query, variables: tripId ? { tripId } : {} }),
         signal,
       });
 
@@ -308,6 +307,15 @@ export function subscribePresence(
   return startSse<Presence>({ query: SUBSCRIBE_PRESENCE, tripId, field: 'onPresenceChanged', onEvent, signal });
 }
 
+// Notificaciones del usuario actual (invitaciones locales). No lleva variables:
+// el backend resuelve el destinatario desde x-user-id.
+export function subscribeNotifications(
+  onEvent: (ev: Notification) => void,
+  signal?: AbortSignal
+): () => void {
+  return startSse<Notification>({ query: SUBSCRIBE_NOTIFICATIONS, field: 'onNotification', onEvent, signal });
+}
+
 // ---------------------------------------------------------------------------
 // Documentos GraphQL
 // ---------------------------------------------------------------------------
@@ -329,7 +337,7 @@ const TRIP_FIELDS = `
   inviteCode
   coverPreset
   coverPhotoUrl
-  members { userId displayName email invitedEmail role joinedAt color avatarUrl }
+  members { userId username displayName email invitedEmail role joinedAt color avatarUrl }
   items { id day order activityId title category cost startTime notes imageUrl addedBy isFavorite lat lng locationText reminderEnabled attachments { id fileName mimeType sizeBytes url createdAt uploadedByName viewerIds visibility createdBy } }
   myRole
   createdAt
@@ -351,12 +359,37 @@ const GET_TRIP = `query($id: ID!) { getTrip(id: $id) { ${TRIP_FIELDS} } }`;
 const LIST_DESTINATIONS = `query { listDestinations { slug name country description imageUrl lat lng } }`;
 const LIST_ACTIVITIES = `query($destSlug: String!, $category: String) { listActivities(destSlug: $destSlug, category: $category) { id name category cost lat lng description tags durationHours imageUrl rating isFavorite } }`;
 const LIST_PRESENCE = `query($tripId: ID!) { listPresence(tripId: $tripId) { userId tripId displayName color editingItemId lastSeen } }`;
-const FIND_USER_BY_EMAIL = `query($email: String!) { findUserByEmail(email: $email) { userId email displayName } }`;
+const FIND_USER_BY_EMAIL = `query($email: String!) { findUserByEmail(email: $email) { userId username email displayName } }`;
 const GET_TRIP_BY_CODE = `query($code: String!) { getTripByCode(code: $code) { id name destinationName ownerName invitedEmail } }`;
 const SEND_TRIP_INVITE = `mutation($tripId: ID!, $email: String!, $role: String!) { sendTripInvite(tripId: $tripId, email: $email, role: $role) { invitationId status email code joinUrl } }`;
 const JOIN_TRIP_WITH_CODE = `mutation($code: String!, $email: String!, $memberId: ID) { joinTripWithCode(code: $code, email: $email, memberId: $memberId) { ${TRIP_FIELDS} } }`;
-const GET_MY_PROFILE = `query { getMyProfile { userId email displayName color avatarUrl language } }`;
-const UPDATE_MY_PROFILE = `mutation($input: UpdateMyProfileInput!) { updateMyProfile(input: $input) { userId email displayName color avatarUrl language } }`;
+
+const PROFILE_FIELDS = `userId username email displayName color avatarUrl language`;
+const GET_MY_PROFILE = `query { getMyProfile { ${PROFILE_FIELDS} } }`;
+const UPDATE_MY_PROFILE = `mutation($input: UpdateMyProfileInput!) { updateMyProfile(input: $input) { ${PROFILE_FIELDS} } }`;
+const LOGIN = `mutation($username: String!, $password: String!) { login(username: $username, password: $password) { ${PROFILE_FIELDS} } }`;
+const LIST_USERS = `query($query: String) { listUsers(query: $query) { ${PROFILE_FIELDS} } }`;
+const CREATE_USER = `mutation($input: CreateUserInput!) { createUser(input: $input) { ${PROFILE_FIELDS} } }`;
+const DELETE_USER = `mutation($userId: ID!) { deleteUser(userId: $userId) }`;
+
+const NOTIFICATION_FIELDS = `
+  id
+  type
+  tripId
+  tripName
+  invitationId
+  role
+  status
+  createdAt
+  readAt
+  inviter { ${PROFILE_FIELDS} }
+`;
+const TRIP_LOCAL_INVITE = `mutation($tripId: ID!, $username: String!, $role: MemberRole!) { tripLocalInvite(tripId: $tripId, username: $username, role: $role) { invitationId notificationId status user { ${PROFILE_FIELDS} } } }`;
+const MY_NOTIFICATIONS = `query { myNotifications { ${NOTIFICATION_FIELDS} } }`;
+const MARK_NOTIFICATION_READ = `mutation($id: ID!) { markNotificationRead(notificationId: $id) { ${NOTIFICATION_FIELDS} } }`;
+const ACCEPT_LOCAL_INVITE = `mutation($id: ID!) { acceptTripLocalInvite(notificationId: $id) { ${TRIP_FIELDS} } }`;
+const DECLINE_LOCAL_INVITE = `mutation($id: ID!) { declineTripLocalInvite(notificationId: $id) { ${NOTIFICATION_FIELDS} } }`;
+const SUBSCRIBE_NOTIFICATIONS = `subscription { onNotification { ${NOTIFICATION_FIELDS} } }`;
 const ADD_ITEM_ATTACHMENT = `mutation($tripId: ID, $itemId: ID!, $input: AddItemAttachmentInput!, $viewerIds: [String!]) { addItemAttachment(tripId: $tripId, itemId: $itemId, input: $input, viewerIds: $viewerIds) { id fileName mimeType sizeBytes url createdAt uploadedByName viewerIds visibility createdBy } }`;
 const UPDATE_ATTACHMENT_VIEWERS = `mutation($attachmentId: ID!, $viewerIds: [String!]) { updateAttachmentViewers(attachmentId: $attachmentId, viewerIds: $viewerIds) { id fileName mimeType sizeBytes url createdAt uploadedByName viewerIds visibility createdBy } }`;
 const REMOVE_ITEM_ATTACHMENT = `mutation($attachmentId: ID!) { removeItemAttachment(attachmentId: $attachmentId) { id } }`;
@@ -451,24 +484,9 @@ export const api: TriplannerApi = {
     notify();
   },
 
-  async loginDemo(userId: string = DEMO_USER_ID): Promise<UserProfile> {
-    const identity = DEMO_IDENTITIES[userId] ?? DEMO_IDENTITIES[DEMO_USER_ID];
-    const fallback: UserProfile = {
-      userId,
-      email: identity.email,
-      displayName: identity.displayName,
-      language: 'en',
-    };
-    let profile: UserProfile | null = null;
-    try {
-      const data = await gql<{ findUserByEmail: UserProfile | null }>(FIND_USER_BY_EMAIL, {
-        email: identity.email,
-      });
-      profile = data.findUserByEmail;
-    } catch {
-      profile = null;
-    }
-    currentUser = profile ?? fallback;
+  async login(username: string, password: string): Promise<UserProfile> {
+    const data = await gql<{ login: UserProfile }>(LOGIN, { username, password });
+    currentUser = data.login;
     persistSession(currentUser);
     notify();
     return currentUser;
@@ -487,10 +505,20 @@ export const api: TriplannerApi = {
     const raw = localStorage.getItem(SESSION_KEY);
     if (!raw) return null;
     try {
-      const parsed = JSON.parse(raw) as UserProfile;
+      const parsed = JSON.parse(raw) as Partial<UserProfile>;
       if (parsed.userId) {
-        currentUser = parsed;
-        return parsed;
+        // Older sessions predate usernames; fill it before the server refresh.
+        const profile: UserProfile = {
+          userId: parsed.userId,
+          username: parsed.username ?? parsed.displayName ?? parsed.userId,
+          email: parsed.email ?? '',
+          displayName: parsed.displayName ?? parsed.username ?? parsed.userId,
+          color: parsed.color ?? null,
+          avatarUrl: parsed.avatarUrl ?? null,
+          language: parsed.language ?? null,
+        };
+        currentUser = profile;
+        return profile;
       }
     } catch {
       localStorage.removeItem(SESSION_KEY);
@@ -505,6 +533,32 @@ export const api: TriplannerApi = {
   async findUserByEmail(email: string): Promise<UserProfile | null> {
     const data = await gql<{ findUserByEmail: UserProfile | null }>(FIND_USER_BY_EMAIL, { email });
     return data.findUserByEmail;
+  },
+
+  async listUsers(query = ''): Promise<UserProfile[]> {
+    const data = await gql<{ listUsers: UserProfile[] }>(LIST_USERS, {
+      query: query.trim() || null,
+    });
+    return data.listUsers;
+  },
+
+  async createUser(input: CreateUserInput): Promise<UserProfile> {
+    const data = await gql<{ createUser: UserProfile }>(CREATE_USER, {
+      input: {
+        username: input.username,
+        password: input.password,
+        displayName: input.displayName,
+        language: input.language ?? 'es',
+      },
+    });
+    notify();
+    return data.createUser;
+  },
+
+  async deleteUser(userId: string): Promise<boolean> {
+    const data = await gql<{ deleteUser: boolean }>(DELETE_USER, { userId });
+    notify();
+    return data.deleteUser;
   },
 
   async listMyTrips(): Promise<TripSummary[]> {
@@ -584,6 +638,46 @@ export const api: TriplannerApi = {
     const data = await gql<{ joinTripWithCode: Trip }>(JOIN_TRIP_WITH_CODE, { code, email, memberId });
     notify();
     return data.joinTripWithCode;
+  },
+
+  async tripLocalInvite(
+    tripId: string,
+    username: string,
+    role: 'viewer' | 'editor',
+  ): Promise<LocalInviteResult> {
+    const data = await gql<{ tripLocalInvite: LocalInviteResult }>(TRIP_LOCAL_INVITE, {
+      tripId,
+      username: username.trim(),
+      role,
+    });
+    return data.tripLocalInvite;
+  },
+
+  async myNotifications(): Promise<Notification[]> {
+    const data = await gql<{ myNotifications: Notification[] }>(MY_NOTIFICATIONS);
+    return data.myNotifications;
+  },
+
+  async markNotificationRead(notificationId: string): Promise<Notification> {
+    const data = await gql<{ markNotificationRead: Notification }>(MARK_NOTIFICATION_READ, {
+      id: notificationId,
+    });
+    return data.markNotificationRead;
+  },
+
+  async acceptTripLocalInvite(notificationId: string): Promise<Trip> {
+    const data = await gql<{ acceptTripLocalInvite: Trip }>(ACCEPT_LOCAL_INVITE, {
+      id: notificationId,
+    });
+    notify();
+    return data.acceptTripLocalInvite;
+  },
+
+  async declineTripLocalInvite(notificationId: string): Promise<Notification> {
+    const data = await gql<{ declineTripLocalInvite: Notification }>(DECLINE_LOCAL_INVITE, {
+      id: notificationId,
+    });
+    return data.declineTripLocalInvite;
   },
 
   async getMyProfile(): Promise<UserProfile | null> {

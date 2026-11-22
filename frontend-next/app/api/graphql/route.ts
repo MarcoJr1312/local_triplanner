@@ -5,7 +5,7 @@ import type { NextRequest } from 'next/server';
 // No hay claves de servicios externos: el backend resuelve el catalogo local.
 
 const DEFAULT_BACKEND = 'http://localhost:4000/graphql';
-const DEMO_USER_ID = 'demo-user';
+const DEMO_USER_ID = '11111111-1111-4111-8111-111111111111';
 
 export const dynamic = 'force-dynamic';
 

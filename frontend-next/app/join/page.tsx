@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { api, localizeApiError, ApiError, DEMO_FRIEND_ID, DEMO_FRIEND_EMAIL } from '@/lib/api';
+import { api, localizeApiError, ApiError, DEMO_FRIEND_ID, DEMO_FRIEND_EMAIL, DEMO_PASSWORD } from '@/lib/api';
 import { useAuth } from '@/hooks/useAuth';
 import { useI18n } from '@/lib/i18n';
 import type { TripPreview } from '@/lib/types';
@@ -20,7 +20,7 @@ const CODE_RE = /^[A-Za-z0-9_-]{12}$/;
 
 export default function JoinPage() {
   const router = useRouter();
-  const { user, loading, signInDemo } = useAuth();
+  const { user, loading, signIn } = useAuth();
   const { t } = useI18n();
   const searchParams = useSearchParams();
   const codeParam = searchParams.get('code') ?? '';
@@ -76,7 +76,7 @@ export default function JoinPage() {
     try {
       // Keep the current demo identity (the recruiter stays Demo). Only an
       // unauthenticated visitor falls back to the second demo identity.
-      if (!user) await signInDemo(DEMO_FRIEND_ID);
+      if (!user) await signIn('demo-friend', DEMO_PASSWORD);
       const trip = await api.joinTripWithCode(code, emailToUse, DEMO_FRIEND_ID);
       afterJoin(trip.id);
     } catch (err) {

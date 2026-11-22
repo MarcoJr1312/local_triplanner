@@ -5,8 +5,8 @@
 import { after, before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { graphql, type GraphQLError, type GraphQLSchema } from 'graphql';
-import { createSchema } from 'graphql-yoga';
+import { graphql, parse, subscribe, type GraphQLError, type GraphQLSchema } from 'graphql';
+import { createPubSub, createSchema } from 'graphql-yoga';
 import { connectPg, deleteUser } from './helpers/pg.ts';
 import type { PgDb } from '../src/pg/db.ts';
 import { resolvers, type Ctx, type PubSub } from '../src/resolvers.ts';
@@ -22,10 +22,12 @@ let schema: GraphQLSchema;
 let inviter: UserRecord;
 let invitee: UserRecord;
 let declinee: UserRecord;
+let subscriber: UserRecord;
 let tripId: string;
 let invitation: InvitationRow | null = null;
 const localInvites = new Map<string, InvitationRow>();
 const published: { topic: string; payload: unknown }[] = [];
+const bus = createPubSub();
 const ownedTrips = new Map<string, { role: 'owner' | 'editor' | 'viewer' }[]>();
 
 const now = new Date().toISOString();
@@ -125,9 +127,10 @@ const trips = {
 const pubsub: PubSub = {
   publish(topic, payload) {
     published.push({ topic, payload });
+    bus.publish(topic, payload);
   },
-  subscribe() {
-    return (async function* empty() {})();
+  subscribe(topic) {
+    return bus.subscribe(topic) as AsyncIterable<unknown>;
   },
 };
 
@@ -192,12 +195,17 @@ before(async () => {
     password: 'secret123',
     displayName: 'Declinee',
   });
+  subscriber = await users.createUser({
+    username: `subscriber-${randomUUID().slice(0, 8)}`,
+    password: 'secret123',
+    displayName: 'Subscriber',
+  });
   tripId = `trip-${randomUUID()}`;
 });
 
 after(async () => {
   if (!db) return;
-  for (const user of [inviter, invitee, declinee]) {
+  for (const user of [inviter, invitee, declinee, subscriber]) {
     if (!user) continue;
     await db.prepare('DELETE FROM notifications WHERE user_id = ?').run(user.id);
     await deleteUser(db, user.id);
@@ -346,6 +354,39 @@ describe('users and local invites over GraphQL', () => {
       (again.data as { declineTripLocalInvite: { status: string } }).declineTripLocalInvite.status,
       'declined',
     );
+  });
+
+  test('delivers onNotification over the live subscription', async () => {
+    const result = await subscribe({
+      schema,
+      document: parse(
+        'subscription { onNotification { id tripName status inviter { username } } }',
+      ),
+      contextValue: contextFor(subscriber.id),
+    });
+    if (!(Symbol.asyncIterator in result)) {
+      assert.fail(`subscription failed: ${JSON.stringify(result)}`);
+    }
+    const iterator = result[Symbol.asyncIterator]();
+    // Start listening before the mutation publishes.
+    const eventPromise = iterator.next();
+
+    const invited = await run(INVITE, inviter.id, {
+      tripId,
+      username: subscriber.username,
+      role: 'viewer',
+    });
+    assert.equal(invited.errors, undefined);
+
+    const event = await eventPromise;
+    assert.equal(event.done, false);
+    const payload = (event.value.data as {
+      onNotification: { tripName: string; status: string; inviter: { username: string } };
+    }).onNotification;
+    assert.equal(payload.tripName, 'Toronto');
+    assert.equal(payload.status, 'unread');
+    assert.equal(payload.inviter.username, inviter.username);
+    await iterator.return?.();
   });
 
   test('guards account deletion: protected demo ids and trip owners', async () => {
