@@ -3,6 +3,7 @@
 # Usage (from the repository root):
 #   kubectl -n triplanner port-forward --address 0.0.0.0 svc/triplanner-kafka 8080:8080
 #   kubectl -n triplanner port-forward --address 0.0.0.0 svc/triplanner-email 4200:4200
+#   kubectl -n triplanner port-forward --address 0.0.0.0 svc/triplanner-trips 4400:4400
 #   docker compose \
 #     -f deploy/docker-compose.yml \
 #     -f deploy/docker-compose.local-cluster.yml \
@@ -14,5 +15,12 @@ services:
       BROKER_TOPIC: TripInvitation
       EMAIL_SERVICE_URL: http://host.docker.internal:4200
       LOCATIONS_URL: http://host.docker.internal:4300
+      TRIPS_MODE: remote
+      TRIPS_URL: http://host.docker.internal:4400
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+  trips:
+    environment:
+      BROKER_URL: http://host.docker.internal:8080
     extra_hosts:
       - "host.docker.internal:host-gateway"

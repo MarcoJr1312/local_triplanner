@@ -1303,13 +1303,21 @@ export const resolvers: {
       const { destinationLat, destinationId } = parent as { destinationLat?: number | null; destinationId?: string | null };
       if (destinationLat != null) return destinationLat;
       if (!destinationId) return null;
-      return (await ctx.catalogue.getById(destinationId))?.lat ?? null;
+      try {
+        return (await ctx.catalogue.getById(destinationId))?.lat ?? null;
+      } catch {
+        return null;
+      }
     },
     destinationLng: async (parent, __, ctx) => {
       const { destinationLng, destinationId } = parent as { destinationLng?: number | null; destinationId?: string | null };
       if (destinationLng != null) return destinationLng;
       if (!destinationId) return null;
-      return (await ctx.catalogue.getById(destinationId))?.lng ?? null;
+      try {
+        return (await ctx.catalogue.getById(destinationId))?.lng ?? null;
+      } catch {
+        return null;
+      }
     },
     items: (parent) => (parent as TripGql).items,
     members: (parent) => (parent as TripGql).members,

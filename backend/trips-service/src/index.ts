@@ -1,4 +1,6 @@
 import { connect, type Db } from './db.ts';
+import { migrate } from './db/migrate.ts';
+import { seedDemo } from './db/seed.ts';
 import { createBrokerPublisher } from './domain/broker.ts';
 import { createLocationsClient } from './domain/locations.ts';
 import { OutboxRelay } from './domain/outbox.ts';
@@ -18,6 +20,22 @@ const db: Db = await connect(config).catch((error: unknown) => {
   console.error('[trips] cannot connect to Postgres:', error);
   process.exit(1);
 });
+
+const migration = await migrate(db).catch((error: unknown) => {
+  console.error('[trips] migration failed:', error);
+  process.exit(1);
+});
+console.log(
+  `[trips] schema v${migration.version} ${migration.applied ? 'applied' : 'already applied'}`,
+);
+
+if (config.seedDemo) {
+  const seeded = await seedDemo(db).catch((error: unknown) => {
+    console.error('[trips] demo seed failed:', error);
+    process.exit(1);
+  });
+  console.log(`[trips] demo seed: ${seeded.items} items in ${seeded.tripId}`);
+}
 
 const locations = createLocationsClient(config);
 const publisher = createBrokerPublisher(config);

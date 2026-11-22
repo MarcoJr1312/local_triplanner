@@ -39,7 +39,8 @@ export const BROKER_TOPIC = process.env.BROKER_TOPIC ?? 'TripInvitation';
 export const TRIPS_MODE: 'local' | 'remote' =
   process.env.TRIPS_MODE === 'remote' ? 'remote' : 'local';
 export const TRIPS_URL = (process.env.TRIPS_URL ?? 'http://127.0.0.1:4400').replace(/\/+$/, '');
-export const TRIPS_TIMEOUT_MS = Number(process.env.TRIPS_TIMEOUT_MS ?? 2000);
+// Must exceed the trips service's own locations timeout (2 s) plus DB work.
+export const TRIPS_TIMEOUT_MS = Number(process.env.TRIPS_TIMEOUT_MS ?? 5000);
 
 // ---- Token interno (endpoints REST /internal/*) ----
 export const INTERNAL_TOKEN = process.env.INTERNAL_TOKEN ?? 'dev-internal-token';
