@@ -136,6 +136,7 @@ $targets = @(
   [pscustomobject]@{ Name = 'email'; Target = 'svc/triplanner-email'; LocalPort = 4200; RemotePort = 4200; Bind = $BindAddress; Health = 'http://localhost:4200/health' }
   [pscustomobject]@{ Name = 'locations'; Target = 'svc/triplanner-locations'; LocalPort = 4300; RemotePort = 4300; Bind = $BindAddress; Health = 'http://localhost:4300/health' }
   [pscustomobject]@{ Name = 'trips'; Target = 'svc/triplanner-trips'; LocalPort = 4400; RemotePort = 4400; Bind = $BindAddress; Health = 'http://localhost:4400/health' }
+  [pscustomobject]@{ Name = 'users'; Target = 'svc/triplanner-users'; LocalPort = 4500; RemotePort = 4500; Bind = $BindAddress; Health = 'http://localhost:4500/health' }
 )
 
 if ($Proxy) {
@@ -144,6 +145,7 @@ if ($Proxy) {
     [pscustomobject]@{ Name = 'email-proxy'; Target = 'svc/triplanner-email'; LocalPort = 8444; RemotePort = 8443; Bind = '127.0.0.1'; Health = $null }
     [pscustomobject]@{ Name = 'locations-proxy'; Target = 'svc/triplanner-locations'; LocalPort = 8445; RemotePort = 8443; Bind = '127.0.0.1'; Health = $null }
     [pscustomobject]@{ Name = 'trips-proxy'; Target = 'svc/triplanner-trips'; LocalPort = 8446; RemotePort = 8443; Bind = '127.0.0.1'; Health = $null }
+    [pscustomobject]@{ Name = 'users-proxy'; Target = 'svc/triplanner-users'; LocalPort = 8447; RemotePort = 8443; Bind = '127.0.0.1'; Health = $null }
   )
 }
 
@@ -153,6 +155,7 @@ if ($Mongo) {
 
 if ($Postgres) {
   $targets += [pscustomobject]@{ Name = 'trips-postgres'; Target = 'statefulset/triplanner-trips-postgres'; LocalPort = 5433; RemotePort = 5432; Bind = '127.0.0.1'; Health = $null }
+  $targets += [pscustomobject]@{ Name = 'users-postgres'; Target = 'statefulset/triplanner-users-postgres'; LocalPort = 5434; RemotePort = 5432; Bind = '127.0.0.1'; Health = $null }
 }
 
 $started = @()

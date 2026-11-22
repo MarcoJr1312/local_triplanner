@@ -87,6 +87,7 @@ targets=(
   "email|svc/triplanner-email|4200|4200|$BIND_ADDRESS|http://localhost:4200/health"
   "locations|svc/triplanner-locations|4300|4300|$BIND_ADDRESS|http://localhost:4300/health"
   "trips|svc/triplanner-trips|4400|4400|$BIND_ADDRESS|http://localhost:4400/health"
+  "users|svc/triplanner-users|4500|4500|$BIND_ADDRESS|http://localhost:4500/health"
 )
 
 if ((PROXY)); then
@@ -95,6 +96,7 @@ if ((PROXY)); then
     "email-proxy|svc/triplanner-email|8444|8443|127.0.0.1|"
     "locations-proxy|svc/triplanner-locations|8445|8443|127.0.0.1|"
     "trips-proxy|svc/triplanner-trips|8446|8443|127.0.0.1|"
+    "users-proxy|svc/triplanner-users|8447|8443|127.0.0.1|"
   )
 fi
 
@@ -104,6 +106,7 @@ fi
 
 if ((POSTGRES)); then
   targets+=("trips-postgres|statefulset/triplanner-trips-postgres|5433|5432|127.0.0.1|")
+  targets+=("users-postgres|statefulset/triplanner-users-postgres|5434|5432|127.0.0.1|")
 fi
 
 started=()

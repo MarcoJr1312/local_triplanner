@@ -13,6 +13,8 @@ COPY backend/users-service/package.json backend/users-service/bun.lock ./
 RUN bun install --frozen-lockfile --production
 
 COPY backend/users-service/src ./src
+COPY backend/users-service/db ./db
+COPY backend/users-service/scripts ./scripts
 
 RUN chown -R app:app /app
 

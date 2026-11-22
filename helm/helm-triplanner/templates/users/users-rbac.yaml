@@ -1,0 +1,85 @@
+{{- if and .Values.usersService.enabled .Values.usersService.rbac.create }}
+{{- if and .Values.usersService.rbacProxy.enabled (ne .Values.usersService.rbac.kind "ClusterRole") }}
+{{- fail "usersService.rbac.kind must be ClusterRole when usersService.rbacProxy.enabled" }}
+{{- end }}
+{{- $name := include "helm-triplanner.usersServiceAccountName" . }}
+{{- if eq .Values.usersService.rbac.kind "ClusterRole" }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ $name }}
+  labels:
+    app.kubernetes.io/name: triplanner-users
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: users
+rules:
+{{- if .Values.usersService.rbacProxy.enabled }}
+  - apiGroups: ["authentication.k8s.io"]
+    resources: ["tokenreviews"]
+    verbs: ["create"]
+  - apiGroups: ["authorization.k8s.io"]
+    resources: ["subjectaccessreviews"]
+    verbs: ["create"]
+{{- end }}
+{{- with .Values.usersService.rbac.rules }}
+  {{- toYaml . | nindent 2 }}
+{{- end }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ $name }}
+  labels:
+    app.kubernetes.io/name: triplanner-users
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: users
+subjects:
+  - kind: ServiceAccount
+    name: {{ $name }}
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ $name }}
+{{- else }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: triplanner-users
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: users
+rules:
+{{- if .Values.usersService.rbacProxy.enabled }}
+  - apiGroups: ["authentication.k8s.io"]
+    resources: ["tokenreviews"]
+    verbs: ["create"]
+  - apiGroups: ["authorization.k8s.io"]
+    resources: ["subjectaccessreviews"]
+    verbs: ["create"]
+{{- end }}
+{{- with .Values.usersService.rbac.rules }}
+  {{- toYaml . | nindent 2 }}
+{{- end }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: triplanner-users
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: users
+subjects:
+  - kind: ServiceAccount
+    name: {{ $name }}
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ $name }}
+{{- end }}
+{{- end }}

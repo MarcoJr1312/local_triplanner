@@ -2,7 +2,8 @@
 
 Helm chart for the Triplanner demo services: a Go HTTP broker, the email
 consumer with BYOK settings, the locations/activities catalogue with its
-single-node MongoDB StatefulSet, and the trips service with its own PostgreSQL.
+single-node MongoDB StatefulSet, the trips service and the users service with
+their own PostgreSQL databases.
 
 ## Layout
 
@@ -47,6 +48,18 @@ templates/
     trips-service.yaml
     trips-serviceaccount.yaml
     trips-test.yaml
+  users/
+    users-deployment.yaml
+    users-networkpolicy.yaml
+    users-postgres-networkpolicy.yaml
+    users-postgres-secret.yaml
+    users-postgres-service.yaml
+    users-postgres-statefulset.yaml
+    users-rbac-proxy.yaml
+    users-rbac.yaml
+    users-service.yaml
+    users-serviceaccount.yaml
+    users-test.yaml
   mongo/
     mongo-networkpolicy.yaml
     mongo-service.yaml
@@ -68,6 +81,7 @@ Each workload has its own ServiceAccount:
 - `triplanner-helm-triplanner-email`
 - `triplanner-helm-triplanner-locations`
 - `triplanner-helm-triplanner-trips`
+- `triplanner-helm-triplanner-users`
 
 The main app containers do not use the Kubernetes API. The
 `kube-rbac-proxy` sidecar does: it needs `create` on
@@ -96,6 +110,9 @@ curl -i http://localhost:8443/ready
 
 kubectl -n triplanner port-forward svc/triplanner-trips 8443:8443
 curl -i http://localhost:8443/ready
+
+kubectl -n triplanner port-forward svc/triplanner-users 8443:8443
+curl -i http://localhost:8443/ready
 ```
 
 A client token must be allowed to `get` `services/proxy` for the service name in
@@ -119,13 +136,14 @@ kubectl create namespace triplanner
 
 Prerequisites:
 
-- A default StorageClass for the five PVCs (broker, email settings, Mongo,
-  locations settings, trips PostgreSQL).
+- A default StorageClass for the six PVCs (broker, email settings, Mongo,
+  locations settings, trips PostgreSQL, users PostgreSQL).
 - The `triplanner-internal` Secret with `INTERNAL_TOKEN`.
 - Images published at `marcojr13/triplanner-kafka:0.1.0`,
   `marcojr13/triplanner-email:0.1.1`,
-  `marcojr13/triplanner-locations:0.2.1` and
-  `marcojr13/triplanner-trips:0.1.0` (or override `images.*`).
+  `marcojr13/triplanner-locations:0.2.1`,
+  `marcojr13/triplanner-trips:0.1.1` and
+  `marcojr13/triplanner-users:0.1.0` (or override `images.*`).
 
 ```bash
 kubectl create namespace triplanner
@@ -163,12 +181,15 @@ bash scripts/port-forward.sh
 | `4200` | `triplanner-email` | app port |
 | `4300` | `triplanner-locations` | app port |
 | `4400` | `triplanner-trips` | app port |
+| `4500` | `triplanner-users` | app port |
 | `8443` | broker `kube-rbac-proxy` | with `-Proxy` / `--proxy` |
 | `8444` | email `kube-rbac-proxy` | with `-Proxy` / `--proxy` |
 | `8445` | locations `kube-rbac-proxy` | with `-Proxy` / `--proxy` |
 | `8446` | trips `kube-rbac-proxy` | with `-Proxy` / `--proxy` |
+| `8447` | users `kube-rbac-proxy` | with `-Proxy` / `--proxy` |
 | `27018` | MongoDB | with `-Mongo` / `--mongo`; avoids Compose on 27017 |
 | `5433` | trips PostgreSQL | with `-Postgres` / `--postgres`; avoids Compose on 5432 |
+| `5434` | users PostgreSQL | with `-Postgres` / `--postgres`; avoids Compose on 5432 |
 
 App ports bind `0.0.0.0` by default so Compose containers can use
 `host.docker.internal`; do not run this on an untrusted network. Proxy and Mongo
@@ -243,6 +264,32 @@ With `tripsService.seedDemo: true` it also seeds the demo trip. The data lives i
 `data-triplanner-trips-postgres-0`; rotating credentials requires updating the
 Secret and restarting the StatefulSet and the trips Deployment.
 
+### Users PostgreSQL credentials
+
+By default the chart renders `usersService.postgres.auth` into the
+`triplanner-users-postgres-credentials` Secret (`POSTGRES_USER`,
+`POSTGRES_PASSWORD`, `POSTGRES_DB`) and injects it into both the StatefulSet and
+the users service. **This is demo-only.** For production, set
+`usersService.postgres.auth.existingSecret` to a Secret managed by Vault,
+External Secrets or Sealed Secrets with the same keys; the chart then renders no
+Secret.
+
+```yaml
+usersService:
+  postgres:
+    auth:
+      enabled: true
+      existingSecret: triplanner-users-postgres-credentials
+      usernameKey: POSTGRES_USER
+      passwordKey: POSTGRES_PASSWORD
+      databaseKey: POSTGRES_DB
+```
+
+The users service applies its own schema and seeds `demo` / `demo-friend`
+(`demo123`) at boot under `pg_advisory_xact_lock`. The data lives in
+`data-triplanner-users-postgres-0`. The demo accounts are protected; deleting a
+user who owns a trip returns `USER_OWNS_TRIPS`.
+
 ### Invitation outbox
 
 Trips writes `email.invite.v1` and `email.member.joined.v1` to its outbox in the
@@ -282,4 +329,11 @@ The trips PostgreSQL StatefulSet also keeps its
 
 ```bash
 kubectl -n triplanner delete pvc -l app.kubernetes.io/name=triplanner-trips-postgres
+```
+
+The users PostgreSQL StatefulSet keeps its `data-triplanner-users-postgres-0`
+PVC:
+
+```bash
+kubectl -n triplanner delete pvc -l app.kubernetes.io/name=triplanner-users-postgres
 ```

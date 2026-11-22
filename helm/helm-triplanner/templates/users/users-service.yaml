@@ -1,0 +1,25 @@
+{{- if .Values.usersService.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: triplanner-users
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: triplanner-users
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: users
+spec:
+  type: {{ .Values.usersService.service.type | default "ClusterIP" }}
+  selector:
+    app.kubernetes.io/name: triplanner-users
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  ports:
+    - name: http
+      port: {{ .Values.usersService.service.port }}
+      targetPort: http
+    {{- if .Values.usersService.rbacProxy.enabled }}
+    - name: rbac-proxy
+      port: {{ .Values.usersService.rbacProxy.port }}
+      targetPort: rbac-proxy
+    {{- end }}
+{{- end }}

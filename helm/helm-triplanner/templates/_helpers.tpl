@@ -70,10 +70,18 @@ needs Kubernetes API permissions in the current design.
 {{- default (printf "%s-trips" (include "helm-triplanner.fullname" .)) .Values.tripsService.serviceAccount.name }}
 {{- end }}
 
+{{- define "helm-triplanner.usersServiceAccountName" -}}
+{{- default (printf "%s-users" (include "helm-triplanner.fullname" .)) .Values.usersService.serviceAccount.name }}
+{{- end }}
+
 {{- define "helm-triplanner.mongoSecretName" -}}
 {{- default "triplanner-mongo-credentials" .Values.mongo.auth.existingSecret }}
 {{- end }}
 
 {{- define "helm-triplanner.tripsPostgresSecretName" -}}
 {{- default "triplanner-trips-postgres-credentials" .Values.tripsService.postgres.auth.existingSecret }}
+{{- end }}
+
+{{- define "helm-triplanner.usersPostgresSecretName" -}}
+{{- default "triplanner-users-postgres-credentials" .Values.usersService.postgres.auth.existingSecret }}
 {{- end }}

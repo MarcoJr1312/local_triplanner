@@ -1,10 +1,10 @@
 apiVersion: v2
 name: helm-triplanner
-description: Triplanner local demo services (Go HTTP broker, email consumer, locations catalogue with optional HasData BYOK + MongoDB, trips service with its own PostgreSQL)
+description: Triplanner local demo services (Go HTTP broker, email consumer, locations catalogue with optional HasData BYOK + MongoDB, trips service and users service with their own PostgreSQL databases)
 type: application
 
 # Chart version. Bump on chart changes.
-version: 0.6.1
+version: 0.7.0
 
 # Version of the deployed application images.
-appVersion: "0.3.0"
+appVersion: "0.4.0"
