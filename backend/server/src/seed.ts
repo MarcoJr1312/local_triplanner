@@ -52,7 +52,7 @@ if (import.meta.main) {
     const images = copySeedImages();
     await seedAll(db);
     console.log(
-      `Seed OK — Postgres listo; usuarios demo; catálogo en locations-service, ${images} imágenes`,
+      `Seed OK — Postgres listo; catálogo en locations-service, ${images} imágenes`,
     );
   } finally {
     await db.close();
