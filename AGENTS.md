@@ -122,8 +122,11 @@ auth and Dockerfiles.
 - Known limitation: macOS clean-clone QA is pending.
 - M9.1–M9.6 (trips service, PostgreSQL): contract, skeleton, schema/migrations,
   trips/members/items, invitations + transactional outbox, and the API cutover
-  behind `TRIPS_MODE=local|remote`. The service is not wired into Compose/Helm
-  yet; that is M9.8–M9.9.
+  behind `TRIPS_MODE=local|remote`.
+- M9.7–M9.9: idempotent legacy import, Compose stack (`trips` +
+  `trips-postgres`), and Helm chart 0.6.0 accepted on Docker Desktop (pods
+  ready, `helm test` passes). QA evidence and the Gate 2 brief are in
+  `docs/migrations/0007-trips-qa.md`.
 Do not assume the target architecture is already implemented — check the
 current tree.
 

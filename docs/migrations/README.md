@@ -14,7 +14,8 @@ Migrations:
   MongoDB cache
 - [`0005-mongo-auth.md`](./0005-mongo-auth.md) — MongoDB credentials and Secret
 - [`0006-trips-service.md`](./0006-trips-service.md) — trips service over
-  PostgreSQL (M9.1–M9.6 implemented; Compose/Helm pending)
+  PostgreSQL (M9.1–M9.9 implemented; Compose/Helm accepted)
+- [`0007-trips-qa.md`](./0007-trips-qa.md) — trips QA evidence and Gate 2
 
 ## Branching (local only)
 
