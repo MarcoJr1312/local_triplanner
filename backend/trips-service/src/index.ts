@@ -1,5 +1,7 @@
 import { connect, type Db } from './db.ts';
+import { createBrokerPublisher } from './domain/broker.ts';
 import { createLocationsClient } from './domain/locations.ts';
+import { OutboxRelay } from './domain/outbox.ts';
 import { TripsService } from './domain/service.ts';
 import { isUsingDefaultInternalToken, loadConfig, loadDotEnv } from './env.ts';
 import { createHandler } from './http.ts';
@@ -18,7 +20,15 @@ const db: Db = await connect(config).catch((error: unknown) => {
 });
 
 const locations = createLocationsClient(config);
-const service = new TripsService(db, locations);
+const publisher = createBrokerPublisher(config);
+const service = new TripsService(db, locations, { brokerTopic: config.broker.topic });
+const relay = new OutboxRelay(db, publisher, {
+  intervalMs: config.outbox.intervalMs,
+  batchSize: config.outbox.batchSize,
+  maxAttempts: config.outbox.maxAttempts,
+  log: (message) => console.log(message),
+});
+relay.start();
 
 const server = Bun.serve({
   hostname: '0.0.0.0',
@@ -39,6 +49,9 @@ console.log(
     ? '[trips] postgres=dsn'
     : `[trips] postgres=${config.postgres.host}:${config.postgres.port}/${config.postgres.database}`,
 );
+console.log(
+  `[trips] broker=${config.broker.url} topic=${config.broker.topic} outbox=${config.outbox.intervalMs}ms`,
+);
 
 const shutdown = createShutdown({
   server,
@@ -46,6 +59,7 @@ const shutdown = createShutdown({
   timeoutMs: config.shutdownTimeoutMs,
   exit: (code) => process.exit(code),
   log: (message) => console.log(message),
+  beforeClose: () => relay.stop(),
 });
 
 process.on('SIGTERM', () => void shutdown('SIGTERM'));

@@ -2,11 +2,17 @@ import { beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 import type { Db } from '../src/db.ts';
 import { migrate } from '../src/db/migrate.ts';
 import {
+  BrokerUnavailableError,
+  type BrokerPublisher,
+} from '../src/domain/broker.ts';
+import {
   LocationsUnavailableError,
   type LocationsClient,
   type LocationSnapshot,
 } from '../src/domain/locations.ts';
+import { OutboxRelay } from '../src/domain/outbox.ts';
 import { TripsService } from '../src/domain/service.ts';
+import { countPendingOutbox, resetOutbox } from '../src/domain/store.ts';
 import { AppError, type ErrorCode } from '../src/errors.ts';
 import { createHandler } from '../src/http.ts';
 import { connectTestDb, resetSchema } from './helpers/pg.ts';
@@ -33,6 +39,53 @@ const failingLocations: LocationsClient = {
     throw new LocationsUnavailableError('locations down');
   },
 };
+
+class FakePublisher implements BrokerPublisher {
+  calls: { topic: string; key: string; payload: unknown }[] = [];
+  fail = false;
+
+  async publish(topic: string, key: string, payload: unknown): Promise<number> {
+    if (this.fail) throw new BrokerUnavailableError('broker down');
+    this.calls.push({ topic, key, payload });
+    return this.calls.length;
+  }
+}
+
+interface StoredEventPayload {
+  to: string;
+  code?: string;
+  ownerName?: string;
+  memberName?: string;
+  tripName?: string;
+  language?: string;
+}
+
+interface StoredEvent {
+  id: string;
+  type: string;
+  version: number;
+  occurredAt: string;
+  source: string;
+  payload: StoredEventPayload;
+}
+
+interface OutboxEventRow {
+  id: string;
+  topic: string;
+  broker_offset: number | null;
+  attempts: number;
+  last_error: string | null;
+  payload: StoredEvent;
+}
+
+function inviteNotify() {
+  return {
+    inviter_name: 'Marco',
+    language: 'es',
+    join_url: 'http://localhost:3000/join?trip=demo-trip&code=ABC',
+    demo: true,
+  };
+}
 
 let db: Db | null = null;
 let service: TripsService;
@@ -80,6 +133,14 @@ function authed(path: string, init: RequestInit = {}, actor = 'u1'): Promise<Res
   headers.set('x-internal-token', INTERNAL_TOKEN);
   headers.set('x-actor-id', actor);
   return handler(new Request(`http://localhost${path}`, { ...init, headers }));
+}
+
+function tokenOnly(path: string): Promise<Response> {
+  return handler(
+    new Request(`http://localhost${path}`, {
+      headers: { 'x-internal-token': INTERNAL_TOKEN },
+    }),
+  );
 }
 
 describe('create and read', () => {
@@ -389,6 +450,253 @@ describe('locations degradation', () => {
   });
 });
 
+describe('invitations and outbox', () => {
+  test('creates an invitation and queues email.invite.v1 in one transaction', async () => {
+    if (!db) return;
+    const id = await newTrip();
+    await service.addMember('u1', id, { user_id: 'u2', role: 'editor' });
+    await service.addMember('u1', id, { user_id: 'u3', role: 'viewer' });
+
+    await expectCode(
+      () =>
+        service.createInvitation('u3', id, {
+          email: 'friend@example.com',
+          role: 'viewer',
+        }),
+      'FORBIDDEN_EDIT',
+    );
+
+    const result = await service.createInvitation('u2', id, {
+      email: 'Friend@Example.com',
+      role: 'viewer',
+      notify: inviteNotify(),
+    });
+
+    expect(result.invitation.code).toMatch(/^[A-Za-z0-9_-]{12}$/);
+    expect(result.invitation.status).toBe('pending');
+    expect(result.invitation.email).toBe('friend@example.com');
+    expect(result.email).toEqual({ queued: true });
+
+    const rows = await db.query<OutboxEventRow>(
+      'SELECT id, topic, broker_offset, attempts, last_error, payload FROM outbox ORDER BY created_at ASC',
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.id).toBe(result.invitation.id);
+    expect(rows[0]?.topic).toBe('TripInvitation');
+    expect(rows[0]?.payload.type).toBe('email.invite.v1');
+    expect(rows[0]?.payload.source).toBe('triplanner-trips');
+    expect(rows[0]?.payload.payload.to).toBe('friend@example.com');
+    expect(rows[0]?.payload.payload.code).toBe(result.invitation.code);
+    expect(rows[0]?.payload.payload.ownerName).toBe('Marco');
+    expect(await countPendingOutbox(db)).toBe(1);
+  });
+
+  test('previews an invitation by code without an actor', async () => {
+    if (!db) return;
+    const id = await newTrip();
+    const result = await service.createInvitation('u1', id, {
+      email: 'friend@example.com',
+      role: 'editor',
+      notify: inviteNotify(),
+    });
+
+    const preview = await service.previewInvitation(result.invitation.code);
+    expect(preview.invitation.id).toBe(result.invitation.id);
+    expect(preview.trip.id).toBe(id);
+    expect(preview.trip.owner_id).toBe('u1');
+
+    await expectCode(() => service.previewInvitation('doesnotexist'), 'INVITE_CODE_NOT_FOUND');
+  });
+
+  test('joins atomically and notifies the owner exactly once', async () => {
+    if (!db) return;
+    const id = await newTrip();
+    const result = await service.createInvitation('u1', id, {
+      email: 'friend@example.com',
+      role: 'editor',
+      notify: inviteNotify(),
+    });
+
+    const joined = await service.joinTrip('u1', id, {
+      user_id: 'u2',
+      email: 'friend@example.com',
+      code: result.invitation.code,
+      notify: {
+        owner_email: 'demo@triplanner.local',
+        owner_name: 'Demo',
+        member_name: 'Demo Friend',
+        language: 'es',
+      },
+    });
+
+    expect(joined.joined).toBe(true);
+    expect(joined.member_email).toEqual({ queued: true });
+    const member = joined.trip.members.find((row) => row.user_id === 'u2');
+    expect(member?.role).toBe('editor');
+    expect(member?.invited_email).toBe('friend@example.com');
+
+    const invitation = await db.one<{ status: string; accepted_at: string | null }>(
+      'SELECT status, accepted_at FROM invitations WHERE id = $1',
+      [result.invitation.id],
+    );
+    expect(invitation?.status).toBe('accepted');
+    expect(invitation?.accepted_at).not.toBeNull();
+
+    const rows = await db.query<OutboxEventRow>(
+      'SELECT id, topic, broker_offset, attempts, last_error, payload FROM outbox ORDER BY created_at ASC',
+    );
+    const joinedEvent = rows.find((row) => row.payload.type === 'email.member.joined.v1');
+    expect(joinedEvent?.payload.payload.to).toBe('demo@triplanner.local');
+    expect(joinedEvent?.payload.payload.ownerName).toBe('Demo');
+    expect(joinedEvent?.payload.payload.memberName).toBe('Demo Friend');
+    expect(joinedEvent?.payload.payload.tripName).toBe('Toronto');
+    expect(rows).toHaveLength(2);
+
+    const again = await service.joinTrip('u1', id, {
+      user_id: 'u2',
+      email: 'friend@example.com',
+      code: result.invitation.code,
+    });
+    expect(again.joined).toBe(false);
+    expect(again.member_email).toEqual({ queued: false, reason: 'ALREADY_MEMBER' });
+
+    const after = await db.query<OutboxEventRow>(
+      'SELECT id, topic, broker_offset, attempts, last_error, payload FROM outbox',
+    );
+    expect(after).toHaveLength(2);
+  });
+
+  test('rejects a wrong email and a used code', async () => {
+    if (!db) return;
+    const id = await newTrip();
+    const result = await service.createInvitation('u1', id, {
+      email: 'friend@example.com',
+      role: 'viewer',
+    });
+
+    await expectCode(
+      () =>
+        service.joinTrip('u1', id, {
+          user_id: 'u2',
+          email: 'other@example.com',
+          code: result.invitation.code,
+        }),
+      'INVITE_EMAIL_MISMATCH',
+    );
+
+    const joined = await service.joinTrip('u1', id, {
+      user_id: 'u2',
+      email: 'friend@example.com',
+      code: result.invitation.code,
+    });
+    expect(joined.joined).toBe(true);
+    expect(joined.member_email).toEqual({ queued: false, reason: 'NO_NOTIFY' });
+
+    await expectCode(
+      () =>
+        service.joinTrip('u1', id, {
+          user_id: 'u3',
+          email: 'friend@example.com',
+          code: result.invitation.code,
+        }),
+      'INVITE_ALREADY_USED',
+    );
+
+    expect(await countPendingOutbox(db)).toBe(0);
+  });
+
+  test('relay publishes pending rows and records the broker offset', async () => {
+    if (!db) return;
+    const id = await newTrip();
+    const publisher = new FakePublisher();
+    const relay = new OutboxRelay(db, publisher, {
+      intervalMs: 1_000,
+      batchSize: 10,
+      maxAttempts: 3,
+    });
+
+    const result = await service.createInvitation('u1', id, {
+      email: 'friend@example.com',
+      role: 'viewer',
+      notify: inviteNotify(),
+    });
+
+    expect(await countPendingOutbox(db)).toBe(1);
+    expect(await relay.drainOnce()).toEqual({ published: 1, failed: 0 });
+    expect(publisher.calls).toHaveLength(1);
+    expect(publisher.calls[0]?.topic).toBe('TripInvitation');
+    expect(publisher.calls[0]?.key).toBe(result.invitation.id);
+    expect(await countPendingOutbox(db)).toBe(0);
+
+    const row = await db.one<{ broker_offset: number; attempts: number }>(
+      'SELECT broker_offset, attempts FROM outbox WHERE id = $1',
+      [result.invitation.id],
+    );
+    expect(row?.broker_offset).toBe(1);
+    expect(row?.attempts).toBe(1);
+  });
+
+  test('a broker failure keeps the row pending and retries', async () => {
+    if (!db) return;
+    const id = await newTrip();
+    const publisher = new FakePublisher();
+    publisher.fail = true;
+    const relay = new OutboxRelay(db, publisher, {
+      intervalMs: 1_000,
+      batchSize: 10,
+      maxAttempts: 3,
+    });
+
+    const result = await service.createInvitation('u1', id, {
+      email: 'friend@example.com',
+      role: 'viewer',
+      notify: inviteNotify(),
+    });
+
+    expect(await relay.drainOnce()).toEqual({ published: 0, failed: 1 });
+    expect(await countPendingOutbox(db)).toBe(1);
+
+    const failed = await db.one<{ attempts: number; last_error: string | null }>(
+      'SELECT attempts, last_error FROM outbox WHERE id = $1',
+      [result.invitation.id],
+    );
+    expect(failed?.attempts).toBe(1);
+    expect(failed?.last_error).toContain('broker down');
+
+    publisher.fail = false;
+    expect(await relay.drainOnce()).toEqual({ published: 1, failed: 0 });
+    expect(publisher.calls).toHaveLength(1);
+    expect(await countPendingOutbox(db)).toBe(0);
+  });
+
+  test('replay resets a row and the relay republishes it', async () => {
+    if (!db) return;
+    const id = await newTrip();
+    const publisher = new FakePublisher();
+    const relay = new OutboxRelay(db, publisher, {
+      intervalMs: 1_000,
+      batchSize: 10,
+      maxAttempts: 3,
+    });
+
+    const result = await service.createInvitation('u1', id, {
+      email: 'friend@example.com',
+      role: 'viewer',
+      notify: inviteNotify(),
+    });
+
+    await relay.drainOnce();
+    expect(await countPendingOutbox(db)).toBe(0);
+    expect(await resetOutbox(db, result.invitation.id)).toBe(true);
+    expect(await countPendingOutbox(db)).toBe(1);
+
+    await relay.drainOnce();
+    expect(publisher.calls).toHaveLength(2);
+    expect(publisher.calls[1]?.key).toBe(result.invitation.id);
+    expect(await resetOutbox(db, 'missing')).toBe(false);
+  });
+});
+
 describe('HTTP routes', () => {
   test('create, list, read and forbid a non-member', async () => {
     if (!db) return;
@@ -471,6 +779,60 @@ describe('HTTP routes', () => {
     const deleted = await authed(`/internal/v1/trips/${trip.id}`, { method: 'DELETE' });
     expect(deleted.status).toBe(200);
     expect(await deleted.json()).toEqual({ deleted: true });
+  });
+
+  test('invitation and join routes work end to end', async () => {
+    if (!db) return;
+    const trip = await service.createTrip('u1', {
+      name: 'Invite routes',
+      start_date: '2026-12-04',
+      end_date: '2026-12-06',
+    });
+
+    const created = await authed(`/internal/v1/trips/${trip.id}/invitations`, {
+      method: 'POST',
+      body: JSON.stringify({
+        email: 'friend@example.com',
+        role: 'viewer',
+        notify: inviteNotify(),
+      }),
+    });
+    expect(created.status).toBe(201);
+    const invitation = (await created.json()) as {
+      invitation: { id: string; code: string };
+      email: { queued: boolean };
+    };
+    expect(invitation.email.queued).toBe(true);
+
+    const preview = await tokenOnly(
+      `/internal/v1/invitations/by-code/${encodeURIComponent(invitation.invitation.code)}`,
+    );
+    expect(preview.status).toBe(200);
+    expect(((await preview.json()) as { trip: { id: string } }).trip.id).toBe(trip.id);
+
+    const joined = await authed(`/internal/v1/trips/${trip.id}/join`, {
+      method: 'POST',
+      body: JSON.stringify({
+        user_id: 'u2',
+        email: 'friend@example.com',
+        code: invitation.invitation.code,
+        notify: {
+          owner_email: 'demo@triplanner.local',
+          owner_name: 'Demo',
+          member_name: 'Demo Friend',
+          language: 'es',
+        },
+      }),
+    });
+    expect(joined.status).toBe(200);
+    const joinedBody = (await joined.json()) as {
+      joined: boolean;
+      trip: { members: { user_id: string }[] };
+      member_email: { queued: boolean };
+    };
+    expect(joinedBody.joined).toBe(true);
+    expect(joinedBody.member_email.queued).toBe(true);
+    expect(joinedBody.trip.members.map((member) => member.user_id)).toContain('u2');
   });
 
   test('rejects invalid JSON and unknown routes', async () => {

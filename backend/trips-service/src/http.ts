@@ -13,6 +13,7 @@ const JSON_HEADERS = { 'content-type': 'application/json; charset=utf-8' } as co
 export interface ReadinessDb {
   ping(): Promise<void>;
   isMigrated(): Promise<boolean>;
+  outboxPending?(): Promise<number>;
 }
 
 export interface HttpDeps {
@@ -123,7 +124,16 @@ async function readiness(deps: HttpDeps): Promise<Response> {
   if (!migrated) {
     return json(503, { status: 'not_ready', postgres: 'ok', migrated: false });
   }
-  return json(200, { status: 'ready', postgres: 'ok', migrated: true });
+
+  const body: Record<string, unknown> = { status: 'ready', postgres: 'ok', migrated: true };
+  if (deps.db.outboxPending) {
+    try {
+      body.outbox_pending = await deps.db.outboxPending();
+    } catch {
+      // Informational only; a count failure must not fail readiness.
+    }
+  }
+  return json(200, body);
 }
 
 export function createHandler(deps: HttpDeps): (req: Request) => Promise<Response> {
@@ -164,6 +174,15 @@ export function createHandler(deps: HttpDeps): (req: Request) => Promise<Respons
         ctx.params.id ?? '',
         ctx.params.userId ?? '',
       ))),
+
+    makeRoute('POST', '/internal/v1/trips/:id/invitations', async (ctx) =>
+      json(201, await service().createInvitation(ctx.actor, ctx.params.id ?? '', ctx.body))),
+
+    makeRoute('GET', '/internal/v1/invitations/by-code/:code', async (ctx) =>
+      json(200, await service().previewInvitation(ctx.params.code ?? '')), false),
+
+    makeRoute('POST', '/internal/v1/trips/:id/join', async (ctx) =>
+      json(200, await service().joinTrip(ctx.actor, ctx.params.id ?? '', ctx.body))),
 
     makeRoute('POST', '/internal/v1/trips/:id/leave', async (ctx) =>
       json(200, await service().leaveTrip(ctx.actor, ctx.params.id ?? '', ctx.body))),

@@ -32,6 +32,7 @@ export interface Db extends Queryable {
   transaction<T>(fn: (tx: Queryable) => Promise<T>): Promise<T>;
   ping(): Promise<void>;
   isMigrated(): Promise<boolean>;
+  outboxPending(): Promise<number>;
   close(): Promise<void>;
 }
 
@@ -141,5 +142,12 @@ class TripsDb extends Sql implements Db {
 
   async close(): Promise<void> {
     await this.pool.end();
+  }
+
+  async outboxPending(): Promise<number> {
+    const row = await this.one<{ count: number }>(
+      'SELECT COUNT(*)::int AS count FROM outbox WHERE published_at IS NULL',
+    );
+    return Number(row?.count ?? 0);
   }
 }

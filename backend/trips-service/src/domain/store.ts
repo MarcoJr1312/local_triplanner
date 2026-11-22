@@ -7,6 +7,8 @@ import {
 } from './reminders.ts';
 import type {
   CategorySpend,
+  InvitationRow,
+  OutboxRow,
   Role,
   TripAggregate,
   TripItemRow,
@@ -444,4 +446,132 @@ export async function buildAggregate(
     spent: stats.spent,
     spent_by_category: stats.spent_by_category,
   };
+}
+
+// ------------------------------------------------------------- invitations
+
+export interface NewInvitation {
+  id: string;
+  trip_id: string;
+  email: string;
+  code: string;
+  role: InvitationRow['role'];
+  created_by: string;
+}
+
+export async function insertInvitation(
+  tx: Queryable,
+  input: NewInvitation,
+): Promise<InvitationRow> {
+  const row = await tx.one<InvitationRow>(
+    `INSERT INTO invitations (id, trip_id, email, code, role, status, created_by)
+     VALUES ($1, $2, $3, $4, $5, 'pending', $6)
+     RETURNING *`,
+    [input.id, input.trip_id, input.email, input.code, input.role, input.created_by],
+  );
+  if (!row) throw new Error('No se pudo crear la invitación');
+  return row;
+}
+
+export async function findInvitationByCode(
+  db: Queryable,
+  code: string,
+): Promise<InvitationRow | null> {
+  return db.one<InvitationRow>('SELECT * FROM invitations WHERE code = $1', [code]);
+}
+
+/** Locks the invitation row for the join transaction. */
+export async function findInvitationForJoin(
+  tx: Queryable,
+  tripId: string,
+  code: string,
+): Promise<InvitationRow | null> {
+  return tx.one<InvitationRow>(
+    'SELECT * FROM invitations WHERE code = $1 AND trip_id = $2 FOR UPDATE',
+    [code, tripId],
+  );
+}
+
+export async function acceptInvitation(
+  tx: Queryable,
+  invitationId: string,
+): Promise<void> {
+  await tx.run(
+    "UPDATE invitations SET status = 'accepted', accepted_at = now() WHERE id = $1",
+    [invitationId],
+  );
+}
+
+// ------------------------------------------------------------------ outbox
+
+export interface NewOutbox {
+  id: string;
+  topic: string;
+  event_key: string;
+  payload: unknown;
+}
+
+export async function enqueueOutbox(tx: Queryable, input: NewOutbox): Promise<void> {
+  await tx.run(
+    `INSERT INTO outbox (id, topic, event_key, payload)
+     VALUES ($1, $2, $3, $4::jsonb)`,
+    [input.id, input.topic, input.event_key, JSON.stringify(input.payload)],
+  );
+}
+
+export async function lockPendingOutbox(
+  tx: Queryable,
+  limit: number,
+  maxAttempts: number,
+): Promise<OutboxRow[]> {
+  return tx.query<OutboxRow>(
+    `SELECT * FROM outbox
+      WHERE published_at IS NULL AND attempts < $1
+      ORDER BY created_at ASC
+      LIMIT $2
+      FOR UPDATE SKIP LOCKED`,
+    [maxAttempts, limit],
+  );
+}
+
+export async function markOutboxPublished(
+  tx: Queryable,
+  id: string,
+  brokerOffset: number,
+): Promise<void> {
+  await tx.run(
+    `UPDATE outbox
+        SET published_at = now(), broker_offset = $1, attempts = attempts + 1,
+            last_error = NULL
+      WHERE id = $2`,
+    [brokerOffset, id],
+  );
+}
+
+export async function markOutboxFailed(
+  tx: Queryable,
+  id: string,
+  error: string,
+): Promise<void> {
+  await tx.run('UPDATE outbox SET attempts = attempts + 1, last_error = $1 WHERE id = $2', [
+    error.slice(0, 2_000),
+    id,
+  ]);
+}
+
+export async function resetOutbox(db: Queryable, id: string): Promise<boolean> {
+  const changes = await db.run(
+    `UPDATE outbox
+        SET published_at = NULL, attempts = 0, last_error = NULL, broker_offset = NULL
+      WHERE id = $1`,
+    [id],
+  );
+  return changes > 0;
+}
+
+export async function countPendingOutbox(db: Queryable): Promise<number> {
+  const row = await db.one<{ count: number }>(
+    'SELECT COUNT(*)::int AS count FROM outbox WHERE published_at IS NULL',
+  );
+  return Number(row?.count ?? 0);
 }

@@ -1,9 +1,15 @@
 // Trips domain service. Authorization is enforced here, not in the API, so the
 // service is safe even if it is called by another internal component.
 
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import type { Db } from '../db.ts';
 import { AppError } from '../errors.ts';
+import {
+  buildInviteEvent,
+  buildMemberJoinedEvent,
+  type InviteNotify,
+  type MemberJoinedNotify,
+} from './events.ts';
 import {
   LocationsUnavailableError,
   type LocationSnapshot,
@@ -11,7 +17,11 @@ import {
 } from './locations.ts';
 import * as store from './store.ts';
 import type {
+  InvitationPreview,
+  InvitationResult,
+  InvitationRole,
   ItemWriteResult,
+  JoinResult,
   Role,
   TripAggregate,
   TripContext,
@@ -26,22 +36,32 @@ import {
   optionalBoolean,
   optionalEmail,
   optionalId,
+  optionalLanguage,
+  optionalObject,
   optionalString,
   optionalTime,
   pathId,
+  pathInviteCode,
   requiredBoolean,
   requiredDate,
+  requiredEmail,
   requiredId,
   requiredInteger,
+  requiredInviteCode,
   requiredNumber,
   requiredRole,
   requiredString,
+  requiredUrl,
   validateTimeZone,
 } from './validation.ts';
 
 export interface LeaveResult {
   left: true;
   trip: TripAggregate;
+}
+
+export interface TripsServiceOptions {
+  brokerTopic: string;
 }
 
 interface ResolvedPlace {
@@ -52,10 +72,15 @@ interface ResolvedPlace {
 const MAX_MONEY = 1_000_000_000;
 
 export class TripsService {
+  private readonly brokerTopic: string;
+
   constructor(
     private readonly db: Db,
     private readonly locations: LocationsClient,
-  ) {}
+    options: TripsServiceOptions = { brokerTopic: 'TripInvitation' },
+  ) {
+    this.brokerTopic = options.brokerTopic;
+  }
 
   // ---------------------------------------------------------------- reads
 
@@ -395,6 +420,155 @@ export class TripsService {
     return { left: true, trip: await store.buildAggregate(this.db, updated, actorId) };
   }
 
+  // --------------------------------------------------------- invitations
+
+  async createInvitation(
+    actorId: string,
+    tripId: string,
+    body: Record<string, unknown>,
+  ): Promise<InvitationResult> {
+    const id = pathId(tripId, 'trip_id');
+    const trip = await this.requireTrip(id);
+    this.requireEditor(await this.requireRole(id, actorId));
+
+    const email = requiredEmail(body, 'email');
+    const role = requiredRole(body, 'role', INVITE_ROLES) as InvitationRole;
+    const notify = this.parseInviteNotify(body);
+
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const invitationId = randomUUID();
+      const code = randomBytes(9).toString('base64url');
+
+      try {
+        const invitation = await this.db.transaction(async (tx) => {
+          const row = await store.insertInvitation(tx, {
+            id: invitationId,
+            trip_id: id,
+            email,
+            code,
+            role,
+            created_by: actorId,
+          });
+
+          if (notify) {
+            await store.enqueueOutbox(tx, {
+              id: row.id,
+              topic: this.brokerTopic,
+              event_key: row.id,
+              payload: buildInviteEvent(trip, row, notify),
+            });
+          }
+
+          return row;
+        });
+
+        return {
+          invitation,
+          email: notify ? { queued: true } : { queued: false, reason: 'NO_NOTIFY' },
+        };
+      } catch (error) {
+        if (store.isUniqueViolation(error) && attempt < 4) continue;
+        throw error;
+      }
+    }
+
+    throw new AppError('UNAVAILABLE', 'No se pudo generar un código de invitación único.');
+  }
+
+  async previewInvitation(code: string): Promise<InvitationPreview> {
+    const invitationCode = pathInviteCode(code);
+    const invitation = await store.findInvitationByCode(this.db, invitationCode);
+    if (!invitation) {
+      throw new AppError('INVITE_CODE_NOT_FOUND', 'Código de invitación no encontrado.');
+    }
+
+    const trip = await store.getTrip(this.db, invitation.trip_id);
+    if (!trip) {
+      throw new AppError('INVITE_CODE_NOT_FOUND', 'Código de invitación no encontrado.');
+    }
+
+    return {
+      invitation,
+      trip: {
+        id: trip.id,
+        name: trip.name,
+        destination_name: trip.destination_name,
+        owner_id: trip.owner_id,
+      },
+    };
+  }
+
+  async joinTrip(
+    actorId: string,
+    tripId: string,
+    body: Record<string, unknown>,
+  ): Promise<JoinResult> {
+    const id = pathId(tripId, 'trip_id');
+    const trip = await this.requireTrip(id);
+
+    const userId = requiredId(body, 'user_id');
+    const email = requiredEmail(body, 'email');
+    const code = requiredInviteCode(body, 'code');
+    const notify = this.parseJoinNotify(body);
+
+    const outcome = await this.db.transaction<{
+      joined: boolean;
+      emailQueued: boolean;
+      reason?: 'ALREADY_MEMBER';
+    }>(async (tx) => {
+      const invitation = await store.findInvitationForJoin(tx, id, code);
+      if (!invitation) {
+        throw new AppError('INVITE_CODE_NOT_FOUND', 'Código de invitación no encontrado.');
+      }
+
+      if (invitation.status === 'accepted') {
+        const existingRole = await store.getMemberRole(tx, id, userId);
+        if (existingRole) {
+          return { joined: false, emailQueued: false, reason: 'ALREADY_MEMBER' };
+        }
+        throw new AppError('INVITE_ALREADY_USED', 'La invitación ya fue utilizada.');
+      }
+
+      if (invitation.status !== 'pending') {
+        throw new AppError('INVITE_ALREADY_USED', 'La invitación ya fue utilizada.');
+      }
+
+      if (invitation.email.toLowerCase() !== email.toLowerCase()) {
+        throw new AppError('INVITE_EMAIL_MISMATCH', 'El email no coincide con la invitación.');
+      }
+
+      await store.upsertMember(tx, id, userId, invitation.role, email);
+      await store.acceptInvitation(tx, invitation.id);
+
+      if (notify) {
+        const outboxId = randomUUID();
+        await store.enqueueOutbox(tx, {
+          id: outboxId,
+          topic: this.brokerTopic,
+          event_key: outboxId,
+          payload: buildMemberJoinedEvent({
+            id: outboxId,
+            tripName: trip.name,
+            notify,
+          }),
+        });
+      }
+
+      return { joined: true, emailQueued: Boolean(notify) };
+    });
+
+    const updated = await this.requireTrip(id);
+    const aggregate = await store.buildAggregate(this.db, updated, actorId);
+
+    return {
+      joined: outcome.joined,
+      trip: aggregate,
+      member_email: outcome.emailQueued
+        ? { queued: true }
+        : { queued: false, reason: outcome.reason ?? 'NO_NOTIFY' },
+    };
+  }
+
   // ---------------------------------------------------------------- items
 
   async addItem(
@@ -600,6 +774,28 @@ export class TripsService {
     if (role !== 'owner') {
       throw new AppError('NOT_TRIP_OWNER', 'Solo el propietario puede realizar esta acción.');
     }
+  }
+
+  private parseInviteNotify(body: Record<string, unknown>): InviteNotify | null {
+    const notify = optionalObject(body, 'notify');
+    if (!notify) return null;
+    return {
+      inviter_name: requiredString(notify, 'inviter_name', 200),
+      language: optionalLanguage(notify, 'language') ?? 'es',
+      join_url: requiredUrl(notify, 'join_url', 2_048),
+      demo: optionalBoolean(notify, 'demo') ?? true,
+    };
+  }
+
+  private parseJoinNotify(body: Record<string, unknown>): MemberJoinedNotify | null {
+    const notify = optionalObject(body, 'notify');
+    if (!notify) return null;
+    return {
+      owner_email: requiredEmail(notify, 'owner_email'),
+      owner_name: requiredString(notify, 'owner_name', 200),
+      member_name: requiredString(notify, 'member_name', 200),
+      language: optionalLanguage(notify, 'language') ?? 'es',
+    };
   }
 
   private async resolvePlace(id: string | null): Promise<ResolvedPlace> {

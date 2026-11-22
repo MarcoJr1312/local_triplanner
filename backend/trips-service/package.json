@@ -9,6 +9,7 @@
     "dev": "bun --watch src/index.ts",
     "db:migrate": "bun src/db/migrate.ts",
     "db:seed": "bun src/db/seed.ts",
+    "db:replay-outbox": "bun src/db/replay-outbox.ts",
     "test": "bun test",
     "typecheck": "tsc --noEmit"
   },

@@ -19,6 +19,9 @@ Contract: [`docs/migrations/0006-trips-service.md`](../../docs/migrations/0006-t
 | DELETE | `/internal/v1/trips/{id}` | owner only |
 | GET/POST | `/internal/v1/trips/{id}/members` | list / add |
 | PATCH/DELETE | `/internal/v1/trips/{id}/members/{userId}` | role / remove |
+| POST | `/internal/v1/trips/{id}/invitations` | create invitation + queue email |
+| GET | `/internal/v1/invitations/by-code/{code}` | preview, no actor (code is the secret) |
+| POST | `/internal/v1/trips/{id}/join` | atomic join + owner notification |
 | POST | `/internal/v1/trips/{id}/leave` | owner must transfer |
 | GET/POST | `/internal/v1/trips/{id}/items` | list / add |
 | PATCH/DELETE | `/internal/v1/trips/{id}/items/{itemId}` | update / remove |
@@ -28,12 +31,29 @@ Contract: [`docs/migrations/0006-trips-service.md`](../../docs/migrations/0006-t
 | GET | `/internal/v1/trips/{id}/context` | agent context |
 
 All `/internal/v1` routes require `x-internal-token`; actor-scoped routes add
-`x-actor-id`. Invitations and `/join` arrive in M9.5.
+`x-actor-id`. The invitation preview is the only actor-less route: the invite
+code is the secret.
 
 Authorization is enforced here: viewers read only; editors edit items, settings
 and invitations; owners change roles, delete and transfer. Cover metadata is
 owner-only. Locations lookups are best-effort: a failure keeps the supplied text
 and reports `place_resolved: false` instead of blocking the write.
+
+## Outbox
+
+`email.invite.v1` and `email.member.joined.v1` are written to `outbox` in the
+same transaction as the invitation or join. The relay publishes every
+`OUTBOX_INTERVAL_MS` in batches of `OUTBOX_BATCH_SIZE`, then stamps
+`published_at` and `broker_offset`. A failure increments `attempts`, stores
+`last_error` and retries; the row stays pending. `/ready` reports
+`outbox_pending`.
+
+Replay one row by id (the relay republishes it; the email service deduplicates
+by event id):
+
+```bash
+bun run db:replay-outbox <outbox-id>
+```
 
 ## Commands
 

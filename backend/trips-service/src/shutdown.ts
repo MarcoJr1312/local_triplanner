@@ -15,6 +15,8 @@ export interface ShutdownOptions {
   timeoutMs: number;
   exit: (code: number) => void;
   log?: (message: string) => void;
+  /** Stops background work (the outbox relay) before the server and pool. */
+  beforeClose?: () => Promise<void>;
 }
 
 export function createShutdown(options: ShutdownOptions): (signal: string) => Promise<void> {
@@ -34,6 +36,7 @@ export function createShutdown(options: ShutdownOptions): (signal: string) => Pr
     try {
       await Promise.race([
         (async () => {
+          await options.beforeClose?.();
           await options.server.stop();
           await options.db.close();
         })(),

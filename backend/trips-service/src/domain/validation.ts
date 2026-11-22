@@ -206,3 +206,62 @@ export function validateTimeZone(value: string): string {
     throw new AppError('INVALID_ARGUMENT', `timezone: zona no válida (${value})`);
   }
 }
+
+export function optionalObject(
+  body: Record<string, unknown>,
+  key: string,
+): Record<string, unknown> | undefined {
+  if (!has(body, key)) return undefined;
+  const value = body[key];
+  if (value === null) return undefined;
+  if (typeof value !== 'object' || Array.isArray(value)) {
+    invalid(key, 'se requiere un objeto');
+  }
+  return value as Record<string, unknown>;
+}
+
+export function requiredUrl(
+  body: Record<string, unknown>,
+  key: string,
+  maxLength = 2_048,
+): string {
+  const value = requiredString(body, key, maxLength);
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    invalid(key, 'se requiere una URL absoluta');
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    invalid(key, 'se requiere http o https');
+  }
+  return value;
+}
+
+export function optionalLanguage(
+  body: Record<string, unknown>,
+  key: string,
+): 'es' | 'en' | undefined {
+  if (!has(body, key) || body[key] === null) return undefined;
+  const value = body[key];
+  if (value === 'es' || value === 'en') return value;
+  invalid(key, "se espera 'es' o 'en'");
+}
+
+const INVITE_CODE_RE = /^[A-Za-z0-9_-]{1,64}$/;
+
+export function requiredInviteCode(body: Record<string, unknown>, key: string): string {
+  const value = requiredString(body, key, 64);
+  if (!INVITE_CODE_RE.test(value)) {
+    throw new AppError('INVITE_CODE_NOT_FOUND', 'Código de invitación no encontrado.');
+  }
+  return value;
+}
+
+export function pathInviteCode(value: string | undefined): string {
+  const code = pathId(value, 'code');
+  if (!INVITE_CODE_RE.test(code)) {
+    throw new AppError('INVITE_CODE_NOT_FOUND', 'Código de invitación no encontrado.');
+  }
+  return code;
+}

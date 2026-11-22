@@ -116,3 +116,56 @@ export interface TripContext {
   members: { user_id: string; role: Role }[];
   my_role: Role;
 }
+
+export type InvitationRole = 'editor' | 'viewer';
+export type InvitationStatus = 'pending' | 'accepted' | 'revoked';
+
+export interface InvitationRow {
+  id: string;
+  trip_id: string;
+  email: string;
+  code: string;
+  role: InvitationRole;
+  status: InvitationStatus;
+  created_by: string;
+  created_at: string;
+  accepted_at: string | null;
+}
+
+export interface InvitationPreview {
+  invitation: InvitationRow;
+  trip: {
+    id: string;
+    name: string;
+    destination_name: string | null;
+    owner_id: string;
+  };
+}
+
+export interface EmailQueueStatus {
+  queued: boolean;
+  reason?: 'NO_NOTIFY' | 'ALREADY_MEMBER';
+}
+
+export interface InvitationResult {
+  invitation: InvitationRow;
+  email: EmailQueueStatus;
+}
+
+export interface JoinResult {
+  joined: boolean;
+  trip: TripAggregate;
+  member_email: EmailQueueStatus;
+}
+
+export interface OutboxRow {
+  id: string;
+  topic: string;
+  event_key: string;
+  payload: unknown;
+  created_at: string;
+  published_at: string | null;
+  broker_offset: number | null;
+  attempts: number;
+  last_error: string | null;
+}
