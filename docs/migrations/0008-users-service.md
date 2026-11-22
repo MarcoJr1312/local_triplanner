@@ -44,6 +44,14 @@ invitations; a new local invitation channel has no email and no outbox.
    users service does not call trips.
 5. **Notification delivery: query + live subscription.** `myNotifications` on
    login/refresh plus an `onNotification` subscription for the current user.
+6. **Local credentials: username + password.** Account creation requires
+   username, display name and password; email is not part of creation. Passwords
+   are hashed with Argon2id (`Bun.password`) and never returned. Login verifies
+   the password and returns the profile; there is still **no JWT** — the browser
+   keeps the returned UUID and sends `x-user-id`. Demo passwords are seeded for
+   `demo`/`demo-friend` and shown in the login hint. Email remains optional in the
+   table only for the migrated demo rows and the agent display; new accounts
+   have none.
 
 ## 3. Scope
 
@@ -75,22 +83,30 @@ invitations; a new local invitation channel has no email and no outbox.
 - `users.id` is a UUID primary key.
 - `username` is lowercase, 3–32 chars, unique among active users
   (`^[a-z0-9][a-z0-9_-]{2,31}$`).
-- `email` is optional and unique among active users when present.
+- `password_hash` is required. Passwords are hashed with Argon2id
+  (`Bun.password.hash`/`verify`), minimum 6 characters, and never stored or
+  returned in plain text.
+- `email` is optional in storage for migrated demo rows; **account creation does
+  not accept email**. New accounts have `email = NULL`.
 - `language` is `es` or `en`; new accounts default to `es` (product default).
-- No password and no JWT. Login means selecting a username from the login screen;
-  the API returns the profile and the browser stores the UUID. Every GraphQL
-  request sends `x-user-id: <uuid>`; the API validates the account on profile
-  operations and uses it for member enrichment.
-- The header is spoofable by design. This is a local recruiter demo.
+- No JWT. Login is `username + password`; the users service verifies the hash
+  and returns the profile. The browser stores the UUID and sends
+  `x-user-id: <uuid>`; the API validates the account on profile operations and
+  uses it for member enrichment.
+- The header is spoofable by design. The password gates login only; this is a
+  local recruiter demo, not production auth.
 
 ### 4.1 Demo identities
 
-| User | UUID | Username | Email | Display name |
+| User | UUID | Username | Demo password | Display name |
 |---|---|---|---|---|
-| demo-user | `11111111-1111-4111-8111-111111111111` | `demo` | `demo@triplanner.local` | Demo |
-| demo-friend | `22222222-2222-4222-8222-222222222222` | `demo-friend` | `friend@triplanner.local` | Demo Friend |
+| demo-user | `11111111-1111-4111-8111-111111111111` | `demo` | `demo123` | Demo |
+| demo-friend | `22222222-2222-4222-8222-222222222222` | `demo-friend` | `demo123` | Demo Friend |
 
-Both are seeded idempotently by the users service and cannot be deleted.
+Both are seeded idempotently by the users service and cannot be deleted. The
+login screen shows the demo pair as a hint. Email is not required for either
+new account; the two seeded rows may keep their legacy demo emails for display
+and agent compatibility, but they are never used to authenticate.
 
 ## 5. Data ownership
 
@@ -114,15 +130,16 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
 );
 
 CREATE TABLE IF NOT EXISTS users (
-  id           uuid PRIMARY KEY,
-  username     text NOT NULL,
-  email        text,
-  display_name text NOT NULL,
-  color        text,
-  avatar_url   text,
-  language     text NOT NULL DEFAULT 'es',
-  created_at   timestamptz NOT NULL DEFAULT now(),
-  deleted_at   timestamptz
+  id            uuid PRIMARY KEY,
+  username      text NOT NULL,
+  email         text,
+  password_hash text NOT NULL,
+  display_name  text NOT NULL,
+  color         text,
+  avatar_url    text,
+  language      text NOT NULL DEFAULT 'es',
+  created_at    timestamptz NOT NULL DEFAULT now(),
+  deleted_at    timestamptz
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS users_username_lower
@@ -166,9 +183,10 @@ Base `/internal/v1`, `x-internal-token` on every request, JSON, snake_case, flat
 | GET | `/internal/v1/users?query=&limit=` | active user search for login/invite |
 | GET | `/internal/v1/users/{id}` | profile (also returns soft-deleted for enrichment) |
 | GET | `/internal/v1/users/by-username/{username}` | login + local invite |
-| GET | `/internal/v1/users/by-email/{email}` | agent identity resolution |
+| GET | `/internal/v1/users/by-email/{email}` | agent identity resolution (legacy demo rows) |
 | POST | `/internal/v1/users/batch` | `{ids}` member/attachment enrichment |
-| POST | `/internal/v1/users` | create `{username, display_name, email?, language?}` |
+| POST | `/internal/v1/auth/login` | `{username, password}` → profile or `INVALID_CREDENTIALS` |
+| POST | `/internal/v1/users` | create `{username, password, display_name, language?}`; no email |
 | PATCH | `/internal/v1/users/{id}` | self profile `{display_name?, language?, avatar_url?, color?}` |
 | DELETE | `/internal/v1/users/{id}` | soft delete; protected demo UUIDs rejected |
 | POST | `/internal/v1/notifications` | create a local invite notification |
@@ -176,12 +194,13 @@ Base `/internal/v1`, `x-internal-token` on every request, JSON, snake_case, flat
 | PATCH | `/internal/v1/notifications/{id}` | `{status: read|accepted|declined}` |
 
 Stable errors: `USER_NOT_FOUND`, `USERNAME_TAKEN`, `EMAIL_TAKEN`,
-`PROTECTED_USER`, `NOTIFICATION_NOT_FOUND`, `INVALID_ARGUMENT`, `UNAUTHORIZED`,
-`UNAVAILABLE`.
+`INVALID_CREDENTIALS` (401), `PROTECTED_USER`, `NOTIFICATION_NOT_FOUND`,
+`INVALID_ARGUMENT`, `UNAUTHORIZED`, `UNAVAILABLE`.
 
 `PATCH /users/{id}` requires `x-actor-id` equal to `{id}` (self). Create and
 delete are open to the internal token, matching the no-admin decision. Delete is
-soft and the API enforces the trip-owner guard.
+soft and the API enforces the trip-owner guard. The password is accepted only by
+login and create; it is hashed immediately and never logged or returned.
 
 ## 8. Trips service changes
 
@@ -308,6 +327,7 @@ extend type Query {
 }
 
 extend type Mutation {
+  login(username: String!, password: String!): UserProfile!
   createUser(input: CreateUserInput!): UserProfile!
   deleteUser(userId: ID!): Boolean!
   tripLocalInvite(tripId: ID!, username: String!, role: MemberRole!): LocalInviteResult!
@@ -321,9 +341,14 @@ extend type Subscription {
 }
 ```
 
+`CreateUserInput` is `{ username, password, displayName, language? }`; there is
+no email field. `login` verifies the password in the users service and returns
+the profile; the client stores the UUID and sends `x-user-id` on subsequent
+requests. No JWT is issued.
+
 - `email` on `UserProfile`/`Member` becomes nullable. The frontend is updated in
   the same slice.
-- `registerUser` and `findUserByEmail` are replaced by `createUser` /
+- `registerUser` and `findUserByEmail` are replaced by `login` / `createUser` /
   `listUsers` / `getUserByUsername`; the old fields stay deprecated for one
   release or are removed with the frontend update.
 - `inviteMember` (direct add without notification) is removed from the UI; the
@@ -357,9 +382,10 @@ The users service also rejects the protected UUIDs; it does not know trips.
 
 ## 11. Frontend
 
-- **Login**: fetch `listUsers`, show user cards (demo users included), create a
-  user inline (username + display name), delete a non-protected user. Selecting
-  a user stores the UUID and profile; no password.
+- **Login**: username + password form; the demo pair is shown with the demo
+  password hint; create a user inline (username, display name, password) and
+  delete a non-protected user. No email field. Selecting a user stores the UUID
+  and profile; no password is stored after login.
 - **Session**: store the UUID, username, display name, email, language; send
   `x-user-id`; update the proxy default to the demo UUID.
 - **Notifications**: bell with unread count; `myNotifications` on login;
@@ -380,7 +406,9 @@ Steps:
 
 1. Read platform `users`; map `demo-user`/`demo-friend` to the fixed UUIDs;
    generate UUIDs for other rows; derive unique usernames from email local-part
-   or display name.
+   or display name. Set the seeded demo password hash (`demo123`); for any other
+   legacy row, assign a documented temporary demo password and flag it for
+   reset.
 2. Insert into the users service; seed the two demo users if absent.
 3. Drop `attachment_viewers.user_id` and `user_favorites.user_id` FKs.
 4. Update platform references: `attachment_viewers.user_id`,
@@ -443,7 +471,8 @@ Cutover:
 | Cross-DB UUID migration | Backup both DBs; mapping script with counts/checksums; dry-run |
 | Dropped FKs on attachments/favorites | API validates user IDs through the users service |
 | Extra users-service calls per trip | `batchUsers` once per aggregate; short in-process TTL cache |
-| Header spoofing | Local demo only; document that `x-user-id` is not production auth |
+| Header spoofing | Local demo only; the password gates login, but `x-user-id` is not production auth |
+| Password handling | Argon2id hashes; never log/return; local HTTP inside the cluster only |
 | Delete keeps memberships | Soft delete; members show the last display name; owner delete blocked |
 | Notification/invitation divergence | Compensating decline; accept idempotent; unique `(user, invitation)` |
 | Live subscription single-replica | API is one local process; shared bus is a later concern |
@@ -452,8 +481,8 @@ Cutover:
 
 ## 16. Acceptance evidence
 
-- Users service tests: CRUD, username/email uniqueness, soft delete, protected
-  demo users, notifications.
+- Users service tests: CRUD, username uniqueness, password login/hash,
+  invalid credentials, soft delete, protected demo users, notifications.
 - Trips tests: local invite create/join/decline, email path unaffected.
 - API tests: local/remote `UsersStore`, profile/auth, member enrichment,
   `tripLocalInvite`, accept/decline, subscription.
