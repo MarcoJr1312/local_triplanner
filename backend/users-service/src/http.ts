@@ -158,6 +158,27 @@ export function createHandler(deps: HttpDeps): (req: Request) => Promise<Respons
     makeRoute('POST', '/internal/v1/users', async (ctx) =>
       json(201, await service().createUser(ctx.body))),
 
+    makeRoute('GET', '/internal/v1/users/:id/notifications', async (ctx) =>
+      json(200, {
+        items: await service().listNotifications(
+          ctx.actor,
+          ctx.params.id ?? '',
+          ctx.url.searchParams.get('status'),
+          ctx.url.searchParams.get('limit'),
+        ),
+      }), true),
+
+    makeRoute('POST', '/internal/v1/notifications', async (ctx) => {
+      const result = await service().createNotification(ctx.body);
+      return json(result.created ? 201 : 200, result.notification);
+    }),
+
+    makeRoute('GET', '/internal/v1/notifications/:id', async (ctx) =>
+      json(200, await service().getNotification(ctx.actor, ctx.params.id ?? '')), true),
+
+    makeRoute('PATCH', '/internal/v1/notifications/:id', async (ctx) =>
+      json(200, await service().updateNotification(ctx.actor, ctx.params.id ?? '', ctx.body)), true),
+
     makeRoute('GET', '/internal/v1/users/:id', async (ctx) =>
       json(200, await service().getUser(ctx.params.id ?? ''))),
 

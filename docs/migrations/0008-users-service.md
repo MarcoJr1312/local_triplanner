@@ -189,18 +189,21 @@ Base `/internal/v1`, `x-internal-token` on every request, JSON, snake_case, flat
 | POST | `/internal/v1/users` | create `{username, password, display_name, language?}`; no email |
 | PATCH | `/internal/v1/users/{id}` | self profile `{display_name?, language?, avatar_url?, color?}` |
 | DELETE | `/internal/v1/users/{id}` | soft delete; protected demo UUIDs rejected |
-| POST | `/internal/v1/notifications` | create a local invite notification |
+| POST | `/internal/v1/notifications` | create a local invite notification (idempotent per user+invitation) |
 | GET | `/internal/v1/users/{id}/notifications?status=&limit=` | inbox |
+| GET | `/internal/v1/notifications/{id}` | read one notification (accept/decline flow) |
 | PATCH | `/internal/v1/notifications/{id}` | `{status: read|accepted|declined}` |
 
 Stable errors: `USER_NOT_FOUND`, `USERNAME_TAKEN`, `EMAIL_TAKEN`,
-`INVALID_CREDENTIALS` (401), `PROTECTED_USER`, `NOTIFICATION_NOT_FOUND`,
-`INVALID_ARGUMENT`, `UNAUTHORIZED`, `UNAVAILABLE`.
+`INVALID_CREDENTIALS` (401), `FORBIDDEN` (403), `PROTECTED_USER`,
+`NOTIFICATION_NOT_FOUND`, `INVALID_ARGUMENT`, `UNAUTHORIZED`, `UNAVAILABLE`.
 
-`PATCH /users/{id}` requires `x-actor-id` equal to `{id}` (self). Create and
-delete are open to the internal token, matching the no-admin decision. Delete is
-soft and the API enforces the trip-owner guard. The password is accepted only by
-login and create; it is hashed immediately and never logged or returned.
+`PATCH /users/{id}` requires `x-actor-id` equal to `{id}` (self), and the
+notification reads/updates require `x-actor-id` equal to the notification owner.
+Create and delete are open to the internal token, matching the no-admin decision.
+Delete is soft and the API enforces the trip-owner guard. The password is
+accepted only by login and create; it is hashed immediately and never logged or
+returned.
 
 ## 8. Trips service changes
 

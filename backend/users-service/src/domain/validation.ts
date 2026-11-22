@@ -28,6 +28,56 @@ export function pathUuid(value: string, field = 'user_id'): string {
   return value;
 }
 
+export function pathNotificationId(value: string): string {
+  if (!isUuid(value)) {
+    throw new AppError('NOTIFICATION_NOT_FOUND', 'Notificación no encontrada.');
+  }
+  return value;
+}
+
+export function requiredId(value: unknown, field: string, max = 128): string {
+  return requiredString(value, field, 1, max);
+}
+
+export function notificationRole(value: unknown): 'editor' | 'viewer' {
+  if (value !== 'editor' && value !== 'viewer') {
+    throw new AppError('INVALID_ARGUMENT', "role debe ser 'editor' o 'viewer'.");
+  }
+  return value;
+}
+
+export function notificationStatus(value: unknown): 'read' | 'accepted' | 'declined' {
+  if (value !== 'read' && value !== 'accepted' && value !== 'declined') {
+    throw new AppError(
+      'INVALID_ARGUMENT',
+      "status debe ser 'read', 'accepted' o 'declined'.",
+    );
+  }
+  return value;
+}
+
+export function notificationStatusFilter(value: unknown): string | null {
+  if (value === null || value === undefined || value === '') return null;
+  if (
+    value !== 'unread' &&
+    value !== 'read' &&
+    value !== 'accepted' &&
+    value !== 'declined'
+  ) {
+    throw new AppError('INVALID_ARGUMENT', 'status inválido.');
+  }
+  return value;
+}
+
+export function notificationLimit(value: unknown): number {
+  if (value === null || value === undefined || value === '') return 50;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    throw new AppError('INVALID_ARGUMENT', 'limit inválido.');
+  }
+  return Math.min(parsed, 100);
+}
+
 /** Login and invite lookups normalize casing; the stored value is lowercase. */
 export function normalizeUsername(value: unknown, field = 'username'): string {
   const raw = requiredString(value, field, 1, 64).toLowerCase();

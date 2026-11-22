@@ -6,16 +6,29 @@ import { randomUUID } from 'node:crypto';
 import type { Db } from '../db.ts';
 import { isProtectedUserId } from '../db/seed.ts';
 import { AppError } from '../errors.ts';
+import * as notifications from './notifications-store.ts';
 import * as store from './store.ts';
-import { toPublicUser, type UserPublic } from './types.ts';
+import {
+  toPublicNotification,
+  toPublicUser,
+  type NotificationJoinedRow,
+  type NotificationPublic,
+  type UserPublic,
+} from './types.ts';
 import {
   batchIds,
   loginUsername,
+  notificationLimit,
+  notificationRole,
+  notificationStatus,
+  notificationStatusFilter,
   optionalAvatarUrl,
   optionalColor,
   optionalLanguage,
   optionalString,
+  pathNotificationId,
   pathUuid,
+  requiredId,
   requiredPassword,
   requiredString,
   searchLimit,
@@ -176,6 +189,101 @@ export class UsersService {
     const exists = await store.softDelete(this.db, userId);
     if (!exists) throw new AppError('USER_NOT_FOUND', 'Usuario no encontrado.');
     return { deleted: true };
+  }
+
+  // ------------------------------------------------------- notifications
+
+  async createNotification(
+    body: Record<string, unknown>,
+  ): Promise<{ notification: NotificationPublic; created: boolean }> {
+    const userId = pathUuid(String(body.user_id ?? ''));
+    const target = await store.findActiveById(this.db, userId);
+    if (!target) throw new AppError('USER_NOT_FOUND', 'Usuario no encontrado.');
+
+    const inviterUserId = pathUuid(String(body.inviter_user_id ?? ''));
+    if (inviterUserId === userId) {
+      throw new AppError('INVALID_ARGUMENT', 'No puedes invitarte a ti mismo.');
+    }
+    const inviter = await store.findAnyById(this.db, inviterUserId);
+    if (!inviter) throw new AppError('USER_NOT_FOUND', 'Usuario no encontrado.');
+
+    if (body.type !== undefined && body.type !== 'trip_invite') {
+      throw new AppError('INVALID_ARGUMENT', "type debe ser 'trip_invite'.");
+    }
+
+    const result = await notifications.insert(this.db, {
+      id: randomUUID(),
+      userId,
+      type: 'trip_invite',
+      tripId: requiredId(body.trip_id, 'trip_id'),
+      tripName: requiredId(body.trip_name, 'trip_name', 200),
+      invitationId: requiredId(body.invitation_id, 'invitation_id'),
+      inviterUserId,
+      role: notificationRole(body.role),
+    });
+
+    const row = await notifications.findById(this.db, result.id);
+    if (!row) throw new Error('notification disappeared after insert');
+    return { notification: toPublicNotification(row), created: result.created };
+  }
+
+  async listNotifications(
+    actorId: string,
+    userId: string,
+    status: unknown,
+    limit: unknown,
+  ): Promise<NotificationPublic[]> {
+    const targetId = pathUuid(userId);
+    if (actorId !== targetId) {
+      throw new AppError('FORBIDDEN', 'No autorizado para leer estas notificaciones.');
+    }
+    const rows = await notifications.listForUser(
+      this.db,
+      targetId,
+      notificationStatusFilter(status),
+      notificationLimit(limit),
+    );
+    return rows.map(toPublicNotification);
+  }
+
+  async getNotification(actorId: string, id: string): Promise<NotificationPublic> {
+    return toPublicNotification(await this.requireNotification(actorId, id));
+  }
+
+  async updateNotification(
+    actorId: string,
+    id: string,
+    body: Record<string, unknown>,
+  ): Promise<NotificationPublic> {
+    const current = await this.requireNotification(actorId, id);
+    const next = notificationStatus(body.status);
+
+    // Terminal notifications never flip; marking one read is a harmless no-op.
+    if (current.status === 'accepted' || current.status === 'declined') {
+      if (next !== 'read' && next !== current.status) {
+        throw new AppError('INVALID_ARGUMENT', 'La notificación ya fue resuelta.');
+      }
+      return toPublicNotification(current);
+    }
+    if (next === 'read' && current.status === 'read') {
+      return toPublicNotification(current);
+    }
+
+    await notifications.setStatus(this.db, current.id, next === 'read' ? 'read' : next);
+    const updated = await notifications.findById(this.db, current.id);
+    if (!updated) throw new Error('notification disappeared after update');
+    return toPublicNotification(updated);
+  }
+
+  private async requireNotification(
+    actorId: string,
+    id: string,
+  ): Promise<NotificationJoinedRow> {
+    const row = await notifications.findById(this.db, pathNotificationId(id));
+    if (!row || row.user_id !== actorId) {
+      throw new AppError('NOTIFICATION_NOT_FOUND', 'Notificación no encontrada.');
+    }
+    return row;
   }
 
   private async requireAny(id: string) {
