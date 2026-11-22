@@ -13,15 +13,14 @@ to Google Maps routes or an Uber deep link.
 The product UI is **Spanish by default**, with an **es/en** switch in the
 profile settings.
 
-> **Status:** **v1.2.2** - one-command Docker Compose demo plus per-service
-> CI/CD and multi-arch Docker Hub publishing. Firebase and AWS are removed from
-> the runtime; place search defaults to the committed Toronto catalogue in
-> MongoDB, with an optional HasData BYOK provider cached in MongoDB. Email is
-> optional: the recruiter can add a Resend key in Settings → Email delivery
-> (BYOK), or keep the copyable join link.
+> **Status:** **v1.4.0** — users microservice with username/password login,
+> local invite notifications and its own PostgreSQL. The v1.x Compose/Helm
+> services, optional HasData/Resend BYOK and optional LLM providers remain.
+> Firebase and AWS are removed from the runtime.
 
 ## Documentation
 
+- [Release notes v1.4.0](docs/RELEASE_NOTES_v1.4.0.md)
 - [10-minute demo tour](docs/DEMO_TOUR.md)
 - [Troubleshooting](docs/TROUBLESHOOTING.md)
 - [Security notes](docs/SECURITY.md)
