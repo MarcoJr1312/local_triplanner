@@ -1,8 +1,7 @@
-// Profile update on Postgres. Avatars go through Storage, so the same code
-// works with local disk and S3.
+// Profile update. Avatar bytes go through Storage (API-owned); the users store
+// keeps the URL, display name and language.
 
-import type { UserRow } from '../schema-types.ts';
-import type { AsyncDb } from './db.ts';
+import type { UsersStore, UserRecord, UpdateUserData } from '../users/types.ts';
 import type { Storage } from '../storage.ts';
 
 export const SUPPORTED_LANGUAGES = ['es', 'en'] as const;
@@ -56,34 +55,30 @@ async function removeAvatarFiles(storage: Storage, userId: string): Promise<void
 }
 
 export async function updateMyProfile(
-  db: AsyncDb,
+  users: UsersStore,
   storage: Storage,
   userId: string,
   input: UpdateMyProfileInput,
-): Promise<UserRow> {
+): Promise<UserRecord> {
   const displayName = validateDisplayName(input.displayName);
-  const language = input.language ?? null;
+  if (input.language != null && !isValidLanguage(input.language)) {
+    throw new Error('Idioma no soportado.');
+  }
+  const language = input.language ?? undefined;
+
+  const patch: UpdateUserData = { displayName };
+  if (language !== undefined) patch.language = language;
 
   if (input.avatarDataUrl) {
     const { ext, buffer } = decodeAvatarDataUrl(input.avatarDataUrl);
     const key = `avatars/${userId}.${ext}`;
     await removeAvatarFiles(storage, userId);
     await storage.put(key, buffer);
-    await db
-      .prepare('UPDATE users SET display_name = ?, avatar_url = ?, language = COALESCE(?, language) WHERE id = ?')
-      .run(displayName, storage.publicPath(key), language, userId);
+    patch.avatarUrl = storage.publicPath(key);
   } else if (input.avatarRemove) {
     await removeAvatarFiles(storage, userId);
-    await db
-      .prepare('UPDATE users SET display_name = ?, avatar_url = NULL, language = COALESCE(?, language) WHERE id = ?')
-      .run(displayName, language, userId);
-  } else {
-    await db
-      .prepare('UPDATE users SET display_name = ?, language = COALESCE(?, language) WHERE id = ?')
-      .run(displayName, language, userId);
+    patch.avatarUrl = null;
   }
 
-  const row = await db.prepare('SELECT * FROM users WHERE id = ?').get<UserRow>(userId);
-  if (!row) throw new Error('Usuario no encontrado.');
-  return row;
+  return users.updateUser(userId, patch);
 }

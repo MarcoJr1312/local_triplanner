@@ -1,35 +1,44 @@
 // Demo authentication for the local runner.
-// No Firebase: the request identity comes from `x-user-id`, defaulting to the
-// seeded demo user. Two identities support collaboration/invite flows.
+// No Firebase and no JWT: the request identity comes from `x-user-id`. In
+// USERS_MODE=local the platform table backs login; in remote mode the users
+// service owns accounts and this module only exposes identity helpers.
 
-import type { Profile, UserRow } from '../schema-types.ts';
-import type { AsyncDb } from './db.ts';
+import type { Profile } from '../schema-types.ts';
 
 export const DEMO_USER_ID = 'demo-user';
 export const DEMO_FRIEND_ID = 'demo-friend';
 
-const DEMO_USERS = [
-  { id: DEMO_USER_ID, email: 'demo@triplanner.local', name: 'Demo', color: '#6366f1' },
-  { id: DEMO_FRIEND_ID, email: 'friend@triplanner.local', name: 'Demo Friend', color: '#10b981' },
-] as const;
+// Fixed UUIDs from the users contract; used by the users service, the M10.10
+// migration and the frontend after cutover.
+export const DEMO_USER_UUID = '11111111-1111-4111-8111-111111111111';
+export const DEMO_FRIEND_UUID = '22222222-2222-4222-8222-222222222222';
 
-// Idempotent: both demo rows survive restarts and repeated boots.
-export async function ensureDemoUsers(db: AsyncDb): Promise<void> {
-  for (const user of DEMO_USERS) {
-    await db
-      .prepare(
-        `INSERT INTO users (id, email, display_name, color)
-         VALUES (?, ?, ?, ?)
-         ON CONFLICT DO NOTHING`,
-      )
-      .run(user.id, user.email, user.name, user.color);
-  }
+export const DEMO_PASSWORD = 'demo123';
+
+interface DemoUser {
+  id: string;
+  username: string;
+  email: string;
+  name: string;
+  color: string;
 }
 
-// Kept for callers/tests that only need the owner identity.
-export async function ensureDemoUser(db: AsyncDb): Promise<void> {
-  await ensureDemoUsers(db);
-}
+export const DEMO_USERS: readonly DemoUser[] = [
+  {
+    id: DEMO_USER_ID,
+    username: 'demo',
+    email: 'demo@triplanner.local',
+    name: 'Demo',
+    color: '#6366f1',
+  },
+  {
+    id: DEMO_FRIEND_ID,
+    username: 'demo-friend',
+    email: 'friend@triplanner.local',
+    name: 'Demo Friend',
+    color: '#10b981',
+  },
+];
 
 export function getCurrentUserId(
   request: Request | { headers: Headers | Record<string, string> } | undefined,
@@ -39,12 +48,22 @@ export function getCurrentUserId(
   return typeof value === 'string' && value.trim() ? value.trim() : DEMO_USER_ID;
 }
 
-export function toProfile(row: UserRow): Profile {
+interface ProfileSource {
+  id: string;
+  email: string | null;
+  display_name: string;
+  color?: string | null;
+  avatar_url?: string | null;
+  language?: string | null;
+}
+
+export function toProfile(row: ProfileSource): Profile {
   return {
     userId: row.id,
-    email: row.email,
+    // GraphQL keeps `email: String!` until the M10.9 frontend switch.
+    email: row.email ?? '',
     displayName: row.display_name,
-    color: row.color,
+    color: row.color ?? null,
     avatarUrl: row.avatar_url ?? null,
     language: row.language ?? 'en',
   };

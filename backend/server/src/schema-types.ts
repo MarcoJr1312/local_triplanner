@@ -9,12 +9,15 @@ export type { AsyncDb as Db } from './pg/db.ts';
 
 export interface UserRow {
   id: string;
-  email: string;
+  username?: string | null;
+  email: string | null;
+  password_hash?: string | null;
   display_name: string;
   color: string | null;
   avatar_url: string | null;
   language: string;
   created_at: string;
+  deleted_at?: string | null;
 }
 
 export interface LocationRow {

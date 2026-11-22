@@ -5,7 +5,6 @@ import { GraphQLError } from 'graphql';
 import type { LocationCatalogue } from './catalogue/types.ts';
 import type { Storage } from './storage.ts';
 import type { AsyncDb } from './pg/db.ts';
-import { toProfile } from './pg/auth.ts';
 import { listPresence, touchPresence } from './presence.ts';
 import { buildJoinUrl } from './invite-links.ts';
 import { updateMyProfile, isValidLanguage } from './pg/profile.ts';
@@ -45,7 +44,9 @@ import {
 } from './locations-settings.ts';
 import type { TripItemRow, TripMemberRow, TripRowFull } from './trips/types.ts';
 import type { TripData, TripRole, TripsStore, UpdateTripInput } from './trips/types.ts';
-import type { LocationRow, Profile, UserRow } from './schema-types.ts';
+import type { LocationRow, Profile } from './schema-types.ts';
+import type { UserRecord, UsersStore } from './users/types.ts';
+import { DEMO_FRIEND_ID, DEMO_FRIEND_UUID, toProfile } from './pg/auth.ts';
 
 export interface PubSub {
   publish(topic: string, payload: Record<string, unknown>): void;
@@ -59,6 +60,7 @@ export interface Ctx {
   currentUserId: string;
   pubsub: PubSub;
   trips: TripsStore;
+  users: UsersStore;
   syncInterests?: InterestsSync;
 }
 
@@ -272,15 +274,16 @@ const toMember = (row: MemberRow): MemberGql => ({
   avatarUrl: row.avatar_url,
 });
 
-function slugEmail(displayName: string | null | undefined): string {
-  const slug =
+function slugHandle(displayName: string | null | undefined): string {
+  return (
     (displayName ?? '')
       .toLowerCase()
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '')
       .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '') || 'user';
-  return `${slug}@demo.local`;
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 28) || 'user'
+  );
 }
 
 function gqlError(code: string, message: string): GraphQLError {
@@ -299,8 +302,6 @@ function locationsSettingsError(error: unknown, fallback: string): GraphQLError 
 
 const nowIso = (): string => new Date().toISOString();
 
-const DEMO_FRIEND_ID = 'demo-friend';
-
 function normalizeTimeZone(value: string | null | undefined): string {
   const tz = value?.trim();
   if (!tz) return 'UTC';
@@ -313,28 +314,40 @@ function normalizeTimeZone(value: string | null | undefined): string {
 }
 
 async function ensureUser(
-  db: AsyncDb,
+  users: UsersStore,
   { userId, email, displayName }: { userId?: string | null; email?: string | null; displayName?: string | null },
-): Promise<UserRow> {
-  let user = userId ? await db.prepare('SELECT * FROM users WHERE id = ?').get<UserRow>(userId) : undefined;
-  if (!user && email) user = (await db.prepare('SELECT * FROM users WHERE email = ?').get<UserRow>(email)) ?? undefined;
-  if (user) return user;
-  const id = userId ?? randomUUID();
-  const em = email ?? slugEmail(displayName ?? 'member');
-  const dn = displayName ?? 'Member';
-  await db
-    .prepare('INSERT INTO users (id, email, display_name, color) VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING')
-    .run(id, em, dn, '#64748b');
-  const created = await db.prepare('SELECT * FROM users WHERE id = ?').get<UserRow>(id);
-  if (!created) throw gqlError('USER_CREATE_FAILED', 'No se pudo crear el usuario.');
-  return created;
+): Promise<UserRecord> {
+  if (userId) {
+    const found = await users.getUser(userId);
+    if (found && !found.deleted_at) return found;
+  }
+  if (email) {
+    const found = await users.getByEmail(email);
+    if (found) return found;
+  }
+
+  const base =
+    (email?.split('@')[0] ?? displayName ?? 'member')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 20) || 'member';
+  const username = `${base}-${randomUUID().slice(0, 6)}`;
+  return users.createUser({
+    username,
+    password: randomUUID(),
+    displayName: displayName ?? 'Member',
+    language: 'es',
+  });
 }
 
-async function requireCurrentUser(db: AsyncDb, userId: string): Promise<string> {
+async function requireCurrentUser(users: UsersStore, userId: string): Promise<string> {
   if (!userId) throw gqlError('AUTH_REQUIRED', 'Necesitas iniciar sesión.');
-  const row = await db.prepare('SELECT 1 AS ok FROM users WHERE id = ?').get(userId);
-  if (!row) throw gqlError('AUTH_REQUIRED', 'Necesitas iniciar sesión.');
-  return userId;
+  const row = await users.getUser(userId);
+  if (!row || row.deleted_at) throw gqlError('AUTH_REQUIRED', 'Necesitas iniciar sesión.');
+  return row.id;
 }
 
 interface LlmSettingsGql {
@@ -451,26 +464,11 @@ function publishTrip(ctx: Ctx, tripId: string, mutationType: string, entity: unk
   });
 }
 
-async function enrichMembers(db: AsyncDb, members: TripMemberRow[]): Promise<MemberRow[]> {
+async function enrichMembers(users: UsersStore, members: TripMemberRow[]): Promise<MemberRow[]> {
   if (members.length === 0) return [];
 
-  const ids = members.map((member) => member.user_id);
-  const placeholders = ids.map(() => '?').join(',');
-  const users = await db
-    .prepare(
-      `SELECT id, display_name, email, color, avatar_url
-         FROM users
-        WHERE id IN (${placeholders})`,
-    )
-    .all<{
-      id: string;
-      display_name: string | null;
-      email: string | null;
-      color: string | null;
-      avatar_url: string | null;
-    }>(...ids);
-
-  const byId = new Map(users.map((user) => [user.id, user]));
+  const rows = await users.batchUsers(members.map((member) => member.user_id));
+  const byId = new Map(rows.map((user) => [user.id, user]));
   return members.map((member) => {
     const user = byId.get(member.user_id);
     return {
@@ -486,8 +484,16 @@ async function enrichMembers(db: AsyncDb, members: TripMemberRow[]): Promise<Mem
   });
 }
 
+/** Adapter for attachment uploader names; one users-service batch call. */
+function uploaderNames(ctx: Ctx) {
+  return async (ids: readonly string[]): Promise<Map<string, string>> => {
+    const rows = await ctx.users.batchUsers(ids);
+    return new Map(rows.map((user) => [user.id, user.display_name]));
+  };
+}
+
 async function buildTrip(ctx: Ctx, data: TripData): Promise<TripGql> {
-  const members = (await enrichMembers(ctx.db, data.members)).map(toMember);
+  const members = (await enrichMembers(ctx.users, data.members)).map(toMember);
 
   return {
     id: data.trip.id,
@@ -567,8 +573,8 @@ export const resolvers: {
 
     findUserByEmail: async (_, args, ctx) => {
       const { email } = args as Args<{ email: string }>;
-      const row = await ctx.db.prepare('SELECT * FROM users WHERE email = ?').get<UserRow>(email);
-      return row ? toProfile(row) : null;
+      const user = await ctx.users.getByEmail(email);
+      return user ? toProfile(user) : null;
     },
 
     searchLocations: async (_, args, ctx) => {
@@ -614,9 +620,7 @@ export const resolvers: {
         throw error;
       }
 
-      const owner = await ctx.db
-        .prepare('SELECT display_name FROM users WHERE id = ?')
-        .get<{ display_name: string | null }>(preview.trip.owner_id);
+      const owner = await ctx.users.getUser(preview.trip.owner_id);
 
       return {
         id: preview.trip.id,
@@ -628,8 +632,8 @@ export const resolvers: {
     },
 
     getMyProfile: async (_, __, ctx) => {
-      const row = await ctx.db.prepare('SELECT * FROM users WHERE id = ?').get<UserRow>(ctx.currentUserId);
-      return row ? toProfile(row) : null;
+      const user = await ctx.users.getUser(ctx.currentUserId);
+      return user && !user.deleted_at ? toProfile(user) : null;
     },
 
     suggestionChats: (_, args, ctx) => {
@@ -638,7 +642,7 @@ export const resolvers: {
     },
 
     getMyInterests: async (_, __, ctx) => {
-      const userId = await requireCurrentUser(ctx.db, ctx.currentUserId);
+      const userId = await requireCurrentUser(ctx.users, ctx.currentUserId);
       return listUserInterests(ctx.db, userId);
     },
 
@@ -651,7 +655,7 @@ export const resolvers: {
     },
 
     getEmailSettings: async (_, __, ctx) => {
-      await requireCurrentUser(ctx.db, ctx.currentUserId);
+      await requireCurrentUser(ctx.users, ctx.currentUserId);
       try {
         return await emailSettingsClient.get();
       } catch (error) {
@@ -663,7 +667,7 @@ export const resolvers: {
     },
 
     getLocationsSettings: async (_, __, ctx) => {
-      await requireCurrentUser(ctx.db, ctx.currentUserId);
+      await requireCurrentUser(ctx.users, ctx.currentUserId);
       try {
         return await locationsSettingsClient.get();
       } catch (error) {
@@ -682,14 +686,21 @@ export const resolvers: {
     registerUser: async (_, args, ctx) => {
       const { input } = args as Args<{ input: RegisterUserInput }>;
       const displayName = input.displayName.trim();
-      const email = slugEmail(displayName);
-      const existing = await ctx.db.prepare('SELECT * FROM users WHERE email = ?').get<UserRow>(email);
+      if (!displayName) {
+        throw gqlError('INVALID_ARGUMENT', 'El nombre no puede estar vacío.');
+      }
+      // Deprecated field: kept for old clients until M10.8 replaces it with
+      // createUser. Username is derived and the generated password is unused.
+      const username = slugHandle(displayName);
+      const existing = await ctx.users.getByUsername(username);
       if (existing) return toProfile(existing);
-      const id = randomUUID();
-      await ctx.db
-        .prepare('INSERT INTO users (id, email, display_name, color) VALUES (?, ?, ?, ?)')
-        .run(id, email, displayName, '#64748b');
-      return { userId: id, email, displayName };
+      const created = await ctx.users.createUser({
+        username,
+        password: randomUUID(),
+        displayName,
+        language: 'es',
+      });
+      return toProfile(created);
     },
 
     createTrip: async (_, args, ctx) => {
@@ -750,7 +761,7 @@ export const resolvers: {
       if (role !== 'editor' && role !== 'viewer') {
         throw gqlError('INVALID_MEMBER_ROLE', 'Rol de miembro no válido.');
       }
-      const user = await ensureUser(ctx.db, { userId, email, displayName });
+      const user = await ensureUser(ctx.users, { userId, email, displayName });
       const data = await ctx.trips.inviteMember(ctx.currentUserId, tripId, user.id, role);
       publishTrip(ctx, tripId, 'inviteMember', { tripId, userId: user.id, role }, ctx.currentUserId);
       return buildTrip(ctx, data);
@@ -1032,28 +1043,25 @@ export const resolvers: {
       // link does not attach the invited address to the root Demo owner. The
       // session stays on the current user either way.
       const targetUserId = (memberId ?? '').trim() || ctx.currentUserId;
-      if (targetUserId !== ctx.currentUserId && targetUserId !== DEMO_FRIEND_ID) {
+      const isDemoFriend =
+        targetUserId === DEMO_FRIEND_ID || targetUserId === DEMO_FRIEND_UUID;
+      if (targetUserId !== ctx.currentUserId && !isDemoFriend) {
         throw gqlError('FORBIDDEN_MEMBER', 'No puedes aceptar la invitacion para ese usuario.');
       }
-      if (targetUserId !== ctx.currentUserId) {
-        const target = await ctx.db.prepare('SELECT 1 AS ok FROM users WHERE id = ?').get(targetUserId);
-        if (!target) throw gqlError('MEMBER_NOT_FOUND', 'El miembro demo no existe.');
-      }
 
-      const owner = await ctx.db
-        .prepare('SELECT display_name, email, language FROM users WHERE id = ?')
-        .get<{ display_name: string | null; email: string | null; language: string | null }>(
-          preview.trip.owner_id,
-        );
-      const member = await ctx.db
-        .prepare('SELECT display_name FROM users WHERE id = ?')
-        .get<{ display_name: string | null }>(targetUserId);
+      const [owner, member] = await Promise.all([
+        ctx.users.getUser(preview.trip.owner_id),
+        ctx.users.getUser(targetUserId),
+      ]);
+      if (!member || member.deleted_at) {
+        throw gqlError('MEMBER_NOT_FOUND', 'El miembro demo no existe.');
+      }
 
       const notify = owner?.email
         ? {
             ownerEmail: owner.email,
-            ownerName: owner.display_name ?? 'Demo',
-            memberName: member?.display_name ?? 'Demo Friend',
+            ownerName: owner.display_name,
+            memberName: member.display_name,
             language: owner.language === 'en' ? ('en' as const) : ('es' as const),
           }
         : undefined;
@@ -1091,7 +1099,7 @@ export const resolvers: {
         throw gqlError('INVALID_LANGUAGE', 'Idioma no vÃ¡lido: usa "es" o "en".');
       }
       try {
-        const row = await updateMyProfile(ctx.db, ctx.storage, ctx.currentUserId, {
+        const row = await updateMyProfile(ctx.users, ctx.storage, ctx.currentUserId, {
           displayName: input.displayName,
           avatarDataUrl: input.avatarDataUrl ?? null,
           avatarRemove: input.avatarRemove ?? false,
@@ -1139,6 +1147,7 @@ export const resolvers: {
             created.id,
             ctx.currentUserId,
             (trip) => ctx.trips.isMember(ctx.currentUserId, trip),
+            uploaderNames(ctx),
           )) ?? created;
         publishTrip(ctx, tripId, 'addAttachment', { itemId, attachmentId: attachment.id }, ctx.currentUserId);
         return attachment;
@@ -1175,6 +1184,7 @@ export const resolvers: {
         attachmentId,
         ctx.currentUserId,
         (trip) => ctx.trips.isMember(ctx.currentUserId, trip),
+        uploaderNames(ctx),
       );
       publishTrip(ctx, row.trip_id, 'updateAttachmentViewers', { attachmentId }, ctx.currentUserId);
       return attachment;
@@ -1194,6 +1204,7 @@ export const resolvers: {
         attachmentId,
         ctx.currentUserId,
         (trip) => ctx.trips.isMember(ctx.currentUserId, trip),
+        uploaderNames(ctx),
       );
       await removeAttachment(ctx.db, ctx.storage, attachmentId);
       publishTrip(ctx, row.trip_id, 'removeAttachment', { attachmentId }, ctx.currentUserId);
@@ -1202,7 +1213,7 @@ export const resolvers: {
 
     setMyInterests: async (_, args, ctx) => {
       const { terms } = args as Args<{ terms: string[] }>;
-      const userId = await requireCurrentUser(ctx.db, ctx.currentUserId);
+      const userId = await requireCurrentUser(ctx.users, ctx.currentUserId);
       return replaceUserInterests(ctx.db, userId, terms, ctx.syncInterests ?? syncInterestsToAgent);
     },
 
@@ -1216,7 +1227,7 @@ export const resolvers: {
           clearKey?: boolean | null;
         };
       }>;
-      await requireCurrentUser(ctx.db, ctx.currentUserId);
+      await requireCurrentUser(ctx.users, ctx.currentUserId);
       try {
         return await agentLlmConfig({
           provider: input.provider,
@@ -1235,7 +1246,7 @@ export const resolvers: {
 
     updateEmailSettings: async (_, args, ctx) => {
       const { input } = args as Args<{ input: UpdateEmailSettingsInput }>;
-      await requireCurrentUser(ctx.db, ctx.currentUserId);
+      await requireCurrentUser(ctx.users, ctx.currentUserId);
       try {
         return await emailSettingsClient.update(input);
       } catch (error) {
@@ -1245,7 +1256,7 @@ export const resolvers: {
 
     updateLocationsSettings: async (_, args, ctx) => {
       const { input } = args as Args<{ input: UpdateLocationsSettingsInput }>;
-      await requireCurrentUser(ctx.db, ctx.currentUserId);
+      await requireCurrentUser(ctx.users, ctx.currentUserId);
       try {
         return await locationsSettingsClient.update(input);
       } catch (error) {
@@ -1326,8 +1337,13 @@ export const resolvers: {
   TripItem: {
     attachments: (parent, __, ctx) => {
       const { id } = parent as { id: string };
-      return listAttachmentsByItem(ctx.db, ctx.storage, id, ctx.currentUserId, (tripId) =>
-        ctx.trips.isMember(ctx.currentUserId, tripId),
+      return listAttachmentsByItem(
+        ctx.db,
+        ctx.storage,
+        id,
+        ctx.currentUserId,
+        (tripId) => ctx.trips.isMember(ctx.currentUserId, tripId),
+        uploaderNames(ctx),
       );
     },
     isFavorite: (parent, __, ctx) => {

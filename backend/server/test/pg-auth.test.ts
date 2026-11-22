@@ -8,10 +8,10 @@ import { migrate } from '../src/db/migrate.ts';
 import {
   DEMO_FRIEND_ID,
   DEMO_USER_ID,
-  ensureDemoUsers,
   getCurrentUserId,
   toProfile,
 } from '../src/pg/auth.ts';
+import { ensureLocalDemoUsers } from '../src/users/local.ts';
 
 let db: PgDb | null = null;
 
@@ -37,17 +37,25 @@ after(async () => {
 describe('demo auth on Postgres', () => {
   test('ensureDemoUsers is idempotent and seeds both identities', async () => {
     if (!db) return;
-    await ensureDemoUsers(db);
-    await ensureDemoUsers(db);
+    await ensureLocalDemoUsers(db);
+    await ensureLocalDemoUsers(db);
 
     const rows = await db
-      .prepare('SELECT id, email, display_name FROM users WHERE id IN (?, ?) ORDER BY id')
+      .prepare(
+        'SELECT id, username, email, display_name, password_hash FROM users WHERE id IN (?, ?) ORDER BY id',
+      )
       .all(DEMO_FRIEND_ID, DEMO_USER_ID);
     assert.equal(rows.length, 2);
 
     const byId = new Map(rows.map((row) => [(row as { id: string }).id, row]));
+    assert.equal((byId.get(DEMO_USER_ID) as { username: string }).username, 'demo');
+    assert.equal((byId.get(DEMO_FRIEND_ID) as { username: string }).username, 'demo-friend');
     assert.equal((byId.get(DEMO_USER_ID) as { email: string }).email, 'demo@triplanner.local');
     assert.equal((byId.get(DEMO_FRIEND_ID) as { email: string }).email, 'friend@triplanner.local');
+    assert.match(
+      (byId.get(DEMO_USER_ID) as { password_hash: string }).password_hash,
+      /^\$argon2id\$/,
+    );
   });
 
   test('request without headers falls back to the demo user', () => {
@@ -72,7 +80,6 @@ describe('demo auth on Postgres', () => {
       color: null,
       avatar_url: 'http://img',
       language: 'en',
-      created_at: '2026-01-01T00:00:00.000Z',
     });
     assert.deepEqual(profile, {
       userId: 'u1',

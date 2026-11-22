@@ -11,15 +11,53 @@
 CREATE EXTENSION IF NOT EXISTS vector;
 
 -- ============================= USERS =============================
+-- During the M10 cutover this table backs the local users adapter only. The
+-- users service owns accounts after the fixed-UUID migration; M10.13 drops it.
+-- Email is optional (accounts are created with username + password).
 CREATE TABLE IF NOT EXISTS users (
   id              text PRIMARY KEY,
-  email           text NOT NULL UNIQUE,
+  username        text,
+  email           text UNIQUE,
+  password_hash   text,
   display_name    text NOT NULL,
   color           text,
   avatar_url      text,
   language        text NOT NULL DEFAULT 'en',
-  created_at      timestamptz NOT NULL DEFAULT now()
+  created_at      timestamptz NOT NULL DEFAULT now(),
+  deleted_at      timestamptz
 );
+
+ALTER TABLE users ALTER COLUMN email DROP NOT NULL;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS username text;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash text;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS deleted_at timestamptz;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username_active
+  ON users (lower(username)) WHERE deleted_at IS NULL AND username IS NOT NULL;
+
+-- ========================== NOTIFICATIONS ========================
+-- Local invite inbox for USERS_MODE=local only. The users service owns this
+-- table after the cutover; user ids stay opaque (no FK) because the service is
+-- the authority. M10.13 drops it.
+CREATE TABLE IF NOT EXISTS notifications (
+  id              text PRIMARY KEY,
+  user_id         text NOT NULL,
+  type            text NOT NULL CHECK (type IN ('trip_invite')),
+  trip_id         text NOT NULL,
+  trip_name       text NOT NULL,
+  invitation_id   text NOT NULL,
+  inviter_user_id text,
+  role            text NOT NULL CHECK (role IN ('editor', 'viewer')),
+  status          text NOT NULL DEFAULT 'unread'
+                    CHECK (status IN ('unread', 'read', 'accepted', 'declined')),
+  created_at      timestamptz NOT NULL DEFAULT now(),
+  read_at         timestamptz
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_notifications_invitation
+  ON notifications(user_id, invitation_id);
+CREATE INDEX IF NOT EXISTS idx_notifications_user
+  ON notifications(user_id, created_at DESC);
 
 -- ============================ TRIPS =============================
 -- Trips, memberships, items and invitations are owned by the trips service
@@ -63,22 +101,30 @@ CREATE INDEX IF NOT EXISTS idx_item_attachments_item ON item_attachments(item_id
 CREATE INDEX IF NOT EXISTS idx_item_attachments_trip ON item_attachments(trip_id);
 
 -- ======================= ATTACHMENT VIEWERS ========================
+-- user_id is an opaque users-service id: no cross-database FK.
 CREATE TABLE IF NOT EXISTS attachment_viewers (
   attachment_id text NOT NULL REFERENCES item_attachments(id) ON DELETE CASCADE,
-  user_id       text NOT NULL REFERENCES users(id),
+  user_id       text NOT NULL,
   PRIMARY KEY (attachment_id, user_id)
 );
+
+ALTER TABLE attachment_viewers
+  DROP CONSTRAINT IF EXISTS attachment_viewers_user_id_fkey;
 
 CREATE INDEX IF NOT EXISTS idx_attachment_viewers_user ON attachment_viewers(user_id);
 
 -- =========================== USER FAVORITES ==========================
--- location_id references the DynamoDB catalogue; deliberately no FK.
+-- location_id references the locations catalogue; user_id is opaque:
+-- deliberately no foreign keys.
 CREATE TABLE IF NOT EXISTS user_favorites (
-  user_id     text NOT NULL REFERENCES users(id),
+  user_id     text NOT NULL,
   location_id text NOT NULL,
   created_at  timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (user_id, location_id)
 );
+
+ALTER TABLE user_favorites
+  DROP CONSTRAINT IF EXISTS user_favorites_user_id_fkey;
 
 -- ========================== USER INTERESTS ==========================
 CREATE TABLE IF NOT EXISTS user_interests (

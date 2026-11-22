@@ -14,6 +14,7 @@ import type { LocationCatalogue } from './catalogue/types.ts';
 import type { AsyncDb } from './pg/db.ts';
 import type { TripMemberRow } from './trips/types.ts';
 import type { TripsStore } from './trips/types.ts';
+import type { UsersStore } from './users/types.ts';
 import type { LocationRow } from './schema-types.ts';
 
 const SEARCH_RADIUS_KM = 75;
@@ -40,6 +41,7 @@ export interface InternalDeps {
   catalogue: LocationCatalogue;
   internalToken: string;
   trips: TripsStore;
+  users: UsersStore;
 }
 
 function matchesToken(expected: string, provided: string): boolean {
@@ -90,10 +92,8 @@ function headerUserEmail(req: IncomingMessage): string | null {
 async function resolveUserId(deps: InternalDeps, req: IncomingMessage): Promise<string | null> {
   const email = headerUserEmail(req);
   if (email) {
-    const row = await deps.db
-      .prepare('SELECT id FROM users WHERE LOWER(email) = LOWER(?)')
-      .get<{ id: string }>(email.trim());
-    if (row) return row.id;
+    const user = await deps.users.getByEmail(email);
+    if (user) return user.id;
   }
   return headerUserId(req);
 }
@@ -133,17 +133,13 @@ function respondTripError(res: ServerResponse, error: unknown): boolean {
 }
 
 async function memberNames(
-  db: AsyncDb,
+  users: UsersStore,
   members: TripMemberRow[],
 ): Promise<{ userId: string; displayName: string; role: string }[]> {
   if (members.length === 0) return [];
 
-  const ids = members.map((member) => member.user_id);
-  const placeholders = ids.map(() => '?').join(',');
-  const users = await db
-    .prepare(`SELECT id, display_name FROM users WHERE id IN (${placeholders})`)
-    .all<{ id: string; display_name: string | null }>(...ids);
-  const byId = new Map(users.map((user) => [user.id, user.display_name]));
+  const rows = await users.batchUsers(members.map((member) => member.user_id));
+  const byId = new Map(rows.map((user) => [user.id, user.display_name]));
 
   return members.map((member) => ({
     userId: member.user_id,
@@ -189,7 +185,7 @@ async function handleTripContext(deps: InternalDeps, req: IncomingMessage, res: 
     byDay.set(day, list);
   }
 
-  const langRow = await deps.db.prepare('SELECT language FROM users WHERE id = ?').get<{ language: string | null }>(userId);
+  const user = await deps.users.getUser(userId);
 
   json(res, 200, {
     userId,
@@ -206,8 +202,8 @@ async function handleTripContext(deps: InternalDeps, req: IncomingMessage, res: 
       spent: data.spent,
     },
     days: [...byDay.entries()].map(([date, items]) => ({ date, items })),
-    members: await memberNames(deps.db, data.members),
-    userLanguage: langRow?.language || 'en',
+    members: await memberNames(deps.users, data.members),
+    userLanguage: user?.language || 'en',
     interests: await listUserInterests(deps.db, userId),
   });
 }

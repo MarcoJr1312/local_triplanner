@@ -14,15 +14,12 @@ import {
 import type { Storage } from '../storage.ts';
 import type { AsyncDb } from './db.ts';
 
-interface AttachmentRowWithUploader extends AttachmentRow {
-  uploaded_by_name: string | null;
-}
+interface AttachmentRowWithUploader extends AttachmentRow {}
 
-const ATTACHMENT_SELECT = `
-  SELECT a.*, u.display_name AS uploaded_by_name
-  FROM item_attachments a
-  LEFT JOIN users u ON u.id = a.created_by
-`;
+/** Resolves display names through the users store; never reads users here. */
+export type UploaderNames = (ids: readonly string[]) => Promise<Map<string, string>>;
+
+const ATTACHMENT_SELECT = 'SELECT a.* FROM item_attachments a';
 
 export async function listAttachmentViewerIds(db: AsyncDb, attachmentId: string): Promise<string[]> {
   const rows = await db
@@ -79,6 +76,7 @@ export async function toAttachmentGql(
   storage: Storage,
   row: AttachmentRowWithUploader,
   callerUserId: string | null,
+  uploadedByName: string | null,
   signUrls = Boolean(callerUserId),
 ): Promise<AttachmentGql> {
   const isUploader = callerUserId !== null && callerUserId === row.created_by;
@@ -91,7 +89,7 @@ export async function toAttachmentGql(
     sizeBytes: row.size_bytes,
     url: callerUserId && signUrls ? signAttachmentUrl(publicPath, callerUserId) : publicPath,
     createdAt: row.created_at,
-    uploadedByName: row.uploaded_by_name ?? null,
+    uploadedByName,
     viewerIds,
     visibility: row.visibility === 'legacy' || (await hasViewerRows(db, row.id)) ? 'shared' : 'private',
     createdBy: row.created_by,
@@ -104,17 +102,30 @@ export async function listAttachmentsByItem(
   itemId: string,
   userId?: string | null,
   isMember?: (tripId: string) => Promise<boolean>,
+  resolveUploaders?: UploaderNames,
 ): Promise<AttachmentGql[]> {
   const rows = await db
     .prepare(`${ATTACHMENT_SELECT} WHERE a.item_id = ? ORDER BY a.created_at ASC`)
     .all<AttachmentRowWithUploader>(itemId);
+
+  const uploaders = resolveUploaders
+    ? await resolveUploaders([...new Set(rows.map((row) => row.created_by))])
+    : new Map<string, string>();
 
   const visible: AttachmentGql[] = [];
   for (const row of rows) {
     if (userId && !(await canViewAttachment(db, row.id, userId, isMember ?? (async () => false)))) {
       continue;
     }
-    visible.push(await toAttachmentGql(db, storage, row, userId ?? null));
+    visible.push(
+      await toAttachmentGql(
+        db,
+        storage,
+        row,
+        userId ?? null,
+        uploaders.get(row.created_by) ?? null,
+      ),
+    );
   }
   return visible;
 }
@@ -132,11 +143,22 @@ export async function getAttachmentForUser(
   attachmentId: string,
   userId: string,
   isMember: (tripId: string) => Promise<boolean>,
+  resolveUploaders?: UploaderNames,
 ): Promise<AttachmentGql | null> {
   const row = await findAttachment(db, attachmentId);
   if (!row) return null;
   if (!(await canViewAttachment(db, attachmentId, userId, isMember))) return null;
-  return toAttachmentGql(db, storage, row, userId, true);
+  const uploaders = resolveUploaders
+    ? await resolveUploaders([row.created_by])
+    : new Map<string, string>();
+  return toAttachmentGql(
+    db,
+    storage,
+    row,
+    userId,
+    uploaders.get(row.created_by) ?? null,
+    true,
+  );
 }
 
 export async function addAttachment(
@@ -182,7 +204,7 @@ export async function addAttachment(
   const row = await findAttachment(db, id);
   if (!row) throw new Error('No se pudo guardar el adjunto');
   // Internal call: relative URL; the resolver re-reads a signed one for the caller.
-  return toAttachmentGql(db, storage, row, createdBy, false);
+  return toAttachmentGql(db, storage, row, createdBy, null, false);
 }
 
 export async function replaceAttachmentViewers(
