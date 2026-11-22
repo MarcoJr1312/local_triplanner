@@ -45,7 +45,7 @@ import {
 import type { TripItemRow, TripMemberRow, TripRowFull } from './trips/types.ts';
 import type { TripData, TripRole, TripsStore, UpdateTripInput } from './trips/types.ts';
 import type { LocationRow, Profile } from './schema-types.ts';
-import type { UserRecord, UsersStore, NotificationRecord } from './users/types.ts';
+import type { UsersStore, NotificationRecord } from './users/types.ts';
 import {
   DEMO_FRIEND_ID,
   DEMO_FRIEND_UUID,
@@ -168,10 +168,6 @@ interface TripGql {
   updatedAt: string;
 }
 
-interface RegisterUserInput {
-  displayName: string;
-}
-
 interface CreateTripInput {
   name: string;
   destinationId: string;
@@ -283,18 +279,6 @@ const toMember = (row: MemberRow): MemberGql => ({
   avatarUrl: row.avatar_url,
 });
 
-function slugHandle(displayName: string | null | undefined): string {
-  return (
-    (displayName ?? '')
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '')
-      .slice(0, 28) || 'user'
-  );
-}
-
 function gqlError(code: string, message: string): GraphQLError {
   return new GraphQLError(message, { extensions: { code } });
 }
@@ -320,36 +304,6 @@ function normalizeTimeZone(value: string | null | undefined): string {
   } catch {
     return 'UTC';
   }
-}
-
-async function ensureUser(
-  users: UsersStore,
-  { userId, email, displayName }: { userId?: string | null; email?: string | null; displayName?: string | null },
-): Promise<UserRecord> {
-  if (userId) {
-    const found = await users.getUser(userId);
-    if (found && !found.deleted_at) return found;
-  }
-  if (email) {
-    const found = await users.getByEmail(email);
-    if (found) return found;
-  }
-
-  const base =
-    (email?.split('@')[0] ?? displayName ?? 'member')
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '')
-      .slice(0, 20) || 'member';
-  const username = `${base}-${randomUUID().slice(0, 6)}`;
-  return users.createUser({
-    username,
-    password: randomUUID(),
-    displayName: displayName ?? 'Member',
-    language: 'es',
-  });
 }
 
 async function requireCurrentUser(users: UsersStore, userId: string): Promise<string> {
@@ -658,12 +612,6 @@ export const resolvers: {
       return listPresence(tripId);
     },
 
-    findUserByEmail: async (_, args, ctx) => {
-      const { email } = args as Args<{ email: string }>;
-      const user = await ctx.users.getByEmail(email);
-      return user ? toProfile(user) : null;
-    },
-
     searchLocations: async (_, args, ctx) => {
       const { q, lat, lng } = args as Args<{ q: string; lat?: number | null; lng?: number | null }>;
       const rows = await searchLocationsWithCatalogue({
@@ -967,26 +915,6 @@ export const resolvers: {
       return buildNotification(ctx, updated);
     },
 
-    registerUser: async (_, args, ctx) => {
-      const { input } = args as Args<{ input: RegisterUserInput }>;
-      const displayName = input.displayName.trim();
-      if (!displayName) {
-        throw gqlError('INVALID_ARGUMENT', 'El nombre no puede estar vacío.');
-      }
-      // Deprecated field: kept for old clients until M10.8 replaces it with
-      // createUser. Username is derived and the generated password is unused.
-      const username = slugHandle(displayName);
-      const existing = await ctx.users.getByUsername(username);
-      if (existing) return toProfile(existing);
-      const created = await ctx.users.createUser({
-        username,
-        password: randomUUID(),
-        displayName,
-        language: 'es',
-      });
-      return toProfile(created);
-    },
-
     createTrip: async (_, args, ctx) => {
       const { input } = args as Args<{ input: CreateTripInput & { timezone?: string | null } }>;
       const destination = await resolveDestination(ctx, input.destinationId, input.destinationName);
@@ -1031,23 +959,6 @@ export const resolvers: {
       const { tripId, totalBudget } = args as Args<{ tripId: string; totalBudget: number }>;
       const data = await ctx.trips.updateTrip(ctx.currentUserId, tripId, { totalBudget });
       publishTrip(ctx, tripId, 'setBudget', { tripId, totalBudget }, ctx.currentUserId);
-      return buildTrip(ctx, data);
-    },
-
-    inviteMember: async (_, args, ctx) => {
-      const { tripId, userId, email, displayName, role } = args as Args<{
-        tripId: string;
-        userId?: string | null;
-        email?: string | null;
-        displayName?: string | null;
-        role: string;
-      }>;
-      if (role !== 'editor' && role !== 'viewer') {
-        throw gqlError('INVALID_MEMBER_ROLE', 'Rol de miembro no válido.');
-      }
-      const user = await ensureUser(ctx.users, { userId, email, displayName });
-      const data = await ctx.trips.inviteMember(ctx.currentUserId, tripId, user.id, role);
-      publishTrip(ctx, tripId, 'inviteMember', { tripId, userId: user.id, role }, ctx.currentUserId);
       return buildTrip(ctx, data);
     },
 

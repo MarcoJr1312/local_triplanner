@@ -168,7 +168,6 @@ services:
       BOOTSTRAP_LOCAL: "1"
       TRIPS_URL: http://trips:4400
       TRIPS_TIMEOUT_MS: "5000"
-      USERS_MODE: remote
       USERS_URL: http://users:4500
       USERS_TIMEOUT_MS: "3000"
     volumes:

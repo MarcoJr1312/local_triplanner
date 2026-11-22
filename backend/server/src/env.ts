@@ -37,9 +37,7 @@ export const TRIPS_URL = (process.env.TRIPS_URL ?? 'http://127.0.0.1:4400').repl
 export const TRIPS_TIMEOUT_MS = Number(process.env.TRIPS_TIMEOUT_MS ?? 5000);
 
 // ---- Users service (:4500) ----
-// The service owns accounts and notifications. `local` keeps the platform users
-// table for tests/cutover; Compose and Helm run `remote`.
-export const USERS_MODE = process.env.USERS_MODE === 'remote' ? 'remote' : 'local';
+// The service owns accounts and notifications. The API always calls it.
 export const USERS_URL = (process.env.USERS_URL ?? 'http://127.0.0.1:4500').replace(/\/+$/, '');
 export const USERS_TIMEOUT_MS = Number(process.env.USERS_TIMEOUT_MS ?? 3000);
 

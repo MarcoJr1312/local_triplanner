@@ -42,35 +42,17 @@ export async function connectPg(): Promise<PgDb | null> {
   }
 }
 
-export async function insertUser(db: AsyncDb, displayName = 'Test User'): Promise<string> {
-  const id = randomUUID();
-  await db
-    .prepare('INSERT INTO users (id, email, display_name) VALUES (?, ?, ?)')
-    .run(id, `test-${id}@example.com`, displayName);
-  return id;
+/**
+ * Identity is owned by the users service; platform tests only need an opaque
+ * UUID for attachments, favorites and chats.
+ */
+export async function insertUser(_db: AsyncDb, _displayName = 'Test User'): Promise<string> {
+  return randomUUID();
 }
 
 export async function deleteUser(db: AsyncDb, userId: string): Promise<void> {
   await db.prepare('DELETE FROM user_favorites WHERE user_id = ?').run(userId);
   await db.prepare('DELETE FROM user_interests WHERE user_id = ?').run(userId);
   await db.prepare('DELETE FROM suggestion_chats WHERE user_id = ?').run(userId);
-  await db.prepare('DELETE FROM users WHERE id = ?').run(userId);
-}
-
-/** Removes demo identities in both legacy text and fixed-UUID forms. */
-export async function cleanDemoUsers(db: AsyncDb): Promise<void> {
-  const ids = [
-    'demo-user',
-    'demo-friend',
-    '11111111-1111-4111-8111-111111111111',
-    '22222222-2222-4222-8222-222222222222',
-  ];
-  for (const id of ids) {
-    await db.prepare('DELETE FROM notifications WHERE user_id = ? OR inviter_user_id = ?').run(id, id);
-    await db.prepare('DELETE FROM user_favorites WHERE user_id = ?').run(id);
-    await db.prepare('DELETE FROM user_interests WHERE user_id = ?').run(id);
-    await db.prepare('DELETE FROM suggestion_chats WHERE user_id = ?').run(id);
-    await db.prepare('DELETE FROM attachment_viewers WHERE user_id = ?').run(id);
-    await db.prepare('DELETE FROM users WHERE id = ?').run(id);
-  }
+  await db.prepare('DELETE FROM attachment_viewers WHERE user_id = ?').run(userId);
 }

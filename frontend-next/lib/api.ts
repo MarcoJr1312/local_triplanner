@@ -3,7 +3,6 @@ import type {
   AddItemInput,
   CreateTripInput,
   Destination,
-  InviteMemberArgs,
   Location,
   MemberRole,
   Presence,
@@ -359,7 +358,6 @@ const GET_TRIP = `query($id: ID!) { getTrip(id: $id) { ${TRIP_FIELDS} } }`;
 const LIST_DESTINATIONS = `query { listDestinations { slug name country description imageUrl lat lng } }`;
 const LIST_ACTIVITIES = `query($destSlug: String!, $category: String) { listActivities(destSlug: $destSlug, category: $category) { id name category cost lat lng description tags durationHours imageUrl rating isFavorite } }`;
 const LIST_PRESENCE = `query($tripId: ID!) { listPresence(tripId: $tripId) { userId tripId displayName color editingItemId lastSeen } }`;
-const FIND_USER_BY_EMAIL = `query($email: String!) { findUserByEmail(email: $email) { userId username email displayName } }`;
 const GET_TRIP_BY_CODE = `query($code: String!) { getTripByCode(code: $code) { id name destinationName ownerName invitedEmail } }`;
 const SEND_TRIP_INVITE = `mutation($tripId: ID!, $email: String!, $role: String!) { sendTripInvite(tripId: $tripId, email: $email, role: $role) { invitationId status email code joinUrl } }`;
 const JOIN_TRIP_WITH_CODE = `mutation($code: String!, $email: String!, $memberId: ID) { joinTripWithCode(code: $code, email: $email, memberId: $memberId) { ${TRIP_FIELDS} } }`;
@@ -398,7 +396,6 @@ const FAVORITE_LOCATION = `mutation($locationId: ID!, $favorite: Boolean!) { fav
 const CREATE_TRIP = `mutation($input: CreateTripInput!) { createTrip(input: $input) { ${TRIP_FIELDS} } }`;
 const UPDATE_TRIP_SETTINGS = `mutation($id: ID!, $input: UpdateTripSettingsInput!) { updateTripSettings(id: $id, input: $input) { ${TRIP_FIELDS} } }`;
 const SET_BUDGET = `mutation($tripId: ID!, $totalBudget: Float!) { setBudget(tripId: $tripId, totalBudget: $totalBudget) { ${TRIP_FIELDS} } }`;
-const INVITE_MEMBER = `mutation($tripId: ID!, $userId: String!, $email: String!, $displayName: String!, $role: MemberRole!) { inviteMember(tripId: $tripId, userId: $userId, email: $email, displayName: $displayName, role: $role) { ${TRIP_FIELDS} } }`;
 const UPDATE_MEMBER_ROLE = `mutation($tripId: ID!, $userId: String!, $role: MemberRole!) { updateMemberRole(tripId: $tripId, userId: $userId, role: $role) { ${TRIP_FIELDS} } }`;
 const REMOVE_MEMBER = `mutation($tripId: ID!, $userId: String!) { removeMember(tripId: $tripId, userId: $userId) { ${TRIP_FIELDS} } }`;
 const LEAVE_TRIP = `mutation($tripId: ID!, $newOwnerId: ID) { leaveTrip(tripId: $tripId, newOwnerId: $newOwnerId) { ${TRIP_FIELDS} } }`;
@@ -530,11 +527,6 @@ export const api: TriplannerApi = {
     return currentUser;
   },
 
-  async findUserByEmail(email: string): Promise<UserProfile | null> {
-    const data = await gql<{ findUserByEmail: UserProfile | null }>(FIND_USER_BY_EMAIL, { email });
-    return data.findUserByEmail;
-  },
-
   async listUsers(query = ''): Promise<UserProfile[]> {
     const data = await gql<{ listUsers: UserProfile[] }>(LIST_USERS, {
       query: query.trim() || null,
@@ -602,18 +594,6 @@ export const api: TriplannerApi = {
     const data = await gql<{ setBudget: Trip }>(SET_BUDGET, { tripId, totalBudget });
     notify();
     return data.setBudget;
-  },
-
-  async inviteMember(tripId: string, args: InviteMemberArgs): Promise<Trip> {
-    const data = await gql<{ inviteMember: Trip }>(INVITE_MEMBER, {
-      tripId,
-      userId: args.userId ?? '',
-      email: args.email,
-      displayName: args.displayName,
-      role: args.role,
-    });
-    notify();
-    return data.inviteMember;
   },
 
   // ---- Invitaciones locales (link copiable, sin email) ----

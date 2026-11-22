@@ -292,20 +292,12 @@ export interface PresenceInput {
   editingItemId?: string | null;
 }
 
-export interface InviteMemberArgs {
-  userId?: string;
-  email: string;
-  displayName: string;
-  role: MemberRole;
-}
-
 export interface TriplannerApi {
   login(username: string, password: string): Promise<UserProfile>;
   logout(): Promise<void>;
   restoreSession(): Promise<UserProfile | null>;
   getCurrentUser(): UserProfile | null;
   setSessionProfile(profile: UserProfile): Promise<void>;
-  findUserByEmail(email: string): Promise<UserProfile | null>;
   listUsers(query?: string): Promise<UserProfile[]>;
   createUser(input: CreateUserInput): Promise<UserProfile>;
   deleteUser(userId: ID): Promise<boolean>;
@@ -319,7 +311,6 @@ export interface TriplannerApi {
   createTrip(input: CreateTripInput): Promise<Trip>;
   updateTripSettings(id: ID, input: UpdateTripSettingsInput): Promise<Trip>;
   setBudget(tripId: ID, totalBudget: number): Promise<Trip>;
-  inviteMember(tripId: ID, args: InviteMemberArgs): Promise<Trip>;
   updateMemberRole(tripId: ID, userId: ID, role: MemberRole): Promise<Trip>;
   removeMember(tripId: ID, userId: ID): Promise<Trip>;
   leaveTrip(tripId: ID, newOwnerId?: ID): Promise<Trip>;

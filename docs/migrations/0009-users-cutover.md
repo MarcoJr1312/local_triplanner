@@ -100,7 +100,8 @@ Demo login after cutover: `demo` / `demo123` and `demo-friend` / `demo123`
 Restore both dumps, redeploy the previous API image (platform ids are text
 again) and point it at the restored databases. The users service database can
 stay; it is additive. Do not run the old API against a partially migrated
-platform DB.
+platform DB. After M10.13 the platform `users`/`notifications` tables are gone;
+a rollback must also restore them and the old local-adapter image.
 
 ## Evidence
 

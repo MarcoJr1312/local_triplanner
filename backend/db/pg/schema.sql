@@ -3,61 +3,14 @@
 --
 -- ARCHITECTURE:
 --   * MongoDB (locations service) owns the catalogue; no FKs point at it.
---   * The trips service owns trips, members, items and invitations in its own
---     PostgreSQL database (backend/trips-service).
---   * Postgres here owns users, favorites, interests, chats, attachment
---     metadata and agent vectors. SQLite is no longer the local engine.
+--   * The trips service owns trips, members, items and invitations and the
+--     users service owns accounts and notifications, each in its own
+--     PostgreSQL database. Postgres here owns favorites, interests, chats,
+--     attachment metadata and agent vectors.
+--   * Run decommission-trips.sql and decommission-users.sql once on databases
+--     created before those cutovers.
 
 CREATE EXTENSION IF NOT EXISTS vector;
-
--- ============================= USERS =============================
--- During the M10 cutover this table backs the local users adapter only. The
--- users service owns accounts after the fixed-UUID migration; M10.13 drops it.
--- Email is optional (accounts are created with username + password).
-CREATE TABLE IF NOT EXISTS users (
-  id              text PRIMARY KEY,
-  username        text,
-  email           text UNIQUE,
-  password_hash   text,
-  display_name    text NOT NULL,
-  color           text,
-  avatar_url      text,
-  language        text NOT NULL DEFAULT 'en',
-  created_at      timestamptz NOT NULL DEFAULT now(),
-  deleted_at      timestamptz
-);
-
-ALTER TABLE users ALTER COLUMN email DROP NOT NULL;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS username text;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash text;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS deleted_at timestamptz;
-
-CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username_active
-  ON users (lower(username)) WHERE deleted_at IS NULL AND username IS NOT NULL;
-
--- ========================== NOTIFICATIONS ========================
--- Local invite inbox for USERS_MODE=local only. The users service owns this
--- table after the cutover; user ids stay opaque (no FK) because the service is
--- the authority. M10.13 drops it.
-CREATE TABLE IF NOT EXISTS notifications (
-  id              text PRIMARY KEY,
-  user_id         text NOT NULL,
-  type            text NOT NULL CHECK (type IN ('trip_invite')),
-  trip_id         text NOT NULL,
-  trip_name       text NOT NULL,
-  invitation_id   text NOT NULL,
-  inviter_user_id text,
-  role            text NOT NULL CHECK (role IN ('editor', 'viewer')),
-  status          text NOT NULL DEFAULT 'unread'
-                    CHECK (status IN ('unread', 'read', 'accepted', 'declined')),
-  created_at      timestamptz NOT NULL DEFAULT now(),
-  read_at         timestamptz
-);
-
-CREATE UNIQUE INDEX IF NOT EXISTS idx_notifications_invitation
-  ON notifications(user_id, invitation_id);
-CREATE INDEX IF NOT EXISTS idx_notifications_user
-  ON notifications(user_id, created_at DESC);
 
 -- ============================ TRIPS =============================
 -- Trips, memberships, items and invitations are owned by the trips service
@@ -108,9 +61,6 @@ CREATE TABLE IF NOT EXISTS attachment_viewers (
   PRIMARY KEY (attachment_id, user_id)
 );
 
-ALTER TABLE attachment_viewers
-  DROP CONSTRAINT IF EXISTS attachment_viewers_user_id_fkey;
-
 CREATE INDEX IF NOT EXISTS idx_attachment_viewers_user ON attachment_viewers(user_id);
 
 -- =========================== USER FAVORITES ==========================
@@ -122,9 +72,6 @@ CREATE TABLE IF NOT EXISTS user_favorites (
   created_at  timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (user_id, location_id)
 );
-
-ALTER TABLE user_favorites
-  DROP CONSTRAINT IF EXISTS user_favorites_user_id_fkey;
 
 -- ========================== USER INTERESTS ==========================
 CREATE TABLE IF NOT EXISTS user_interests (

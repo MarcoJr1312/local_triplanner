@@ -18,7 +18,6 @@ import {
   BOOTSTRAP_LOCAL,
   TRIPS_URL,
   TRIPS_TIMEOUT_MS,
-  USERS_MODE,
   USERS_URL,
   USERS_TIMEOUT_MS,
 } from './env.ts';
@@ -26,7 +25,6 @@ import { createInternalRouter } from './internal.ts';
 import { serveUploads } from './uploads.ts';
 import { createTripsStore } from './trips/index.ts';
 import { createUsersStore } from './users/index.ts';
-import { ensureLocalDemoUsers } from './users/local.ts';
 
 const databaseUrl = await resolveDatabaseUrl();
 const db = await PgDb.connect(databaseUrl);
@@ -37,17 +35,10 @@ if (BOOTSTRAP_LOCAL) {
 }
 
 const users = createUsersStore({
-  mode: USERS_MODE,
-  db,
   baseUrl: USERS_URL,
   internalToken: INTERNAL_TOKEN,
   timeoutMs: USERS_TIMEOUT_MS,
 });
-
-// Demo identities live in the users service in remote mode.
-if (USERS_MODE === 'local') {
-  await ensureLocalDemoUsers(db);
-}
 
 const catalogue = await createCatalogue();
 const gqlCatalogue = guardCatalogue(catalogue);
@@ -101,7 +92,7 @@ const server = createServer((req, res) => {
 server.listen(PORT, () => {
   console.log(`[triplanner-local] GraphQL en http://localhost:${PORT}/graphql`);
   console.log(`[triplanner-local] trips url=${TRIPS_URL}`);
-  console.log(`[triplanner-local] users mode=${USERS_MODE} url=${USERS_URL}`);
+  console.log(`[triplanner-local] users url=${USERS_URL}`);
   if (isUsingDefaultInternalToken()) {
     console.warn(
       '[triplanner-local] INTERNAL_TOKEN no definido: usando default de desarrollo (define INTERNAL_TOKEN en backend/.env)',

@@ -278,10 +278,9 @@ UI: invite by username
 `backend/server/src/users/`:
 
 - `types.ts` — `UsersStore` port, user/notification DTOs.
-- `local.ts` — platform `users` + temporary platform `notifications` tables.
-- `remote.ts` — calls the users service.
-- `index.ts` — factory from `USERS_MODE=local|remote` (local during the cutover
-  and tests; remote in Compose/Helm).
+- `remote.ts` — calls the users service; the only adapter after M10.13.
+- `index.ts` — factory for the remote store. There is no `USERS_MODE` and no
+  local users table.
 
 Methods: `getUser`, `getByUsername`, `getByEmail`, `listUsers`, `batchUsers`,
 `createUser`, `updateUser`, `deleteUser`, `createNotification`,
@@ -431,10 +430,11 @@ The users service seed uses the fixed UUIDs; the trips seed uses the same
 
 Cutover:
 
-- Build the users service and the API `UsersStore`; `USERS_MODE=remote` in
-  Compose/Helm, `local` only for tests/rollback.
-- The platform `users` table and the temporary `notifications` table remain
-  until Gate 2, then are dropped with the local adapter.
+- Build the users service and the API `UsersStore`; Compose/Helm call the users
+  service with `USERS_URL`. There is no `USERS_MODE` after M10.13.
+- The platform `users` table and the temporary `notifications` table were
+  dropped with the local adapter after Gate 2
+  (`backend/db/pg/decommission-users.sql`).
 - Backups: platform DB (users + FKs) and trips DB before the UUID update.
 
 ## 13. Compose and Helm
@@ -445,7 +445,7 @@ Cutover:
 - `users`: `:4500`, own Postgres only; `/health` + `/ready`; seeds demo users.
 - Helm chart 0.7.0: `usersService` block, StatefulSet, Service, Secret,
   NetworkPolicy, SA/RBAC/proxy, test hook.
-- API overlay: `USERS_MODE=remote`, `USERS_URL=http://host.docker.internal:4500`.
+- API overlay: `USERS_URL=http://host.docker.internal:4500`.
 - Port-forward helpers add users `4500`, proxy `8447`, users Postgres `5434`.
 - Images: users `0.1.0`, trips `0.1.1` (local invite schema), API/web `1.3.0`,
   email unchanged `0.1.1`.
@@ -466,8 +466,8 @@ Cutover:
 | M10.10 | Fixed-UUID migration script and data copy | Backend |
 | M10.11 | Compose and Helm: `users-postgres` + `users` | SRE |
 | M10.12 | QA matrix, failure injection and Gate 2 | QA |
-| M10.13 | Decommission platform users/notifications and local adapter | Backend |
-| M10.14 | Image publish, Helm acceptance and release | SRE |
+| M10.13 | Decommission platform users/notifications and local adapter — **done, Gate 2 approved** | Backend |
+| M10.14 | Image publish, Helm acceptance and release (pending) | SRE |
 
 ## 15. Risks
 

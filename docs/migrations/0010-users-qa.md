@@ -377,6 +377,17 @@ Residual risk accepted at the human gate: the full clean Compose one-command sta
 
 **Original QA record:** the pre-fix matrix in sections 3 and 4 remains the HOLD evidence for `612c71f`; sections 10 and 11 are the post-fix verification and final recommendation.
 
+### 11.1 Gate 2 and M10.13 execution
+
+The human Gate 2 decision was **approve** after the re-verification above.
+M10.13 then removed `USERS_MODE`, the local users adapter and the deprecated
+`registerUser`/`findUserByEmail`/`inviteMember` paths. The platform
+`users`/`notifications` tables were dropped on the Compose database with
+`backend/db/pg/decommission-users.sql`; the API now boots from source with
+`BOOTSTRAP_LOCAL=1` against the users service and returns the demo profile,
+login and trips without any platform users table. Suites after the decommission:
+users 61, trips 66, API 70, frontend 22 (all green). M10.14 publication remains.
+
 ## 12. Post-report D-7 cleanup (implementation)
 
 After the QA re-run the remaining P3 documentation/test-script drift was closed

@@ -1,13 +1,7 @@
-import type { AsyncDb } from '../pg/db.ts';
-import { LocalUsersStore } from './local.ts';
 import { RemoteUsersStore } from './remote.ts';
 import type { UsersStore } from './types.ts';
 
-export type UsersMode = 'local' | 'remote';
-
 export interface CreateUsersStoreOptions {
-  mode: UsersMode;
-  db: AsyncDb;
   baseUrl: string;
   internalToken: string;
   timeoutMs: number;
@@ -15,19 +9,11 @@ export interface CreateUsersStoreOptions {
 }
 
 /**
- * `remote` is the production path (users service); `local` keeps the platform
- * users table for tests and the M10 cutover window only.
+ * The users service owns accounts and notifications after the M10.13
+ * decommission; there is no local adapter and no USERS_MODE.
  */
 export function createUsersStore(options: CreateUsersStoreOptions): UsersStore {
-  if (options.mode === 'remote') {
-    return new RemoteUsersStore({
-      baseUrl: options.baseUrl,
-      internalToken: options.internalToken,
-      timeoutMs: options.timeoutMs,
-      fetchImpl: options.fetchImpl,
-    });
-  }
-  return new LocalUsersStore(options.db);
+  return new RemoteUsersStore(options);
 }
 
 export type { UsersStore } from './types.ts';

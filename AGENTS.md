@@ -7,7 +7,7 @@ by default**, with an es/en switch.
 
 Orkai category id: `ba4c49a10fa15dd100c16c61383f6529`.
 Owner: Marco (GitHub `MarcoJr1312`).
-Working branch: `feature/local-runner`. Never push to `main`.
+Working branch: current delivery branch; never push to `main`.
 
 **Call `overview()` and read `project_preferences` for the category above before
 project work.** The Orkai plan is **Local Recruiter Demo — v1** with milestones
@@ -36,16 +36,20 @@ the only external integrations.
 | Relational | PostgreSQL 17 + pgvector |
 | Locations | Bun/TS `locations` service + MongoDB 7, optional HasData BYOK with Mongo cache |
 | Trips | Bun/TS `trips` service + PostgreSQL 17, own credentials and outbox |
+| Users | Bun/TS `users` service + PostgreSQL 17, Argon2id login and local-invite notifications |
 | Agent | Python 3.12 + FastAPI + Agno + pgvector |
-| Orchestration | Docker Compose, built from source |
+| Orchestration | Docker Compose and Helm, built from source |
 
-Runtime services: `web`, `api`, `locations`, `trips`, `agent`, `postgres`,
-`trips-postgres`, `mongo`.
+Runtime services: `web`, `api`, `locations`, `trips`, `users`, `agent`, `postgres`,
+`trips-postgres`, `users-postgres`, `mongo`.
 
 ## Hard constraints
 
-- **No Firebase** at runtime. Demo auth via `x-user-id`; seeded `demo-user` and
-  `demo-friend`.
+- **No Firebase** at runtime. Accounts live in the users service with
+  username + password (Argon2id) and fixed demo UUIDs
+  `11111111-1111-4111-8111-111111111111` (`demo` / `demo123`) and
+  `22222222-2222-4222-8222-222222222222` (`demo-friend` / `demo123`). Requests
+  carry `x-user-id: <uuid>`; there is no JWT.
 - **HasData is optional BYOK at runtime.** The default is the committed Toronto
   catalogue in MongoDB. A recruiter-supplied key lives on the locations PVC and
   HasData results are cached in MongoDB with a 5-day TTL; no key ships in the
@@ -132,6 +136,14 @@ auth and Dockerfiles.
   chart 0.6.1 accepted on Docker Desktop. `TRIPS_MODE` and the legacy trip
   tables were removed in M9.11; the API is remote-only. Evidence:
   `docs/migrations/0006-trips-service.md` and `0007-trips-qa.md`.
+- M10 (users service, PostgreSQL) through Gate 2: accounts, Argon2id login,
+  search/batch, protected soft delete, notifications, local invites by username,
+  accept/decline, `onNotification`, fixed-UUID migration, users +
+  users-postgres in Compose/Helm (chart 0.7.0), and the M10.13 platform
+  users/notifications decommission. No `USERS_MODE`; the API is remote-only.
+  Evidence: `docs/migrations/0008-users-service.md`,
+  `0009-users-cutover.md` and `0010-users-qa.md`. M10.14 (image publish,
+  Helm acceptance, tag v1.4.0) is pending.
 Do not assume the target architecture is already implemented — check the
 current tree.
 
@@ -156,9 +168,14 @@ docker compose -f deploy/docker-compose.yml down              # stop, keep volum
 docker compose -f deploy/docker-compose.yml down -v           # reset data
 cd backend/server && bun test      # API tests (needs Postgres)
 cd backend/server && bunx tsc --noEmit
+cd backend/trips-service && bun test        # needs trips PostgreSQL
+cd backend/trips-service && bunx tsc --noEmit
+cd backend/users-service && bun test        # needs users PostgreSQL
+cd backend/users-service && bunx tsc --noEmit
 cd backend/locations-service && bun test    # needs MongoDB
 cd backend/locations-service && bunx tsc --noEmit
 cd frontend-next && bun test
+cd frontend-next && bunx tsc --noEmit
 cd backend/agent-service && uv run python tests/test_m2.py
 ```
 

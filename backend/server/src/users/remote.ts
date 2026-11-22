@@ -1,5 +1,5 @@
-// Remote adapter: calls the users service. In Compose/Helm this is the only
-// path; USERS_MODE=local exists for tests and the cutover window.
+// Remote adapter: calls the users service. This is the only path after the
+// M10.13 decommission; there is no local users table.
 
 import type {
   CreateNotificationData,
