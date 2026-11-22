@@ -54,7 +54,9 @@ agent --/internal/*--> api
    local path is deleted after QA sign-off.
 6. **Join**: `POST /internal/v1/trips/{id}/join`. The invite email keeps the web
    join link (`APP_URL/join?...`); the web calls the API, the API calls trips.
-   Joining does **not** send an email in v1.
+   A successful join queues `email.member.joined.v1` to the trip owner through
+   the same outbox. The API supplies the owner recipient context because trips
+   does not own identity.
 
 ## 3. Current state
 
@@ -94,7 +96,7 @@ agent --/internal/*--> api
 - Presence and GraphQL subscriptions.
 - `suggestion_chats`, AI recommendations, pgvector tables.
 - Favorites and catalogue search.
-- A broker outbox for any event other than the invitation email.
+- Broker events other than invite and member-joined notifications.
 - gRPC. HTTP/JSON in this migration.
 - Multi-node Postgres, TLS between services, per-service internal tokens.
 
@@ -111,7 +113,7 @@ the platform database.
 | `trip_members` | Membership + role | PK `(trip_id, user_id)`; one `owner` per trip |
 | `trip_items` | Itinerary | FK `trip_id` with `ON DELETE CASCADE` |
 | `invitations` | Invite codes | unique `code`; role is `editor` or `viewer` only |
-| `outbox` | Transactional email events | pending until published; at-least-once |
+| `outbox` | Invite and member-joined email events | pending until published; at-least-once |
 | `schema_migrations` | Applied version | one row per applied version |
 
 `user_id`, `owner_id`, `created_by` are **opaque text with no foreign key**. The
@@ -258,7 +260,7 @@ CREATE INDEX IF NOT EXISTS idx_outbox_pending
 | GET | `/internal/v1/items/{itemId}` | member | Resolve item → trip (attachments) |
 | POST | `/internal/v1/trips/{id}/invitations` | owner/editor | Create invitation + publish email event |
 | GET | `/internal/v1/invitations/by-code/{code}` | — | Preview by secret code |
-| POST | `/internal/v1/trips/{id}/join` | any | Atomic membership + invitation accept |
+| POST | `/internal/v1/trips/{id}/join` | any | Atomic membership + accept + owner notification |
 | GET | `/internal/v1/trips/{id}/context` | member | Agent context (trip + days + member ids) |
 
 ### 6.3 Authorization matrix
@@ -341,13 +343,28 @@ invitation and the copyable join link work even if the broker is down.
 `POST /internal/v1/trips/{id}/join`
 
 ```json
-{ "user_id": "demo-friend", "email": "friend@example.com", "code": "AB12CD34EF56" }
+{
+  "user_id": "demo-friend",
+  "email": "friend@example.com",
+  "code": "AB12CD34EF56",
+  "notify": {
+    "owner_email": "demo@triplanner.local",
+    "owner_name": "Demo",
+    "member_name": "Demo Friend",
+    "language": "es"
+  }
+}
 ```
 
 One transaction: validate the code belongs to `{id}`, `status = 'pending'`, the
 email matches case-insensitively, insert/update the membership with the
-invitation role and `invited_email`, then set `accepted_at`. The demo policy
+invitation role and `invited_email`, set `accepted_at`, and — when `notify` is
+present — insert the `email.member.joined.v1` outbox row. The demo policy
 (caller or `demo-friend`) stays in the API.
+
+`notify` is optional. If the API cannot resolve the owner's email, the join
+still succeeds and the response reports `"member_email": {"queued": false,
+"reason": "NO_OWNER_EMAIL"}`. A duplicate join does not write a second event.
 
 ## 7. Locations integration
 
@@ -420,8 +437,34 @@ accepted. Topic `TripInvitation.dlq` remains the consumer's responsibility.
 This removes the previous "row committed, publish crashed" gap and satisfies
 `README.md` gate 3.
 
-**Join email:** not sent in v1. If an owner notification is wanted, add
-`email.member.joined.v1` plus a consumer template as a separate task.
+### 8.2 Member joined event
+
+A successful join writes `email.member.joined.v1` to the outbox **in the same
+transaction** as the membership:
+
+```json
+{
+  "id": "<outbox id>",
+  "type": "email.member.joined.v1",
+  "version": 1,
+  "occurredAt": "2026-11-21T12:00:00.000Z",
+  "source": "triplanner-trips",
+  "payload": {
+    "to": "demo@triplanner.local",
+    "ownerName": "Demo",
+    "memberName": "Demo Friend",
+    "tripName": "Fin de semana en Toronto",
+    "language": "es"
+  }
+}
+```
+
+- Recipient is the owner; the API supplies `owner_email`, `owner_name`,
+  `member_name` and `language` in `notify`.
+- Event id = outbox id; a duplicate join is rejected before the outbox insert,
+  so the owner is not notified twice.
+- The email service adds the event type, a Spanish/English template and DLQ
+  handling. This is task M9.5b.
 
 ## 9. PostgreSQL deployment
 
@@ -578,6 +621,9 @@ The public schema does not change.
 - Item CRUD, move, cost, reminder, ordering; delete cascades.
 - Invitation create, unique code, role validation, preview, join success,
   wrong email, used code, wrong trip, atomic failure injection.
+- Join notification: one outbox row per successful join; duplicate join does
+  not double-send; missing owner email returns `queued=false`; owner recipient
+  comes from `notify`.
 - Outbox: invitation + event committed atomically; relay publishes and stamps
   the offset; broker down leaves the row pending and retries; replay is
   idempotent.
@@ -593,8 +639,13 @@ The public schema does not change.
 - All mutations still enforce membership.
 - Attachment add/remove and cover update ordering.
 - `requestSuggestions` reads items through the store.
-- `getTripByCode` and the web join flow.
+- `getTripByCode` and the web join flow (including the owner notification).
 - Legacy `TRIPS_MODE=local` still passes while the flag exists.
+
+### Email service
+
+- `email.member.joined.v1` parses, renders in es/en and delivers in sink mode.
+- Invalid payload goes to `TripInvitation.dlq`; duplicate event id is ignored.
 
 ### Compose E2E
 
@@ -624,6 +675,7 @@ The public schema does not change.
 | M9.3 | Schema, migrations, advisory lock, demo seed | Backend |
 | M9.4 | Trips, members, items + locations client + authz | Backend |
 | M9.5 | Invitations, join, transactional outbox and broker relay | Backend |
+| M9.5b | Email: `member.joined` event and template | Backend |
 | M9.6 | API `TripsStore`, `TRIPS_MODE`, resolver/internal refactor, seed split | Backend |
 | M9.7 | Legacy data copy and count verification | Backend |
 | M9.8 | Compose integration and e2e | Backend |
@@ -639,6 +691,7 @@ The public schema does not change.
 | Trips now depends on locations | A locations outage could block writes | Best-effort lookup; client text fallback; timeout 2 s |
 | Trips now depends on broker | Invite email can fail | Transactional outbox + relay; invitation and copyable link always work |
 | Outbox backlog | Emails delayed after a long outage | Drained on boot, bounded retries, replay script, `outbox_pending` in `/ready` |
+| Owner email missing | No join notification | `notify` optional; join still succeeds; response reports `queued=false` |
 | Two Postgres instances | +256-512 MB on Docker Desktop | Single replica; small PVC; document the budget |
 | Data copy needs a freeze | Writes during copy are lost | Stop API, copy, verify counts, then cut over |
 | Opaque user ids | No referential integrity | API validates identity; membership enforced in trips |
@@ -656,6 +709,7 @@ The public schema does not change.
 - Data copy counts and checksums before/after.
 - Outbox drain: one invite event published, acked by the email consumer, no
   pending rows, no DLQ growth.
+- Join notification: owner receives one email; duplicate join sends nothing.
 - GraphQL regression evidence for the demo path.
 - No secret in logs, images, rendered manifests or the browser.
 - Gate 1 and Gate 2 decisions recorded in Orkai.
