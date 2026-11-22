@@ -57,7 +57,7 @@ services:
     restart: unless-stopped
 
   locations:
-    image: ${DOCKERHUB_USERNAME:-marcojr13}/triplanner-locations:${IMAGE_TAG:-latest}
+    image: ${DOCKERHUB_USERNAME:-marcojr13}/triplanner-locations:${LOCATIONS_IMAGE_TAG:-0.2.1}
     container_name: local_triplanner-locations
     pull_policy: always
     environment:

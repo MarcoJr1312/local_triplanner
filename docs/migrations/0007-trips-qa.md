@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **Gate 2 approved 2026-11-21 — M9.11 complete; M9.12 pending** |
+| Status | **Gate 2 approved 2026-11-21 — M9.11 and M9.12 complete** |
 | Date | 2026-11-21 |
 | Environment | Windows 11, Docker Desktop, Compose stack, Kubernetes `docker-desktop` |
 | Branch | `refactor/helm-trips-service` |
@@ -16,9 +16,9 @@ Verified the M9 delivery: trips service ownership of trips/members/items/
 invitations, the API cutover behind `TRIPS_MODE`, the transactional outbox,
 Compose integration, the legacy data import and the Helm workload.
 
-Out of scope: M9.12 image publication (release step), macOS clean-clone QA
-(pre-existing), and the agent-owned recommendation microservice. M9.11
-decommission is complete and recorded in section 8.
+Out of scope: macOS clean-clone QA (pre-existing) and the agent-owned
+recommendation microservice. M9.11 decommission and M9.12 release are complete
+(sections 8 and 9).
 
 ## 2. Automated suites
 
@@ -140,7 +140,7 @@ No P1/P2 defects found.
 | API is not deployed by the Helm chart | P3 | Pre-existing; the trips workload is verified via probes and `helm test` |
 | `networkPolicy.enabled` defaults to false | P3 | Policies render and validate with the flag on |
 | macOS clean-clone QA | P3 | Pre-existing limitation |
-| Trips image is locally tagged, not published | P3 | M9.12 |
+| Trips image is locally tagged, not published | Resolved | Published as `0.1.0` + `latest`, amd64 + arm64 (section 9) |
 
 ## 8. Gate 2 decision and decommission
 
@@ -167,3 +167,28 @@ restore.
   account for the difference from 82).
 - Compose API restarted remote-only; the demo trip still returns 9 items and
   `spent=413`; API logs show only the platform tables.
+
+## 9. Release (M9.12)
+
+| Item | Value |
+|---|---|
+| Git tag | `v1.3.0` |
+| Chart | `helm-triplanner` 0.6.0 (trips image `0.1.0`) |
+| Trips image | `marcojr13/triplanner-trips:0.1.0` + `latest`, manifest `sha256:dab280313429f081aeda2f9a71913476a8b580112c6585d779a2b1ad64a419a4`, `linux/amd64` + `linux/arm64` |
+| API image | `marcojr13/triplanner-api:1.2.0` + `latest`, manifest `sha256:783b54c2033e85d594c19c2e01e3bb83a9156404ac06cada5e516b6195648ac1`, `linux/amd64` + `linux/arm64` |
+| CI | `.github/workflows/trips.yml` (test + multi-arch publish) |
+| Hub compose | `trips` + `trips-postgres`; locations pinned to `0.2.1` |
+
+Published-stack smoke with `docker compose -f deploy/docker-compose.hub.yml up
+-d --pull always`:
+
+- All eight services healthy.
+- API image `marcojr13/triplanner-api:latest`, trips image
+  `marcojr13/triplanner-trips:latest`.
+- API logs show only platform tables and `trips url=http://trips:4400`.
+- `getTrip("demo-trip")` returns 9 items, `spent=413`, no errors.
+- Platform `to_regclass('public.trips')` is `null`.
+
+The `marcojr13/triplanner-locations:latest` tag did not exist; it was created
+from the published `0.2.1` manifest, and the Hub compose now pins
+`LOCATIONS_IMAGE_TAG=0.2.1` so it does not depend on that mutable tag.
