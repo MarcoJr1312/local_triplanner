@@ -1,0 +1,25 @@
+{{- if .Values.tripsService.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: triplanner-trips
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: triplanner-trips
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: trips
+spec:
+  type: {{ .Values.tripsService.service.type | default "ClusterIP" }}
+  selector:
+    app.kubernetes.io/name: triplanner-trips
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  ports:
+    - name: http
+      port: {{ .Values.tripsService.service.port }}
+      targetPort: http
+    {{- if .Values.tripsService.rbacProxy.enabled }}
+    - name: rbac-proxy
+      port: {{ .Values.tripsService.rbacProxy.port }}
+      targetPort: rbac-proxy
+    {{- end }}
+{{- end }}

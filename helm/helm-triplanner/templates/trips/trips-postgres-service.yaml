@@ -1,0 +1,21 @@
+{{- if and .Values.tripsService.enabled .Values.tripsService.postgres.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: triplanner-trips-postgres
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: triplanner-trips-postgres
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: trips-postgres
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: triplanner-trips-postgres
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  ports:
+    - name: postgres
+      port: {{ .Values.tripsService.postgres.service.port }}
+      targetPort: postgres
+      protocol: TCP
+{{- end }}

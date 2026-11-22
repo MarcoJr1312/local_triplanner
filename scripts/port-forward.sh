@@ -16,6 +16,7 @@ KUBECTL="${KUBECTL:-kubectl}"
 BIND_ADDRESS="0.0.0.0"
 PROXY=0
 MONGO=0
+POSTGRES=0
 STRICT=0
 STOP=0
 
@@ -26,8 +27,9 @@ Port-forward the Triplanner Helm services.
 Options:
   -n, --namespace NAME   Kubernetes namespace (default: triplanner)
       --bind ADDRESS     Bind address for app ports (default: 0.0.0.0)
-      --proxy            Also forward the RBAC proxies (127.0.0.1:8443/8444/8445)
+      --proxy            Also forward the RBAC proxies (127.0.0.1:8443/8444/8445/8446)
       --mongo            Also forward MongoDB (127.0.0.1:27018)
+      --postgres         Also forward the trips PostgreSQL (127.0.0.1:5433)
       --strict           Fail when a local port is already in use
       --stop             Stop the forwards started by this script
   -h, --help             Show this help
@@ -40,6 +42,7 @@ while [[ $# -gt 0 ]]; do
     --bind) BIND_ADDRESS="$2"; shift 2 ;;
     --proxy) PROXY=1; shift ;;
     --mongo) MONGO=1; shift ;;
+    --postgres) POSTGRES=1; shift ;;
     --strict) STRICT=1; shift ;;
     --stop) STOP=1; shift ;;
     -h|--help) usage; exit 0 ;;
@@ -83,6 +86,7 @@ targets=(
   "broker|svc/triplanner-kafka|8080|8080|$BIND_ADDRESS|http://localhost:8080/health"
   "email|svc/triplanner-email|4200|4200|$BIND_ADDRESS|http://localhost:4200/health"
   "locations|svc/triplanner-locations|4300|4300|$BIND_ADDRESS|http://localhost:4300/health"
+  "trips|svc/triplanner-trips|4400|4400|$BIND_ADDRESS|http://localhost:4400/health"
 )
 
 if ((PROXY)); then
@@ -90,11 +94,16 @@ if ((PROXY)); then
     "broker-proxy|svc/triplanner-kafka|8443|8443|127.0.0.1|"
     "email-proxy|svc/triplanner-email|8444|8443|127.0.0.1|"
     "locations-proxy|svc/triplanner-locations|8445|8443|127.0.0.1|"
+    "trips-proxy|svc/triplanner-trips|8446|8443|127.0.0.1|"
   )
 fi
 
 if ((MONGO)); then
   targets+=("mongo|statefulset/triplanner-mongo|27018|27017|127.0.0.1|")
+fi
+
+if ((POSTGRES)); then
+  targets+=("trips-postgres|statefulset/triplanner-trips-postgres|5433|5432|127.0.0.1|")
 fi
 
 started=()
@@ -158,7 +167,7 @@ done
 if ((PROXY)); then
   echo ""
   echo "RBAC proxies are 127.0.0.1 only. Example:"
-  echo "  curl -i http://localhost:8445/ready    # 401 without a token"
+  echo "  curl -i http://localhost:8446/ready    # trips: 401 without a token"
 fi
 echo ""
 echo "Press Ctrl+C to stop. If the forwards survive, run: bash scripts/port-forward.sh --stop"

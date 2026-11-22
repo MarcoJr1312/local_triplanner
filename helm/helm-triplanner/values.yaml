@@ -30,6 +30,10 @@ images:
     name: marcojr13/triplanner-locations
     tag: "0.2.1"
     pullPolicy: IfNotPresent
+  trips:
+    name: marcojr13/triplanner-trips
+    tag: "0.1.0"
+    pullPolicy: IfNotPresent
 
 # MongoDB 7 StatefulSet for the locations catalogue. Single node, no auth:
 # the Service is ClusterIP-only and the NetworkPolicy limits ingress.
@@ -370,6 +374,152 @@ locationsService:
       resource: services
       subresource: proxy
       name: triplanner-locations
+    resources:
+      requests:
+        cpu: 10m
+        memory: 32Mi
+      limits:
+        cpu: 100m
+        memory: 64Mi
+    securityContext:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      runAsNonRoot: true
+      runAsUser: 65532
+      runAsGroup: 65532
+      capabilities:
+        drop: [ "ALL" ]
+  podAnnotations: {}
+  podLabels: {}
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 100
+    runAsGroup: 101
+    fsGroup: 101
+    fsGroupChangePolicy: OnRootMismatch
+    seccompProfile:
+      type: RuntimeDefault
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop: [ "ALL" ]
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: http
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    failureThreshold: 3
+  readinessProbe:
+    httpGet:
+      path: /ready
+      port: http
+    initialDelaySeconds: 5
+    periodSeconds: 5
+    failureThreshold: 3
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# Trips service. Owns trips, memberships, items and invitations, its own
+# PostgreSQL database and the transactional email outbox.
+tripsService:
+  enabled: true
+  replicaCount: 1
+  service:
+    type: ClusterIP
+    port: 4400
+  postgres:
+    enabled: true
+    image:
+      repository: postgres
+      tag: "17"
+      pullPolicy: IfNotPresent
+    auth:
+      enabled: true
+      # DEMO ONLY. These values render into the
+      # triplanner-trips-postgres-credentials Secret. In production set
+      # existingSecret to a Vault/External Secrets managed Secret.
+      username: trips
+      password: trips-demo
+      database: trips
+      existingSecret: ""
+      usernameKey: POSTGRES_USER
+      passwordKey: POSTGRES_PASSWORD
+      databaseKey: POSTGRES_DB
+    service:
+      port: 5432
+    persistence:
+      enabled: true
+      size: 2Gi
+      storageClass: ""
+    podSecurityContext:
+      runAsNonRoot: true
+      runAsUser: 999
+      runAsGroup: 999
+      fsGroup: 999
+      fsGroupChangePolicy: OnRootMismatch
+      seccompProfile:
+        type: RuntimeDefault
+    securityContext:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities:
+        drop: [ "ALL" ]
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+  locations:
+    url: http://triplanner-locations:4300
+    timeoutMs: 2000
+  broker:
+    url: http://triplanner-kafka:8080
+    topic: TripInvitation
+    timeoutMs: 3000
+  outbox:
+    intervalMs: 1000
+    batchSize: 10
+    maxAttempts: 20
+  seedDemo: true
+  internalToken:
+    existingSecret: triplanner-internal
+    key: INTERNAL_TOKEN
+  serviceAccount:
+    create: true
+    name: ""
+    automount: false
+    annotations: {}
+  # Must stay ClusterRole while rbacProxy.enabled: TokenReview and
+  # SubjectAccessReview are cluster-scoped and the chart adds those rules.
+  rbac:
+    create: true
+    kind: ClusterRole
+    rules: []
+  # Local demo: HTTP 8443 for kubectl port-forward only. Never expose it.
+  rbacProxy:
+    enabled: true
+    image:
+      repository: quay.io/brancz/kube-rbac-proxy
+      tag: v0.23.1
+      pullPolicy: IfNotPresent
+    port: 8443
+    config:
+      apiVersion: v1
+      resource: services
+      subresource: proxy
+      name: triplanner-trips
     resources:
       requests:
         cpu: 10m

@@ -8,20 +8,24 @@ Components:
   - triplanner-kafka: Go HTTP broker (topic/offset/ack, SQLite)
   - triplanner-email: email consumer + BYOK settings
   - triplanner-locations: destinations/activities catalogue (REST, :{{ .Values.locationsService.service.port }})
+  - triplanner-trips: trips, members, items and invitations (REST, :{{ .Values.tripsService.service.port }})
   - triplanner-mongo: single-node MongoDB StatefulSet
+  - triplanner-trips-postgres: single-node PostgreSQL StatefulSet
 
 RBAC:
   - per-service ServiceAccount
   - ClusterRole + ClusterRoleBinding for TokenReview/SAR
   - kube-rbac-proxy sidecar on HTTP 8443 (local demo only)
-  - main app ports remain 8080 (broker) / 4200 (email) / {{ .Values.locationsService.service.port }} (locations)
+  - main app ports remain 8080 (broker) / 4200 (email) / {{ .Values.locationsService.service.port }} (locations) / {{ .Values.tripsService.service.port }} (trips)
   - port-forward 8443; do not expose it outside the cluster
 
 1. Check the rollouts:
    kubectl -n {{ .Release.Namespace }} rollout status deployment/triplanner-kafka
    kubectl -n {{ .Release.Namespace }} rollout status deployment/triplanner-email
    kubectl -n {{ .Release.Namespace }} rollout status deployment/triplanner-locations
+   kubectl -n {{ .Release.Namespace }} rollout status deployment/triplanner-trips
    kubectl -n {{ .Release.Namespace }} rollout status statefulset/triplanner-mongo
+   kubectl -n {{ .Release.Namespace }} rollout status statefulset/triplanner-trips-postgres
 
 2. Check the probes:
    kubectl -n {{ .Release.Namespace }} port-forward svc/triplanner-email 4200:{{ .Values.emailService.service.port }}
@@ -38,7 +42,12 @@ RBAC:
    curl http://localhost:{{ .Values.locationsService.service.port }}/health
    curl http://localhost:{{ .Values.locationsService.service.port }}/ready
 
-5. BYOK:
+5. Check trips:
+   kubectl -n {{ .Release.Namespace }} port-forward svc/triplanner-trips {{ .Values.tripsService.service.port }}:{{ .Values.tripsService.service.port }}
+   curl http://localhost:{{ .Values.tripsService.service.port }}/health
+   curl http://localhost:{{ .Values.tripsService.service.port }}/ready
+
+6. BYOK:
    The email service starts with provider={{ .Values.emailService.provider }}.
    Open the app Profile -> Email delivery to add a Resend key.
    No Resend Secret is required for the recruiter demo.
@@ -55,6 +64,16 @@ Required Secret:
    {{- else if .Values.mongo.auth.enabled }}
    {{ include "helm-triplanner.mongoSecretName" . }} (existing Secret)
    {{- end }}
+   {{- if and .Values.tripsService.postgres.auth.enabled (not .Values.tripsService.postgres.auth.existingSecret) }}
+   {{ include "helm-triplanner.tripsPostgresSecretName" . }} (demo trips Postgres credentials;
+   use existingSecret with Vault/External Secrets in production)
+   {{- else if .Values.tripsService.postgres.auth.enabled }}
+   {{ include "helm-triplanner.tripsPostgresSecretName" . }} (existing Secret)
+   {{- end }}
 
 Broker topic:
    {{ .Values.emailService.broker.topic }} (DLQ: {{ .Values.emailService.broker.dlqTopic }})
+
+Trips outbox:
+   invite + member-joined events go to {{ .Values.tripsService.broker.topic }}.
+   /ready reports outbox_pending; replay by id with db:replay-outbox.

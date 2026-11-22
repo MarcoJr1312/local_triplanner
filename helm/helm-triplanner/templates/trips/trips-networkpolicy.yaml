@@ -1,0 +1,59 @@
+{{- if and .Values.tripsService.enabled .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: triplanner-trips
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: triplanner-trips
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: trips
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: triplanner-trips
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: triplanner-api
+      ports:
+        - port: {{ .Values.tripsService.service.port }}
+          protocol: TCP
+    {{- if .Values.tripsService.rbacProxy.enabled }}
+    - ports:
+        - port: {{ .Values.tripsService.rbacProxy.port }}
+          protocol: TCP
+    {{- end }}
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: triplanner-trips-postgres
+      ports:
+        - port: {{ .Values.tripsService.postgres.service.port }}
+          protocol: TCP
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: triplanner-locations
+      ports:
+        - port: {{ .Values.locationsService.service.port }}
+          protocol: TCP
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: triplanner-kafka
+      ports:
+        - port: {{ .Values.broker.service.port }}
+          protocol: TCP
+    - ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+{{- end }}

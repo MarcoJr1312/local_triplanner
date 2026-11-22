@@ -1,8 +1,8 @@
 # helm-triplanner
 
 Helm chart for the Triplanner demo services: a Go HTTP broker, the email
-consumer with BYOK settings, and the locations/activities catalogue with its
-single-node MongoDB StatefulSet.
+consumer with BYOK settings, the locations/activities catalogue with its
+single-node MongoDB StatefulSet, and the trips service with its own PostgreSQL.
 
 ## Layout
 
@@ -35,6 +35,18 @@ templates/
     locations-service.yaml
     locations-serviceaccount.yaml
     locations-test.yaml
+  trips/
+    trips-deployment.yaml
+    trips-networkpolicy.yaml
+    trips-postgres-networkpolicy.yaml
+    trips-postgres-secret.yaml
+    trips-postgres-service.yaml
+    trips-postgres-statefulset.yaml
+    trips-rbac-proxy.yaml
+    trips-rbac.yaml
+    trips-service.yaml
+    trips-serviceaccount.yaml
+    trips-test.yaml
   mongo/
     mongo-networkpolicy.yaml
     mongo-service.yaml
@@ -55,6 +67,7 @@ Each workload has its own ServiceAccount:
 - `triplanner-helm-triplanner-broker`
 - `triplanner-helm-triplanner-email`
 - `triplanner-helm-triplanner-locations`
+- `triplanner-helm-triplanner-trips`
 
 The main app containers do not use the Kubernetes API. The
 `kube-rbac-proxy` sidecar does: it needs `create` on
@@ -80,6 +93,9 @@ curl -i http://localhost:8443/ready          # 401 without a token
 
 kubectl -n triplanner port-forward svc/triplanner-locations 8443:8443
 curl -i http://localhost:8443/ready
+
+kubectl -n triplanner port-forward svc/triplanner-trips 8443:8443
+curl -i http://localhost:8443/ready
 ```
 
 A client token must be allowed to `get` `services/proxy` for the service name in
@@ -103,12 +119,13 @@ kubectl create namespace triplanner
 
 Prerequisites:
 
-- A default StorageClass for the four PVCs (broker, email settings, Mongo,
-  locations settings).
+- A default StorageClass for the five PVCs (broker, email settings, Mongo,
+  locations settings, trips PostgreSQL).
 - The `triplanner-internal` Secret with `INTERNAL_TOKEN`.
 - Images published at `marcojr13/triplanner-kafka:0.1.0`,
-  `marcojr13/triplanner-email:0.1.0` and
-  `marcojr13/triplanner-locations:0.2.1` (or override `images.*`).
+  `marcojr13/triplanner-email:0.1.0`,
+  `marcojr13/triplanner-locations:0.2.1` and
+  `marcojr13/triplanner-trips:0.1.0` (or override `images.*`).
 
 ```bash
 kubectl create namespace triplanner
@@ -145,10 +162,13 @@ bash scripts/port-forward.sh
 | `8080` | `triplanner-kafka` | app port |
 | `4200` | `triplanner-email` | app port |
 | `4300` | `triplanner-locations` | app port |
+| `4400` | `triplanner-trips` | app port |
 | `8443` | broker `kube-rbac-proxy` | with `-Proxy` / `--proxy` |
 | `8444` | email `kube-rbac-proxy` | with `-Proxy` / `--proxy` |
 | `8445` | locations `kube-rbac-proxy` | with `-Proxy` / `--proxy` |
+| `8446` | trips `kube-rbac-proxy` | with `-Proxy` / `--proxy` |
 | `27018` | MongoDB | with `-Mongo` / `--mongo`; avoids Compose on 27017 |
+| `5433` | trips PostgreSQL | with `-Postgres` / `--postgres`; avoids Compose on 5432 |
 
 App ports bind `0.0.0.0` by default so Compose containers can use
 `host.docker.internal`; do not run this on an untrusted network. Proxy and Mongo
@@ -197,6 +217,48 @@ updating the Secret and restarting the Mongo and locations pods. The Mongo
 StatefulSet keeps its `data-triplanner-mongo-0` PVC, so a root user created on
 an older unauthenticated PVC must be created once manually or the PVC reset.
 
+### Trips PostgreSQL credentials
+
+By default the chart renders `tripsService.postgres.auth` into the
+`triplanner-trips-postgres-credentials` Secret (`POSTGRES_USER`,
+`POSTGRES_PASSWORD`, `POSTGRES_DB`) and injects it into both the StatefulSet and
+the trips service. **This is demo-only.** For production, set
+`tripsService.postgres.auth.existingSecret` to a Secret managed by Vault,
+External Secrets or Sealed Secrets with the same keys; the chart then renders no
+Secret.
+
+```yaml
+tripsService:
+  postgres:
+    auth:
+      enabled: true
+      existingSecret: triplanner-trips-postgres-credentials
+      usernameKey: POSTGRES_USER
+      passwordKey: POSTGRES_PASSWORD
+      databaseKey: POSTGRES_DB
+```
+
+The trips service applies its own schema at boot under `pg_advisory_xact_lock`.
+With `tripsService.seedDemo: true` it also seeds the demo trip. The data lives in
+`data-triplanner-trips-postgres-0`; rotating credentials requires updating the
+Secret and restarting the StatefulSet and the trips Deployment.
+
+### Invitation outbox
+
+Trips writes `email.invite.v1` and `email.member.joined.v1` to its outbox in the
+same transaction as the invitation or join. The relay publishes to
+`triplanner-kafka` on `TripInvitation` and stamps `published_at` /
+`broker_offset`. A broker outage leaves rows pending; `/ready` reports
+`outbox_pending`. Replay one row with:
+
+```bash
+kubectl -n triplanner exec deploy/triplanner-trips -c trips -- \
+  bun run db:replay-outbox <outbox-id>
+```
+
+The base demo still exposes the copyable join link if email is disabled or the
+broker is down.
+
 Test hook pods are deleted after success via
 `helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded`. Failed tests
 keep the pod for logs.
@@ -213,4 +275,11 @@ delete it explicitly to reset the catalogue:
 
 ```bash
 kubectl -n triplanner delete pvc -l app.kubernetes.io/name=triplanner-mongo
+```
+
+The trips PostgreSQL StatefulSet also keeps its
+`data-triplanner-trips-postgres-0` PVC:
+
+```bash
+kubectl -n triplanner delete pvc -l app.kubernetes.io/name=triplanner-trips-postgres
 ```

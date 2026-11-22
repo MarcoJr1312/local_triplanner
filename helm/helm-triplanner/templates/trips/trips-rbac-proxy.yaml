@@ -1,0 +1,21 @@
+{{- if and .Values.tripsService.enabled .Values.tripsService.rbacProxy.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: triplanner-trips-rbac-proxy
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: triplanner-trips
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: trips
+data:
+  config-file.yaml: |
+    authorization:
+      resourceAttributes:
+        namespace: {{ .Release.Namespace }}
+        apiVersion: {{ .Values.tripsService.rbacProxy.config.apiVersion }}
+        resource: {{ .Values.tripsService.rbacProxy.config.resource }}
+        subresource: {{ .Values.tripsService.rbacProxy.config.subresource }}
+        name: {{ .Values.tripsService.rbacProxy.config.name }}
+        verb: get
+{{- end }}
