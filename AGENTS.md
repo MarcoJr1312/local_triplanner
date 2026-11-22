@@ -157,9 +157,38 @@ cd backend/agent-service && uv run python tests/test_m2.py
 - Update the Orkai task/milestone status when work moves.
 - Do not invent owners, dates or acceptance evidence; use `TBD`.
 
+## Delivery cycles (human-in-the-loop)
+
+Migration work runs through one of two Orkai cycles. Name the cycle and the
+slice in the session header before starting. Both cycles stop at explicit human
+gates — a green test run, a prior approval or silence is **not** consent.
+
+| Cycle | Steps | Use for |
+|---|---|---|
+| **Microservice Code Migration** (`19455fa3-28ea-4f03-b195-973c5ddf595e`) | PM → **Gate 1** (contract) → Backend → QA → **Gate 2** (merge) → decommission | Service extraction, cutover, decommission, event schema, data-ownership changes |
+| **Kubernetes Manifest Delivery** (`bf155f51-737c-4138-a439-01d547450118`) | PM → **Gate 1** (scope/exposure) → QA verification plan → Backend readiness → SRE → **Gate 2** (readiness) → QA sign-off | Chart, image, RBAC, Secret, PVC, probe, NetworkPolicy, cluster acceptance |
+
+Role workflows:
+
+- Microservice PM — `0350c390-ead3-46d6-b99a-e1b5bff119a6`
+- Senior Backend Engineer — `269bc7be-73ff-4eab-8b63-b13de4ff33c9`
+- SRE / DevOps — `9cbce416-d411-4f69-bbe5-4bcaf4bd4a1b`
+- QA — `c14512b2-f67c-42b4-98b9-97c8ad950387`
+- Human Decision Gate — `52d858fd-af66-4ca8-ad23-b38235b44c5d` (one decision,
+  evidence, max three options, a recommendation, explicit answer)
+
+Both cycles are invocable in OpenCode as subagents: `ms-pm`,
+`senior-backend`, `sre-devops`, `qa-migration` under `.opencode/agents/`.
+
+Rules: a contract or scope change re-enters Gate 1; P1/P2 defects block
+sign-off; no merge, image publication, decommission or security relaxation
+without explicit human approval.
+
 ## Orkai workflow
 
 1. `overview(category_id: "ba4c49a10fa15dd100c16c61383f6529")`
 2. `project_preferences(action: "get", category_ids: ["ba4c49a10fa15dd100c16c61383f6529"])`
-3. `plan` / `milestone` / `tasks` for the active slice.
-4. Search Orkai before reading large files; re-index after source changes.
+3. `cycle(action: "list", status: "active", category_ids: [...])` — pick the
+   cycle, then `workflow(action: "get", id: ...)` per step.
+4. `plan` / `milestone` / `tasks` for the active slice.
+5. Search Orkai before reading large files; re-index after source changes.
