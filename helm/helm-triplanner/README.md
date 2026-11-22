@@ -1,9 +1,9 @@
 # helm-triplanner
 
-Helm chart for the Triplanner demo services: a Go HTTP broker, the email
-consumer with BYOK settings, the locations/activities catalogue with its
-single-node MongoDB StatefulSet, the trips service and the users service with
-their own PostgreSQL databases.
+Helm chart for the Triplanner demo services: the Next.js web app behind nginx
+ingress, a Go HTTP broker, the email consumer with BYOK settings, the
+locations/activities catalogue with its single-node MongoDB StatefulSet, the
+trips service and the users service with their own PostgreSQL databases.
 
 ## Layout
 
@@ -60,6 +60,13 @@ templates/
     users-service.yaml
     users-serviceaccount.yaml
     users-test.yaml
+  web/
+    web-deployment.yaml
+    web-ingress.yaml
+    web-networkpolicy.yaml
+    web-service.yaml
+    web-serviceaccount.yaml
+    web-test.yaml
   mongo/
     mongo-networkpolicy.yaml
     mongo-service.yaml
@@ -82,6 +89,8 @@ Each workload has its own ServiceAccount:
 - `triplanner-helm-triplanner-locations`
 - `triplanner-helm-triplanner-trips`
 - `triplanner-helm-triplanner-users`
+- `triplanner-helm-triplanner-web` (no Kubernetes API access; no
+  kube-rbac-proxy sidecar)
 
 The main app containers do not use the Kubernetes API. The
 `kube-rbac-proxy` sidecar does: it needs `create` on
@@ -138,17 +147,24 @@ Prerequisites:
 
 - A default StorageClass for the six PVCs (broker, email settings, Mongo,
   locations settings, trips PostgreSQL, users PostgreSQL).
+- An nginx ingress controller (`ingressClassName: nginx`).
 - The `triplanner-internal` Secret with `INTERNAL_TOKEN`.
 - Images published at `marcojr13/triplanner-kafka:0.1.0`,
   `marcojr13/triplanner-email:0.1.1`,
   `marcojr13/triplanner-locations:0.2.1`,
-  `marcojr13/triplanner-trips:0.1.1` and
-  `marcojr13/triplanner-users:0.1.0` (or override `images.*`).
+  `marcojr13/triplanner-trips:0.1.1`,
+  `marcojr13/triplanner-users:0.1.0` and
+  `marcojr13/triplanner-web:1.3.0` (or override `images.*`).
 
 ```bash
 kubectl create namespace triplanner
 kubectl -n triplanner create secret generic triplanner-internal \
   --from-literal=INTERNAL_TOKEN="$(openssl rand -hex 32)"
+
+# nginx ingress (once per cluster)
+helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
+helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx \
+  --namespace ingress-nginx --create-namespace
 
 helm install triplanner ./helm/helm-triplanner \
   --namespace triplanner \
@@ -158,11 +174,53 @@ helm install triplanner ./helm/helm-triplanner \
 The email service starts with `provider: sink`; the recruiter adds a Resend key
 in **Profile → Email delivery**. No Resend Secret is required.
 
+### Web and ingress
+
+The chart deploys `triplanner-web` on ClusterIP `:3000` and an nginx Ingress at
+`http://triplanner.localhost` by default. The API and agent are still external
+in this slice, so the web pod reaches them through `host.docker.internal`.
+Publish those ports on the host during the transition:
+
+```bash
+docker compose \
+  -f deploy/docker-compose.yml \
+  -f deploy/docker-compose.frontend-helm.yml \
+  up -d api agent
+```
+
+Values:
+
+```yaml
+webService:
+  backend:
+    url: http://host.docker.internal:4000/graphql
+    origin: http://host.docker.internal:4000
+  agent:
+    url: http://host.docker.internal:4100
+  ingress:
+    host: triplanner.localhost
+```
+
+The Ingress disables proxy buffering and uses long read/send timeouts for SSE,
+and a 20 MB body limit for GraphQL attachments. If `host.docker.internal` does
+not resolve from the pod, set `webService.hostAliases` to the Docker Desktop
+gateway IP.
+
+The API’s `APP_URL` remains the Compose web URL, so email invite links still
+target `http://localhost:3000` until the API migrates. Username invites and
+notifications work through the Helm web.
+
 ## Verify
 
 ```bash
 helm test triplanner -n triplanner
 kubectl -n triplanner get pods
+
+# Web through ingress
+curl -H "Host: triplanner.localhost" http://127.0.0.1/api/health
+curl -H "Host: triplanner.localhost" http://127.0.0.1/api/ready
+curl -H "Host: triplanner.localhost" -o /dev/null -w '%{http_code}\n' http://127.0.0.1/login
+# Then open http://triplanner.localhost
 ```
 
 Or forward every service with one command:
@@ -182,6 +240,7 @@ bash scripts/port-forward.sh
 | `4300` | `triplanner-locations` | app port |
 | `4400` | `triplanner-trips` | app port |
 | `4500` | `triplanner-users` | app port |
+| `3000` | `triplanner-web` | served through nginx ingress at `http://triplanner.localhost` |
 | `8443` | broker `kube-rbac-proxy` | with `-Proxy` / `--proxy` |
 | `8444` | email `kube-rbac-proxy` | with `-Proxy` / `--proxy` |
 | `8445` | locations `kube-rbac-proxy` | with `-Proxy` / `--proxy` |

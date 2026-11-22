@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **Proposed — pending Gate 1** |
+| Status | **Approved; M11.2–M11.5 implemented; M11.6 acceptance in progress** |
 | Cycle | Kubernetes Manifest Delivery (`bf155f51-737c-4138-a439-01d547450118`) |
 | Integration branch | `refactor/helm` |
 | Work branch | `refactor/helm-frontend-service` |
@@ -162,15 +162,18 @@ Chart version 0.8.0; `appVersion` 0.5.0.
 ## 6. Host connectivity risk
 
 The API and agent are still Compose/host workloads. A cluster pod must reach
-them through `host.docker.internal` or a configured host alias. M11.3 proves
-this with a short-lived probe pod:
+them through `host.docker.internal` or a configured host alias. M11.3 proved
+this with the existing ingress controller and a probe pod:
 
-- If `host.docker.internal:4000/health` and `:4100/health` answer, use those
-  values.
-- If not, set `webService.hostAliases` to the Docker Desktop host gateway IP
-  and document it.
-- If neither works, stop and re-enter Gate 1: the fallback is to add API/agent
-  to the same Helm slice, which changes scope.
+- `host.docker.internal` resolves to the Docker Desktop gateway
+  (`192.168.65.254`), but the Compose API/agent ports are not published by
+  default, so the gateway refuses.
+- Publishing them with `deploy/docker-compose.frontend-helm.yml`
+  (`0.0.0.0:4000`, `0.0.0.0:4100`) makes `host.docker.internal:4000/health` and
+  `:4100/health` answer from a pod. This is the accepted transitional path.
+- The overlay is not the default demo stack; only `web` is published there.
+- If the host IP changes, set `webService.hostAliases`; if the overlay is not
+  acceptable, stop and re-enter Gate 1 with API/agent in the Helm slice.
 
 The API’s `APP_URL` is still `http://localhost:3000` (Compose web). Email invite
 links therefore point at the Compose web until the API moves to Helm. Local
@@ -180,8 +183,9 @@ make email links coherent; this is configuration, not a code change.
 
 ## 7. Ingress prerequisite
 
-The cluster needs an nginx ingress controller. M11.3 checks
-`kubectl get ingressclass`; if absent, install the upstream chart:
+The cluster needs an nginx ingress controller. The Docker Desktop cluster
+already has `IngressClass/nginx` (controller v1.8.1). If absent, install the
+upstream chart:
 
 ```bash
 helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
@@ -225,11 +229,11 @@ Docker Desktop should publish the controller on localhost:80/443. Port conflicts
 
 | Stage | Name | Owner |
 |---|---|---|
-| M11.1 | Contract, ADR and Gate 1 | PM |
-| M11.2 | Web health/readiness, env contract, Docker healthcheck and tests | Backend |
-| M11.3 | Ingress prerequisite and host-connectivity spike | SRE |
-| M11.4 | Helm web Deployment, Service, Ingress, SA, NetworkPolicy, chart 0.8.0 | SRE |
-| M11.5 | Web image/CI alignment and ingress/runbook docs | SRE |
+| M11.1 | Contract, ADR and Gate 1 — **done** | PM |
+| M11.2 | Web health/readiness, env contract, Docker healthcheck and tests — **done** | Backend |
+| M11.3 | Ingress prerequisite and host-connectivity spike — **done** | SRE |
+| M11.4 | Helm web Deployment, Service, Ingress, SA, NetworkPolicy, chart 0.8.0 — **done** | SRE |
+| M11.5 | Web image/CI alignment and ingress/runbook docs — **done** | SRE |
 | M11.6 | Cluster acceptance through nginx ingress | SRE |
 | M11.7 | QA matrix, failure injection and Gate 2 evidence | QA |
 | M11.8 | Gate 2, release notes and tag | PM/SRE |

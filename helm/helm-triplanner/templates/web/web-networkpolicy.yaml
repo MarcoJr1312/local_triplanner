@@ -1,0 +1,44 @@
+{{- if and .Values.webService.enabled .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: triplanner-web
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: triplanner-web
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: web
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: triplanner-web
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - port: {{ .Values.webService.service.port }}
+          protocol: TCP
+  egress:
+    # The API and agent are host-published during the transition. Keep the
+    # egress scoped to their ports; this becomes pod selectors when they move
+    # into Helm.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - port: 4000
+          protocol: TCP
+        - port: 4100
+          protocol: TCP
+    - ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+{{- end }}

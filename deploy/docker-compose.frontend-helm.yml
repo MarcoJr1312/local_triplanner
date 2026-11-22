@@ -1,0 +1,20 @@
+# Transitional overlay for the Helm-deployed web frontend.
+#
+# The web pod reaches the still-Compose API/agent through
+# host.docker.internal. That only works when the ports are published on the
+# host; this overlay does that explicitly. Do not use it as the default demo
+# stack (only `web` should be published there). Remove it when the API and agent
+# move into Helm.
+#
+# Usage:
+#   docker compose \
+#     -f deploy/docker-compose.yml \
+#     -f deploy/docker-compose.frontend-helm.yml \
+#     up -d api agent
+services:
+  api:
+    ports:
+      - "0.0.0.0:4000:4000"
+  agent:
+    ports:
+      - "0.0.0.0:4100:4100"

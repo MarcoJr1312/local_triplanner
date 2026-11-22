@@ -149,8 +149,9 @@ docker compose logs -f api
 
 ### Cluster demo (optional)
 
-The chart in `helm/helm-triplanner` runs the broker, email, locations, trips,
-users and their PostgreSQL databases plus MongoDB on a local cluster. See the
+The chart in `helm/helm-triplanner` runs the Next.js web app behind nginx
+ingress, plus the broker, email, locations, trips, users and their PostgreSQL
+databases and MongoDB on a local cluster. See the
 [chart README](helm/helm-triplanner/README.md), then forward the services with
 one command:
 
@@ -159,6 +160,10 @@ powershell -ExecutionPolicy Bypass -File scripts/port-forward.ps1 -Proxy
 # or
 bash scripts/port-forward.sh --proxy
 ```
+
+The Helm web is at `http://triplanner.localhost` (nginx ingress). The API and
+agent are still external in this slice; publish their ports with
+`deploy/docker-compose.frontend-helm.yml` as described in the chart README.
 
 ### What to try
 

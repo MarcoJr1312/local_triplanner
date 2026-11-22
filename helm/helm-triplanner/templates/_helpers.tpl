@@ -74,6 +74,10 @@ needs Kubernetes API permissions in the current design.
 {{- default (printf "%s-users" (include "helm-triplanner.fullname" .)) .Values.usersService.serviceAccount.name }}
 {{- end }}
 
+{{- define "helm-triplanner.webServiceAccountName" -}}
+{{- default (printf "%s-web" (include "helm-triplanner.fullname" .)) .Values.webService.serviceAccount.name }}
+{{- end }}
+
 {{- define "helm-triplanner.mongoSecretName" -}}
 {{- default "triplanner-mongo-credentials" .Values.mongo.auth.existingSecret }}
 {{- end }}
