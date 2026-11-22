@@ -8,7 +8,7 @@
 | Branch | `refactor/helm-trips-service` |
 | Image under test | `marcojr13/triplanner-trips:0.1.0` (local build; publication is M9.12) |
 | Postgres | 17.12 (trips) / pgvector 17 (platform) |
-| Chart | `helm-triplanner` 0.6.0 |
+| Chart | `helm-triplanner` 0.6.1 |
 
 ## 1. Scope
 
@@ -98,7 +98,8 @@ The API trips timeout was raised to 5 s because the service itself waits up to
 - `helm template` + `kubectl apply --dry-run=server`: all objects valid.
 - `--set networkPolicy.enabled=true`: `triplanner-trips` and
   `triplanner-trips-postgres` NetworkPolicies render and validate.
-- `helm upgrade --install triplanner ...`: revision 18, chart 0.6.0 deployed.
+- `helm upgrade --install triplanner ...`: revision 18, chart 0.6.0 deployed
+  (revision 19 adds the email 0.1.1 patch).
 - Pods: `triplanner-trips` 2/2 Running (service + rbac-proxy),
   `triplanner-trips-postgres-0` 1/1 Running.
 - PVC `data-triplanner-trips-postgres-0` Bound (2Gi).
@@ -173,7 +174,8 @@ restore.
 | Item | Value |
 |---|---|
 | Git tag | `v1.3.0` |
-| Chart | `helm-triplanner` 0.6.0 (trips image `0.1.0`) |
+| Chart | `helm-triplanner` 0.6.1 (trips 0.1.0, email 0.1.1) |
+| Email consumer | `marcojr13/triplanner-email:0.1.1` + `latest`, manifest `sha256:e5319f4c28d779cf8237d408230a43517227d7cda10765bbb6db2e660c8ef3de`, `linux/amd64` + `linux/arm64` |
 | Trips image | `marcojr13/triplanner-trips:0.1.0` + `latest`, manifest `sha256:dab280313429f081aeda2f9a71913476a8b580112c6585d779a2b1ad64a419a4`, `linux/amd64` + `linux/arm64` |
 | API image | `marcojr13/triplanner-api:1.2.0` + `latest`, manifest `sha256:783b54c2033e85d594c19c2e01e3bb83a9156404ac06cada5e516b6195648ac1`, `linux/amd64` + `linux/arm64` |
 | CI | `.github/workflows/trips.yml` (test + multi-arch publish) |
@@ -192,3 +194,15 @@ Published-stack smoke with `docker compose -f deploy/docker-compose.hub.yml up
 The `marcojr13/triplanner-locations:latest` tag did not exist; it was created
 from the published `0.2.1` manifest, and the Hub compose now pins
 `LOCATIONS_IMAGE_TAG=0.2.1` so it does not depend on that mutable tag.
+
+### 9.1 Email patch (v1.3.1)
+
+The initial chart shipped `triplanner-email:0.1.0`, which predates
+`email.member.joined.v1`; the joined event was dead-lettered. The patch:
+
+- publishes `triplanner-email:0.1.1` / `latest` (manifest
+  `sha256:e5319f4…`, amd64 + arm64);
+- chart 0.6.1 uses it, release revision 19;
+- replays the dead-lettered outbox row
+  `ff13b03c-0ce2-42ae-9cea-ed608e32bba6`; the email service logs `email.sent`
+  for `email.member.joined.v1` to the owner and `outbox_pending=0`.

@@ -525,7 +525,7 @@ Mirror `0005`:
   5432, locations 4300, broker 8080 and DNS.
 - HPA disabled, no PDB (single replica).
 - Helm test pod: `wget /ready`.
-- Chart version 0.6.0.
+- Chart version 0.6.1.
 
 ### 9.4 Compose
 

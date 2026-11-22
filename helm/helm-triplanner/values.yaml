@@ -24,7 +24,7 @@ images:
     pullPolicy: IfNotPresent
   email:
     name: marcojr13/triplanner-email
-    tag: "0.1.0"
+    tag: "0.1.1"
     pullPolicy: IfNotPresent
   locations:
     name: marcojr13/triplanner-locations

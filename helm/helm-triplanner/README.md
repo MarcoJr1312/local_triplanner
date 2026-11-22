@@ -123,7 +123,7 @@ Prerequisites:
   locations settings, trips PostgreSQL).
 - The `triplanner-internal` Secret with `INTERNAL_TOKEN`.
 - Images published at `marcojr13/triplanner-kafka:0.1.0`,
-  `marcojr13/triplanner-email:0.1.0`,
+  `marcojr13/triplanner-email:0.1.1`,
   `marcojr13/triplanner-locations:0.2.1` and
   `marcojr13/triplanner-trips:0.1.0` (or override `images.*`).
 

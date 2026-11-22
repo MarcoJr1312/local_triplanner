@@ -95,10 +95,12 @@ auth and Dockerfiles.
   clean-clone QA and the `v1.0.0` tag.
 - CI/CD upgrade (`v1.1.0`): per-service workflows in `.github/workflows/`,
   multi-arch Docker Hub images and `deploy/docker-compose.hub.yml`.
-- Trips release (`v1.3.0`): trips service + remote-only API, chart 0.6.0.
-  Images `marcojr13/triplanner-trips:0.1.0`/`latest` (`sha256:dab2803…`) and
-  `marcojr13/triplanner-api:1.2.0`/`latest` (`sha256:783b54c…`), both amd64 +
-  arm64. The published Hub stack passed the demo smoke.
+- Trips release (`v1.3.0`): trips service + remote-only API, chart 0.6.1.
+  Images `marcojr13/triplanner-trips:0.1.0`/`latest` (`sha256:dab2803…`),
+  `marcojr13/triplanner-api:1.2.0`/`latest` (`sha256:783b54c…`) and
+  `marcojr13/triplanner-email:0.1.1`/`latest` (`sha256:e5319f4…`), all amd64 +
+  arm64. `v1.3.1` is the email patch that enables `email.member.joined.v1`.
+  The published Hub stack passed the demo smoke.
 - CI/CD verified: 8/8 GitHub Actions runs passed; published images
   `marcojr13/triplanner-{web,api,agent}` (tags `latest`, `1.1`, `1.1.0`,
   `sha-e335779`) and the published stack passed the smoke test.
@@ -127,7 +129,7 @@ auth and Dockerfiles.
 - M9 (trips service, PostgreSQL) complete: contract, schema/migrations,
   trips/members/items, invitations + transactional outbox, API cutover,
   idempotent legacy import, Compose stack (`trips` + `trips-postgres`) and Helm
-  chart 0.6.0 accepted on Docker Desktop. `TRIPS_MODE` and the legacy trip
+  chart 0.6.1 accepted on Docker Desktop. `TRIPS_MODE` and the legacy trip
   tables were removed in M9.11; the API is remote-only. Evidence:
   `docs/migrations/0006-trips-service.md` and `0007-trips-qa.md`.
 Do not assume the target architecture is already implemented — check the
