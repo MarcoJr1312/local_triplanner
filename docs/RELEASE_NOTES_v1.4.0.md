@@ -1,5 +1,9 @@
 # Release notes — v1.4.0 (users service)
 
+> Superseded. `v1.4.0` was tagged locally but never published. The users
+> service ships in **v1.5.0**, which also adds the frontend on Helm. See
+> [`RELEASE_NOTES_v1.5.0.md`](./RELEASE_NOTES_v1.5.0.md).
+
 | Field | Value |
 |---|---|
 | Status | Release candidate; Docker Hub publish and published-stack smoke pending |
