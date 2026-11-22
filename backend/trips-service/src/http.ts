@@ -184,6 +184,32 @@ export function createHandler(deps: HttpDeps): (req: Request) => Promise<Respons
     makeRoute('POST', '/internal/v1/trips/:id/join', async (ctx) =>
       json(200, await service().joinTrip(ctx.actor, ctx.params.id ?? '', ctx.body))),
 
+    makeRoute('POST', '/internal/v1/trips/:id/local-invite', async (ctx) => {
+      const result = await service().createLocalInvitation(
+        ctx.actor,
+        ctx.params.id ?? '',
+        ctx.body,
+      );
+      return json(result.created ? 201 : 200, result.invitation);
+    }),
+
+    makeRoute('POST', '/internal/v1/trips/:id/join-local', async (ctx) =>
+      json(200, await service().joinLocal(ctx.actor, ctx.params.id ?? '', ctx.body))),
+
+    makeRoute(
+      'POST',
+      '/internal/v1/trips/:id/local-invite/:invitationId/decline',
+      async (ctx) =>
+        json(200, await service().declineLocalInvitation(
+          ctx.actor,
+          ctx.params.id ?? '',
+          {
+            ...ctx.body,
+            invitation_id: ctx.params.invitationId ?? '',
+          },
+        )),
+    ),
+
     makeRoute('POST', '/internal/v1/trips/:id/leave', async (ctx) =>
       json(200, await service().leaveTrip(ctx.actor, ctx.params.id ?? '', ctx.body))),
 

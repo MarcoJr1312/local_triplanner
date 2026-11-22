@@ -22,6 +22,9 @@ import type {
   InvitationRole,
   ItemWriteResult,
   JoinResult,
+  LocalInvitationResult,
+  LocalInvitationRow,
+  LocalJoinResult,
   Role,
   TripAggregate,
   TripContext,
@@ -567,6 +570,123 @@ export class TripsService {
         ? { queued: true }
         : { queued: false, reason: outcome.reason ?? 'NO_NOTIFY' },
     };
+  }
+
+  /**
+   * Creates a pending invitation addressed to an existing user id. No code, no
+   * email and no outbox row: the API stores the notification and publishes it.
+   */
+  async createLocalInvitation(
+    actorId: string,
+    tripId: string,
+    body: Record<string, unknown>,
+  ): Promise<LocalInvitationResult> {
+    const id = pathId(tripId, 'trip_id');
+    await this.requireTrip(id);
+    this.requireEditor(await this.requireRole(id, actorId));
+
+    const inviteeUserId = requiredId(body, 'invitee_user_id');
+    const role = requiredRole(body, 'role', INVITE_ROLES) as InvitationRole;
+    if (inviteeUserId === actorId) {
+      throw new AppError('INVALID_ARGUMENT', 'No puedes invitarte a ti mismo.');
+    }
+    if (await store.getMemberRole(this.db, id, inviteeUserId)) {
+      throw new AppError('ALREADY_MEMBER', 'El usuario ya es miembro de este viaje.');
+    }
+
+    return this.db.transaction(async (tx) => {
+      // Re-check inside the transaction to close the join race.
+      if (await store.getMemberRole(tx, id, inviteeUserId)) {
+        throw new AppError('ALREADY_MEMBER', 'El usuario ya es miembro de este viaje.');
+      }
+      return store.insertLocalInvitation(tx, {
+        id: randomUUID(),
+        trip_id: id,
+        invitee_user_id: inviteeUserId,
+        role,
+        created_by: actorId,
+      });
+    });
+  }
+
+  /** Membership + accepted invitation in one transaction; no email outbox. */
+  async joinLocal(
+    actorId: string,
+    tripId: string,
+    body: Record<string, unknown>,
+  ): Promise<LocalJoinResult> {
+    const id = pathId(tripId, 'trip_id');
+    await this.requireTrip(id);
+
+    const userId = requiredId(body, 'user_id');
+    if (userId !== actorId) {
+      throw new AppError('FORBIDDEN', 'Solo el invitado puede aceptar esta invitación.');
+    }
+    const invitationId = requiredId(body, 'invitation_id');
+
+    const outcome = await this.db.transaction<{ joined: boolean }>(async (tx) => {
+      const invitation = await store.findLocalInvitationForUpdate(tx, id, invitationId);
+      if (!invitation) {
+        throw new AppError('INVITE_NOT_FOUND', 'Invitación no encontrada.');
+      }
+      if (invitation.invitee_user_id !== userId) {
+        throw new AppError('INVITE_INVITEE_MISMATCH', 'La invitación es para otro usuario.');
+      }
+
+      if (invitation.status === 'accepted') {
+        if (await store.getMemberRole(tx, id, userId)) return { joined: false };
+        throw new AppError('INVITE_ALREADY_USED', 'La invitación ya fue utilizada.');
+      }
+      if (invitation.status !== 'pending') {
+        throw new AppError('INVITE_ALREADY_USED', 'La invitación ya fue utilizada.');
+      }
+
+      await store.upsertMember(tx, id, userId, invitation.role, null);
+      await store.acceptInvitation(tx, invitation.id);
+      return { joined: true };
+    });
+
+    const updated = await this.requireTrip(id);
+    return {
+      joined: outcome.joined,
+      trip: await store.buildAggregate(this.db, updated, actorId),
+    };
+  }
+
+  /** Declines a pending local invitation; repeat declines are idempotent. */
+  async declineLocalInvitation(
+    actorId: string,
+    tripId: string,
+    body: Record<string, unknown>,
+  ): Promise<LocalInvitationRow> {
+    const id = pathId(tripId, 'trip_id');
+    await this.requireTrip(id);
+
+    const userId = requiredId(body, 'user_id');
+    if (userId !== actorId) {
+      throw new AppError('FORBIDDEN', 'Solo el invitado puede rechazar esta invitación.');
+    }
+    const invitationId = requiredId(body, 'invitation_id');
+
+    return this.db.transaction(async (tx) => {
+      const invitation = await store.findLocalInvitationForUpdate(tx, id, invitationId);
+      if (!invitation) {
+        throw new AppError('INVITE_NOT_FOUND', 'Invitación no encontrada.');
+      }
+      if (invitation.invitee_user_id !== userId) {
+        throw new AppError('INVITE_INVITEE_MISMATCH', 'La invitación es para otro usuario.');
+      }
+      if (invitation.status === 'declined') return invitation;
+      if (invitation.status !== 'pending') {
+        throw new AppError('INVITE_ALREADY_USED', 'La invitación ya fue utilizada.');
+      }
+
+      const declined = await store.declineInvitation(tx, invitation.id);
+      if (!declined) {
+        throw new AppError('INVITE_ALREADY_USED', 'La invitación ya fue utilizada.');
+      }
+      return declined;
+    });
   }
 
   // ---------------------------------------------------------------- items

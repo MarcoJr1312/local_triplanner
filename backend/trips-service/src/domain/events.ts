@@ -1,7 +1,7 @@
 // Email event envelopes produced by trips. The email service owns rendering;
 // trips only guarantees the versioned contract and at-least-once delivery.
 
-import type { InvitationRow, TripRow } from './types.ts';
+import type { EmailInvitationRow, TripRow } from './types.ts';
 
 export interface InviteNotify {
   inviter_name: string;
@@ -28,7 +28,7 @@ export interface EventEnvelope {
 
 export function buildInviteEvent(
   trip: TripRow,
-  invitation: InvitationRow,
+  invitation: EmailInvitationRow,
   notify: InviteNotify,
   now: Date = new Date(),
 ): EventEnvelope {

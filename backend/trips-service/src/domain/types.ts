@@ -118,22 +118,41 @@ export interface TripContext {
 }
 
 export type InvitationRole = 'editor' | 'viewer';
-export type InvitationStatus = 'pending' | 'accepted' | 'revoked';
+export type InvitationStatus = 'pending' | 'accepted' | 'declined' | 'revoked';
+export type InvitationChannel = 'email' | 'local';
 
 export interface InvitationRow {
   id: string;
   trip_id: string;
-  email: string;
-  code: string;
+  email: string | null;
+  code: string | null;
   role: InvitationRole;
   status: InvitationStatus;
   created_by: string;
   created_at: string;
   accepted_at: string | null;
+  channel: InvitationChannel;
+  invitee_user_id: string | null;
+}
+
+/** Email invitations always carry both fields (enforced by a DB check). */
+export interface EmailInvitationRow extends InvitationRow {
+  channel: 'email';
+  email: string;
+  code: string;
+  invitee_user_id: null;
+}
+
+/** Local invitations carry the invitee instead of email/code. */
+export interface LocalInvitationRow extends InvitationRow {
+  channel: 'local';
+  email: null;
+  code: null;
+  invitee_user_id: string;
 }
 
 export interface InvitationPreview {
-  invitation: InvitationRow;
+  invitation: EmailInvitationRow;
   trip: {
     id: string;
     name: string;
@@ -148,14 +167,24 @@ export interface EmailQueueStatus {
 }
 
 export interface InvitationResult {
-  invitation: InvitationRow;
+  invitation: EmailInvitationRow;
   email: EmailQueueStatus;
+}
+
+export interface LocalInvitationResult {
+  invitation: LocalInvitationRow;
+  created: boolean;
 }
 
 export interface JoinResult {
   joined: boolean;
   trip: TripAggregate;
   member_email: EmailQueueStatus;
+}
+
+export interface LocalJoinResult {
+  joined: boolean;
+  trip: TripAggregate;
 }
 
 export interface OutboxRow {

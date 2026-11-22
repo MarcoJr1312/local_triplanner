@@ -852,3 +852,215 @@ describe('HTTP routes', () => {
     expect(unknown.status).toBe(404);
   });
 });
+
+describe('local invitations', () => {
+  test('creates one pending invite without code, email or outbox', async () => {
+    if (!db) return;
+    const id = await newTrip();
+    await service.addMember('u1', id, { user_id: 'u3', role: 'viewer' });
+
+    await expectCode(
+      () => service.createLocalInvitation('u3', id, { invitee_user_id: 'u2', role: 'viewer' }),
+      'FORBIDDEN_EDIT',
+    );
+
+    const result = await service.createLocalInvitation('u1', id, {
+      invitee_user_id: 'u2',
+      role: 'editor',
+    });
+    expect(result.created).toBe(true);
+    expect(result.invitation).toMatchObject({
+      channel: 'local',
+      email: null,
+      code: null,
+      invitee_user_id: 'u2',
+      role: 'editor',
+      status: 'pending',
+      created_by: 'u1',
+    });
+    expect(await countPendingOutbox(db)).toBe(0);
+
+    const retry = await service.createLocalInvitation('u1', id, {
+      invitee_user_id: 'u2',
+      role: 'editor',
+    });
+    expect(retry.created).toBe(false);
+    expect(retry.invitation.id).toBe(result.invitation.id);
+  });
+
+  test('joins atomically, only as the invitee, and repeat joins are a no-op', async () => {
+    if (!db) return;
+    const id = await newTrip();
+    const result = await service.createLocalInvitation('u1', id, {
+      invitee_user_id: 'u2',
+      role: 'editor',
+    });
+
+    await expectCode(
+      () =>
+        service.joinLocal('u1', id, {
+          user_id: 'u2',
+          invitation_id: result.invitation.id,
+        }),
+      'FORBIDDEN',
+    );
+    await expectCode(
+      () =>
+        service.joinLocal('u2', id, {
+          user_id: 'u2',
+          invitation_id: 'missing-invite',
+        }),
+      'INVITE_NOT_FOUND',
+    );
+
+    const other = await service.createLocalInvitation('u1', id, {
+      invitee_user_id: 'u3',
+      role: 'viewer',
+    });
+    await expectCode(
+      () =>
+        service.joinLocal('u3', id, {
+          user_id: 'u3',
+          invitation_id: result.invitation.id,
+        }),
+      'INVITE_INVITEE_MISMATCH',
+    );
+
+    const joined = await service.joinLocal('u2', id, {
+      user_id: 'u2',
+      invitation_id: result.invitation.id,
+    });
+    expect(joined.joined).toBe(true);
+    expect(joined.trip.members.find((member) => member.user_id === 'u2')?.role).toBe('editor');
+
+    const invitation = await db.one<{ status: string; accepted_at: string | null }>(
+      'SELECT status, accepted_at FROM invitations WHERE id = $1',
+      [result.invitation.id],
+    );
+    expect(invitation?.status).toBe('accepted');
+    expect(invitation?.accepted_at).not.toBeNull();
+    expect(await countPendingOutbox(db)).toBe(0);
+
+    const again = await service.joinLocal('u2', id, {
+      user_id: 'u2',
+      invitation_id: result.invitation.id,
+    });
+    expect(again.joined).toBe(false);
+
+    // The other invite is untouched.
+    const pending = await db.one<{ status: string }>(
+      'SELECT status FROM invitations WHERE id = $1',
+      [other.invitation.id],
+    );
+    expect(pending?.status).toBe('pending');
+  });
+
+  test('declines idempotently, frees the pair and blocks a late join', async () => {
+    if (!db) return;
+    const id = await newTrip();
+    const first = await service.createLocalInvitation('u1', id, {
+      invitee_user_id: 'u2',
+      role: 'viewer',
+    });
+
+    await expectCode(
+      () =>
+        service.declineLocalInvitation('u1', id, {
+          user_id: 'u2',
+          invitation_id: first.invitation.id,
+        }),
+      'FORBIDDEN',
+    );
+
+    const declined = await service.declineLocalInvitation('u2', id, {
+      user_id: 'u2',
+      invitation_id: first.invitation.id,
+    });
+    expect(declined.status).toBe('declined');
+
+    const repeat = await service.declineLocalInvitation('u2', id, {
+      user_id: 'u2',
+      invitation_id: first.invitation.id,
+    });
+    expect(repeat.status).toBe('declined');
+
+    await expectCode(
+      () =>
+        service.joinLocal('u2', id, {
+          user_id: 'u2',
+          invitation_id: first.invitation.id,
+        }),
+      'INVITE_ALREADY_USED',
+    );
+
+    // A declined invite frees the partial unique index.
+    const second = await service.createLocalInvitation('u1', id, {
+      invitee_user_id: 'u2',
+      role: 'editor',
+    });
+    expect(second.created).toBe(true);
+    expect(second.invitation.id).not.toBe(first.invitation.id);
+  });
+
+  test('rejects self invites and users who are already members', async () => {
+    if (!db) return;
+    const id = await newTrip();
+    await service.addMember('u1', id, { user_id: 'u2', role: 'viewer' });
+
+    await expectCode(
+      () => service.createLocalInvitation('u1', id, { invitee_user_id: 'u2', role: 'viewer' }),
+      'ALREADY_MEMBER',
+    );
+    await expectCode(
+      () => service.createLocalInvitation('u1', id, { invitee_user_id: 'u1', role: 'viewer' }),
+      'INVALID_ARGUMENT',
+    );
+  });
+
+  test('exposes the local routes over HTTP', async () => {
+    if (!db) return;
+    const trip = await service.createTrip('u1', {
+      name: 'Toronto',
+      destination_id: 'toronto',
+      start_date: '2026-12-04',
+      end_date: '2026-12-06',
+    });
+
+    const created = await authed(`/internal/v1/trips/${trip.id}/local-invite`, {
+      method: 'POST',
+      body: JSON.stringify({ invitee_user_id: 'u2', role: 'viewer' }),
+    });
+    expect(created.status).toBe(201);
+    const invitation = (await created.json()) as { id: string; channel: string };
+    expect(invitation.channel).toBe('local');
+
+    const join = await authed(
+      `/internal/v1/trips/${trip.id}/join-local`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ user_id: 'u2', invitation_id: invitation.id }),
+      },
+      'u2',
+    );
+    expect(join.status).toBe(200);
+    const joined = (await join.json()) as { joined: boolean };
+    expect(joined.joined).toBe(true);
+
+    const second = await authed(`/internal/v1/trips/${trip.id}/local-invite`, {
+      method: 'POST',
+      body: JSON.stringify({ invitee_user_id: 'u3', role: 'viewer' }),
+    });
+    const secondInvitation = (await second.json()) as { id: string };
+
+    const decline = await authed(
+      `/internal/v1/trips/${trip.id}/local-invite/${secondInvitation.id}/decline`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ user_id: 'u3' }),
+      },
+      'u3',
+    );
+    expect(decline.status).toBe(200);
+    expect(((await decline.json()) as { status: string }).status).toBe('declined');
+  });
+});

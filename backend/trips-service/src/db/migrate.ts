@@ -1,18 +1,29 @@
-// Schema runner. One transaction, one advisory lock, one version row.
+// Schema runner. One transaction, one advisory lock, one row per version.
 // The service only ever migrates its own database.
 
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import { connect, type Db, type Queryable } from '../db.ts';
+import { connect, LATEST_SCHEMA_VERSION, type Db, type Queryable } from '../db.ts';
 import { loadConfig, loadDotEnv } from '../env.ts';
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = LATEST_SCHEMA_VERSION;
 const MIGRATION_LOCK_ID = 740_001;
-const SCHEMA_PATH = fileURLToPath(new URL('../../db/schema.sql', import.meta.url));
+
+interface Migration {
+  version: number;
+  path: string;
+}
+
+// Ordered, append-only. Existing databases apply only the missing versions.
+const MIGRATIONS: Migration[] = [
+  { version: 1, path: '../../db/schema.sql' },
+  { version: 2, path: '../../db/migrations/002-local-invitations.sql' },
+];
 
 export interface MigrateResult {
   version: number;
   applied: boolean;
+  applied_versions: number[];
   tables: string[];
 }
 
@@ -27,7 +38,11 @@ async function listTables(tx: Queryable): Promise<string[]> {
 }
 
 export async function migrate(db: Db): Promise<MigrateResult> {
-  const sql = await readFile(SCHEMA_PATH, 'utf8');
+  const sqlByVersion = new Map<number, string>();
+  for (const migration of MIGRATIONS) {
+    const path = fileURLToPath(new URL(migration.path, import.meta.url));
+    sqlByVersion.set(migration.version, await readFile(path, 'utf8'));
+  }
 
   return db.transaction(async (tx) => {
     // Serializes concurrent boots; released on commit or rollback.
@@ -39,18 +54,29 @@ export async function migrate(db: Db): Promise<MigrateResult> {
        )`,
     );
 
-    const existing = await tx.one<{ version: number }>(
-      'SELECT version FROM schema_migrations WHERE version = $1',
-      [SCHEMA_VERSION],
+    const existing = await tx.query<{ version: number }>(
+      'SELECT version FROM schema_migrations ORDER BY version',
     );
-    if (existing) {
-      return { version: SCHEMA_VERSION, applied: false, tables: await listTables(tx) };
+    const appliedVersions = new Set(existing.map((row) => Number(row.version)));
+    const applied: number[] = [];
+
+    for (const migration of MIGRATIONS) {
+      if (appliedVersions.has(migration.version)) continue;
+      const sql = sqlByVersion.get(migration.version);
+      if (!sql) throw new Error(`missing migration ${migration.version}`);
+      await tx.exec(sql);
+      await tx.run('INSERT INTO schema_migrations (version) VALUES ($1)', [
+        migration.version,
+      ]);
+      applied.push(migration.version);
     }
 
-    await tx.exec(sql);
-    await tx.run('INSERT INTO schema_migrations (version) VALUES ($1)', [SCHEMA_VERSION]);
-
-    return { version: SCHEMA_VERSION, applied: true, tables: await listTables(tx) };
+    return {
+      version: SCHEMA_VERSION,
+      applied: applied.length > 0,
+      applied_versions: applied,
+      tables: await listTables(tx),
+    };
   });
 }
 
@@ -60,7 +86,9 @@ if (import.meta.main) {
   const db = await connect(config);
   try {
     const result = await migrate(db);
-    const state = result.applied ? 'applied' : 'already applied';
+    const state = result.applied
+      ? `applied ${result.applied_versions.join(', ')}`
+      : 'already applied';
     console.log(`[trips] schema v${result.version} ${state} (${result.tables.join(', ')})`);
   } finally {
     await db.close();

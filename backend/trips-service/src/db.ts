@@ -36,6 +36,9 @@ export interface Db extends Queryable {
   close(): Promise<void>;
 }
 
+/** Latest schema version applied by src/db/migrate.ts. */
+export const LATEST_SCHEMA_VERSION = 2;
+
 class Sql implements Queryable {
   constructor(private readonly client: Pool | PoolClient) {}
 
@@ -135,7 +138,8 @@ class TripsDb extends Sql implements Db {
     );
     if (!table?.table) return false;
     const row = await this.one<{ count: number }>(
-      'SELECT COUNT(*)::int AS count FROM schema_migrations WHERE version >= 1',
+      'SELECT COUNT(*)::int AS count FROM schema_migrations WHERE version >= $1',
+      [LATEST_SCHEMA_VERSION],
     );
     return Number(row?.count ?? 0) > 0;
   }

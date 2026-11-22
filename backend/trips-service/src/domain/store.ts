@@ -7,7 +7,9 @@ import {
 } from './reminders.ts';
 import type {
   CategorySpend,
-  InvitationRow,
+  EmailInvitationRow,
+  InvitationRole,
+  LocalInvitationRow,
   OutboxRow,
   Role,
   TripAggregate,
@@ -455,17 +457,17 @@ export interface NewInvitation {
   trip_id: string;
   email: string;
   code: string;
-  role: InvitationRow['role'];
+  role: InvitationRole;
   created_by: string;
 }
 
 export async function insertInvitation(
   tx: Queryable,
   input: NewInvitation,
-): Promise<InvitationRow> {
-  const row = await tx.one<InvitationRow>(
-    `INSERT INTO invitations (id, trip_id, email, code, role, status, created_by)
-     VALUES ($1, $2, $3, $4, $5, 'pending', $6)
+): Promise<EmailInvitationRow> {
+  const row = await tx.one<EmailInvitationRow>(
+    `INSERT INTO invitations (id, trip_id, email, code, role, status, created_by, channel)
+     VALUES ($1, $2, $3, $4, $5, 'pending', $6, 'email')
      RETURNING *`,
     [input.id, input.trip_id, input.email, input.code, input.role, input.created_by],
   );
@@ -476,8 +478,11 @@ export async function insertInvitation(
 export async function findInvitationByCode(
   db: Queryable,
   code: string,
-): Promise<InvitationRow | null> {
-  return db.one<InvitationRow>('SELECT * FROM invitations WHERE code = $1', [code]);
+): Promise<EmailInvitationRow | null> {
+  return db.one<EmailInvitationRow>(
+    "SELECT * FROM invitations WHERE code = $1 AND channel = 'email'",
+    [code],
+  );
 }
 
 /** Locks the invitation row for the join transaction. */
@@ -485,10 +490,77 @@ export async function findInvitationForJoin(
   tx: Queryable,
   tripId: string,
   code: string,
-): Promise<InvitationRow | null> {
-  return tx.one<InvitationRow>(
-    'SELECT * FROM invitations WHERE code = $1 AND trip_id = $2 FOR UPDATE',
+): Promise<EmailInvitationRow | null> {
+  return tx.one<EmailInvitationRow>(
+    `SELECT * FROM invitations
+      WHERE code = $1 AND trip_id = $2 AND channel = 'email'
+      FOR UPDATE`,
     [code, tripId],
+  );
+}
+
+export interface NewLocalInvitation {
+  id: string;
+  trip_id: string;
+  invitee_user_id: string;
+  role: InvitationRole;
+  created_by: string;
+}
+
+/**
+ * Creates one pending local invitation per trip+user. A retry returns the
+ * existing pending row instead of duplicating it.
+ */
+export async function insertLocalInvitation(
+  tx: Queryable,
+  input: NewLocalInvitation,
+): Promise<{ invitation: LocalInvitationRow; created: boolean }> {
+  const inserted = await tx.one<LocalInvitationRow>(
+    `INSERT INTO invitations
+       (id, trip_id, email, code, role, status, created_by, channel, invitee_user_id)
+     VALUES ($1, $2, NULL, NULL, $3, 'pending', $4, 'local', $5)
+     ON CONFLICT (trip_id, invitee_user_id)
+       WHERE channel = 'local' AND status = 'pending'
+       DO NOTHING
+     RETURNING *`,
+    [input.id, input.trip_id, input.role, input.created_by, input.invitee_user_id],
+  );
+  if (inserted) return { invitation: inserted, created: true };
+
+  const existing = await tx.one<LocalInvitationRow>(
+    `SELECT * FROM invitations
+      WHERE trip_id = $1 AND invitee_user_id = $2
+        AND channel = 'local' AND status = 'pending'`,
+    [input.trip_id, input.invitee_user_id],
+  );
+  if (!existing) throw new Error('No se pudo crear la invitación local');
+  return { invitation: existing, created: false };
+}
+
+/** Locks a local invitation for join/decline. */
+export async function findLocalInvitationForUpdate(
+  tx: Queryable,
+  tripId: string,
+  invitationId: string,
+): Promise<LocalInvitationRow | null> {
+  return tx.one<LocalInvitationRow>(
+    `SELECT * FROM invitations
+      WHERE id = $1 AND trip_id = $2 AND channel = 'local'
+      FOR UPDATE`,
+    [invitationId, tripId],
+  );
+}
+
+export async function declineInvitation(
+  tx: Queryable,
+  invitationId: string,
+): Promise<LocalInvitationRow | null> {
+  return tx.one<LocalInvitationRow>(
+    `UPDATE invitations
+        SET status = 'declined'
+      WHERE id = $1 AND status = 'pending'
+      RETURNING *`,
+    [invitationId],
   );
 }
 
