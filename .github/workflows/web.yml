@@ -39,9 +39,9 @@ jobs:
       - name: Typecheck
         working-directory: frontend-next
         run: bunx tsc --noEmit
-      - name: Test (geolocation + Uber helpers)
+      - name: Test
         working-directory: frontend-next
-        run: bun test lib/geolocation.test.ts lib/uberLink.test.ts
+        run: bun test
 
   publish:
     name: Publish triplanner-web

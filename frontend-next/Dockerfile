@@ -32,6 +32,6 @@ USER node
 EXPOSE 3000
 
 HEALTHCHECK --interval=10s --timeout=3s --start-period=45s --retries=12 \
-  CMD curl -f http://localhost:3000/login || exit 1
+  CMD curl -f http://localhost:3000/api/health || exit 1
 
 CMD ["node", "server.js"]

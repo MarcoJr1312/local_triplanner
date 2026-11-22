@@ -1,8 +1,8 @@
 import type { NextRequest } from 'next/server';
+import { agentOrigin } from '@/lib/server-config';
 
 // Proxy for the agent service. Runtime env keeps the same Next image working
-// in Docker (`http://agent:4100`) and in host development (`127.0.0.1:4100`).
-const AGENT_ORIGIN = (process.env.NEXT_PRIVATE_AGENT_URL ?? 'http://127.0.0.1:4100').replace(/\/+$/, '');
+// in Compose, Helm and host development.
 
 export const dynamic = 'force-dynamic';
 
@@ -12,7 +12,7 @@ async function proxy(
   method: 'GET' | 'POST',
 ): Promise<Response> {
   const { path } = await ctx.params;
-  const target = `${AGENT_ORIGIN}/api/agent/${path.join('/')}`;
+  const target = `${agentOrigin()}/api/agent/${path.join('/')}`;
 
   const headers: Record<string, string> = {};
   const xUserId = request.headers.get('x-user-id')?.trim();
