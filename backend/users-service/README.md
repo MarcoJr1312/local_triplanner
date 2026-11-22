@@ -28,6 +28,9 @@ bun test
 bun src/index.ts
 ```
 
+The service migrates its own schema and seeds the protected demo accounts on
+boot (`SEED_DEMO=true`). `db:migrate` and `db:seed` run the same steps manually.
+
 ## Configuration
 
 See [`.env.example`](./.env.example). Production values come from the

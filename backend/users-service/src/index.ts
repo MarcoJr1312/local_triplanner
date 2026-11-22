@@ -1,4 +1,6 @@
 import { connect, type Db } from './db.ts';
+import { migrate } from './db/migrate.ts';
+import { seedDemoUsers } from './db/seed.ts';
 import { isUsingDefaultInternalToken, loadConfig, loadDotEnv } from './env.ts';
 import { createHandler } from './http.ts';
 import { createShutdown } from './shutdown.ts';
@@ -14,6 +16,24 @@ const db: Db = await connect(config).catch((error: unknown) => {
   console.error('[users] cannot connect to Postgres:', error);
   process.exit(1);
 });
+
+const migration = await migrate(db).catch((error: unknown) => {
+  console.error('[users] migration failed:', error);
+  process.exit(1);
+});
+console.log(
+  `[users] schema v${migration.version} ${migration.applied ? 'applied' : 'already applied'}`,
+);
+
+if (config.seedDemo) {
+  const seeded = await seedDemoUsers(db).catch((error: unknown) => {
+    console.error('[users] demo seed failed:', error);
+    process.exit(1);
+  });
+  console.log(
+    `[users] demo seed: ${seeded.created} created, ${seeded.total} protected accounts`,
+  );
+}
 
 const server = Bun.serve({
   hostname: '0.0.0.0',

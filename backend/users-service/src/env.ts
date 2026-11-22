@@ -73,7 +73,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       // Preserve the password exactly; trimming would change a valid secret.
       password: env.POSTGRES_PASSWORD ?? '',
     },
-    seedDemo: booleanEnv(env, 'SEED_DEMO', false),
+    // The two protected demo accounts are required for the recruiter demo and
+    // are seeded idempotently; only tests turn this off.
+    seedDemo: booleanEnv(env, 'SEED_DEMO', true),
     shutdownTimeoutMs: numberEnv(env, 'SHUTDOWN_TIMEOUT_MS', 10_000, 1, 120_000),
     dbConnectAttempts: numberEnv(env, 'DB_CONNECT_ATTEMPTS', 30, 1, 600),
     dbConnectDelayMs: numberEnv(env, 'DB_CONNECT_DELAY_MS', 500, 0, 60_000),

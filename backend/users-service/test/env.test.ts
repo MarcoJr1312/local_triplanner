@@ -16,7 +16,8 @@ describe('loadConfig', () => {
     expect(config.postgres.port).toBe(5432);
     expect(config.postgres.database).toBe('users');
     expect(config.postgres.user).toBe('users');
-    expect(config.seedDemo).toBe(false);
+    // Demo accounts are seeded by default; tests opt out explicitly.
+    expect(config.seedDemo).toBe(true);
     expect(config.shutdownTimeoutMs).toBe(10_000);
     expect(config.dbConnectAttempts).toBe(30);
     expect(config.dbConnectDelayMs).toBe(500);
@@ -27,7 +28,7 @@ describe('loadConfig', () => {
       PORT: '4600',
       INTERNAL_TOKEN: 'secret',
       USERS_DATABASE_URL: 'postgres://u:p@db:5432/users',
-      SEED_DEMO: 'yes',
+      SEED_DEMO: 'no',
       POSTGRES_HOST: 'users-postgres',
       POSTGRES_PORT: '5433',
       POSTGRES_DB: 'users_demo',
@@ -41,7 +42,7 @@ describe('loadConfig', () => {
     expect(config.port).toBe(4600);
     expect(config.internalToken).toBe('secret');
     expect(config.databaseUrl).toBe('postgres://u:p@db:5432/users');
-    expect(config.seedDemo).toBe(true);
+    expect(config.seedDemo).toBe(false);
     expect(config.postgres).toEqual({
       host: 'users-postgres',
       port: 5433,
