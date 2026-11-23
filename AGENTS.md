@@ -153,6 +153,14 @@ auth and Dockerfiles.
   the still-Compose API/agent. Evidence:
   `docs/migrations/0011-frontend-service.md` and `0012-frontend-qa.md`
   (Gate 2 approved). M10.14 and the web image publish move to tag `v1.5.0`.
+- M12 (private favorites): `favorite_locations` lives in the users service
+  (schema v2), the API uses a request-scoped favorite set from `UsersStore`,
+  and the platform `pg/favorites` module is gone. The heart works for legacy
+  trip IDs and catalogue IDs, manual activities have no heart, and failures
+  show a localized error. Contract `docs/migrations/0013-user-favorites.md`;
+  migration script `backend/users-service/scripts/migrate-favorites.ts`.
+- Test databases: users tests default to `users_test` on `127.0.0.1:55433`
+  (never the live `users` database); trips tests use the trips test database.
 Do not assume the target architecture is already implemented — check the
 current tree.
 

@@ -298,6 +298,7 @@ describe('migrateUsers', () => {
       apply: true,
       log: () => undefined,
     });
-    expect(second.copied).toBe(1);
+    expect(second.copied).toBe(0);
+    expect(second.alreadyPresent).toBe(1);
   });
 });

@@ -2,8 +2,9 @@ import { connect, type Db } from '../../src/db.ts';
 import { loadConfig } from '../../src/env.ts';
 
 // Local throwaway Postgres for the service tests. CI overrides this with
-// TEST_USERS_DATABASE_URL (or USERS_DATABASE_URL).
-const DEFAULT_TEST_URL = 'postgres://users:users@127.0.0.1:55433/users';
+// TEST_USERS_DATABASE_URL (or USERS_DATABASE_URL). Never point the default at
+// the live `users` database: the suite drops and recreates its schema.
+const DEFAULT_TEST_URL = 'postgres://users:users@127.0.0.1:55433/users_test';
 
 export async function connectTestDb(): Promise<Db | null> {
   const url =

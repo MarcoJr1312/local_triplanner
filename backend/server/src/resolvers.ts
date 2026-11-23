@@ -1478,7 +1478,7 @@ export const resolvers: {
       const { locationId, favorite } = args as Args<{ locationId: string; favorite: boolean }>;
       try {
         const state = await ctx.users.setFavorite(ctx.currentUserId, locationId, favorite);
-        return { locationId, favorite: state };
+        return { locationId: locationId.trim(), favorite: state };
       } catch (e) {
         if (e instanceof GraphQLError) {
           const code = e.extensions?.code;

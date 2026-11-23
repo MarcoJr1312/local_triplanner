@@ -25,6 +25,7 @@ export interface FavoriteMigrationReport {
   applied: boolean;
   read: number;
   copied: number;
+  alreadyPresent: number;
   skippedInvalidUser: number;
   skippedMissingUser: number;
   skippedInvalidLocation: number;
@@ -74,6 +75,7 @@ export async function migrateFavorites(
     applied: options.apply,
     read: 0,
     copied: 0,
+    alreadyPresent: 0,
     skippedInvalidUser: 0,
     skippedMissingUser: 0,
     skippedInvalidLocation: 0,
@@ -107,25 +109,28 @@ export async function migrateFavorites(
       await users.query('BEGIN');
       try {
         for (const row of valid) {
-          await users.query(
+          const result = await users.query(
             `INSERT INTO favorite_locations (user_id, location_id, created_at)
              VALUES ($1, $2, $3)
              ON CONFLICT DO NOTHING`,
             [row.user_id, row.location_id, row.created_at],
           );
+          if (result.rowCount === 1) report.copied += 1;
+          else report.alreadyPresent += 1;
         }
         await users.query('COMMIT');
       } catch (error) {
         await users.query('ROLLBACK');
         throw error;
       }
+    } else if (!options.apply) {
+      report.copied = valid.length;
     }
 
-    report.copied = valid.length;
     log(
       `[favorites] ${options.apply ? 'copied' : 'would copy'} ${report.copied}/${report.read}; ` +
-        `invalid_user=${report.skippedInvalidUser} missing_user=${report.skippedMissingUser} ` +
-        `invalid_location=${report.skippedInvalidLocation}`,
+        `already_present=${report.alreadyPresent} invalid_user=${report.skippedInvalidUser} ` +
+        `missing_user=${report.skippedMissingUser} invalid_location=${report.skippedInvalidLocation}`,
     );
     return report;
   } finally {

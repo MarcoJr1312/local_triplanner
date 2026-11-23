@@ -94,8 +94,8 @@ All routes use the existing `INTERNAL_TOKEN`; the API passes the acting user.
 
 ## 6. Client changes
 
-- Trip page: when `activityId` is null, do not render an active heart; show a
-  disabled heart with the “manual activity” tooltip.
+- Trip page: when `activityId` is null, hide the heart (manual activities
+  cannot be catalogue favorites).
 - On a failed mutation, show `toast.error(localizeApiError(...))`; keep the
   optimistic rollback.
 - Add `errors.FAVORITE_SAVE_FAILED` (already exists) and an English/Spanish
@@ -117,8 +117,8 @@ All routes use the existing `INTERNAL_TOKEN`; the API passes the acting user.
 The one-time script:
 `backend/users-service/scripts/migrate-favorites.ts`.
 Inputs: platform Postgres URL, users Postgres URL. It is idempotent
-(`ON CONFLICT DO NOTHING`) and prints `copied`, `skipped_missing_user`,
-`skipped_invalid_id`.
+(`ON CONFLICT DO NOTHING`) and prints `copied`, `already_present`,
+`skipped_missing_user`, `skipped_invalid_user`, `skipped_invalid_location`.
 
 ## 8. Tests and acceptance
 
@@ -141,7 +141,7 @@ Inputs: platform Postgres URL, users Postgres URL. It is idempotent
 | Risk | Mitigation |
 |---|---|
 | Legacy IDs do not match catalogue IDs | Store opaque IDs; heart works on the trip item; normalise demo data separately |
-| Users service down breaks favorites | `USERS_UNAVAILABLE` surfaced; search still returns places with `isFavorite: false` only if the call is best-effort; trip reads fail clearly |
+| Users service down breaks favorites | `USERS_UNAVAILABLE` surfaced; search degrades to `isFavorite: false`; trip reads fail clearly because member enrichment already requires the users service; favorites add no new failure mode |
 | Favorite set grows large | One fetch per request; demo scale is small; add a batch endpoint later |
 | Data copy misses soft-deleted users | FK to users; skipped rows are reported, not silently dropped |
 | Duplicate platform table | Drop only after QA and Gate 2 |
