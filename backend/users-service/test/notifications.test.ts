@@ -80,7 +80,7 @@ async function invite(
       user_id: invitee.id,
       type: options.type ?? 'trip_invite',
       trip_id: 'demo-trip',
-      trip_name: options.tripName ?? 'Fin de semana en Toronto',
+      trip_name: options.tripName ?? 'Weekend in Toronto',
       invitation_id: options.invitationId ?? 'inv-1',
       inviter_user_id: inviter.id,
       role: options.role ?? 'viewer',
@@ -169,7 +169,7 @@ describe('local invite notifications', () => {
     expect(notification).toMatchObject({
       type: 'trip_invite',
       trip_id: 'demo-trip',
-      trip_name: 'Fin de semana en Toronto',
+      trip_name: 'Weekend in Toronto',
       invitation_id: 'inv-1',
       role: 'viewer',
       status: 'unread',

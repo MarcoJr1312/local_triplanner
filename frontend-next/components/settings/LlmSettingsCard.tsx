@@ -90,7 +90,7 @@ export default function LlmSettingsCard() {
             <span className="rounded-full bg-violet-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-violet-700 dark:text-violet-300">
               {t('settings.serviceBadge.agent')}
             </span>
-            <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+            <span className="rounded-full border border-brand-500/25 bg-brand-600/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-700 dark:text-brand-300">
               {t('settings.byok')}
             </span>
             {llm && (

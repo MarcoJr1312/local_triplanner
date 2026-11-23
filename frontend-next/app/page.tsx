@@ -197,7 +197,6 @@ function TripsContent() {
           <div>
             <div className="stat-label">{t('premium.stat.trips')}</div>
             <div className="stat-value">{list.length}</div>
-            <div className="stat-delta">+0</div>
           </div>
         </div>
         <div className="stat card">

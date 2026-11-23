@@ -71,7 +71,7 @@ export async function seedDemo(db: Db): Promise<SeedResult> {
        ON CONFLICT DO NOTHING`,
       [
         DEMO_TRIP_ID,
-        'Fin de semana en Toronto',
+        'Weekend in Toronto',
         'toronto',
         'Toronto',
         43.6532,

@@ -18,7 +18,7 @@ The UI starts in English (the recruiter can switch to Spanish in
 accounts; `demo` and `demo-friend` are protected.
 
 You should land on the trips dashboard with the seeded trip
-**“Fin de semana en Toronto”** (Dec 4–6, 2026).
+**“Weekend in Toronto”** (Dec 4–6, 2026).
 
 ## 2. Explore the itinerary
 

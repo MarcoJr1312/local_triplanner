@@ -380,7 +380,9 @@ export default function AddItemModal({ open, tripId, destinationId, day, onClose
           type="button"
           onClick={() => setMode('catalog')}
           className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium transition duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40 ${
-            mode === 'catalog' ? 'bg-card text-brand-700 shadow-sm' : 'text-muted-foreground hover:text-foreground'
+            mode === 'catalog'
+              ? 'bg-brand-600 text-white shadow-sm'
+              : 'text-foreground/70 hover:text-foreground'
           }`}
         >
           <List className="h-4 w-4" /> {t('items.catalog')}
@@ -389,7 +391,9 @@ export default function AddItemModal({ open, tripId, destinationId, day, onClose
           type="button"
           onClick={() => setMode('manual')}
           className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium transition duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40 ${
-            mode === 'manual' ? 'bg-card text-brand-700 shadow-sm' : 'text-muted-foreground hover:text-foreground'
+            mode === 'manual'
+              ? 'bg-brand-600 text-white shadow-sm'
+              : 'text-foreground/70 hover:text-foreground'
           }`}
         >
           <Plus className="h-4 w-4" /> {t('items.manual')}
