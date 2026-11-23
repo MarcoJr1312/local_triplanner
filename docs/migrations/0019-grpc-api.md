@@ -54,9 +54,9 @@ These do not change the wire contract; they record how M15.1–M15.6 were built.
 - The API is still a Compose workload in the Helm transition, so the functional
   cutover runs in Compose. The chart exposes gRPC on the three ClusterIP
   Services for the future in-cluster API.
-- Compose transport defaults stay `http` until Gate 2; QA runs with
-  `USERS_TRANSPORT=grpc`, `TRIPS_TRANSPORT=grpc` and
-  `LOCATIONS_TRANSPORT=grpc`.
+- Gate 2 was approved on 2026-11-23: Compose defaults are now `grpc`; the
+  users/trips/locations internal HTTP business routes remain for one release as
+  rollback. Locations HTTP also stays for the agent and trips service.
 
 ## 3. Scope
 
@@ -202,17 +202,18 @@ server:
 - Channels are reused; no per-request channel creation.
 - Transport selection:
 
-| Variable | Default in this slice | End state |
+| Variable | Before Gate 2 | Current (Gate 2) |
 |---|---|---|
-| `USERS_TRANSPORT` | `http` | `grpc` |
-| `TRIPS_TRANSPORT` | `http` | `grpc` |
-| `LOCATIONS_TRANSPORT` | `http` | `grpc` |
+| `USERS_TRANSPORT` | `http` | **`grpc`** |
+| `TRIPS_TRANSPORT` | `http` | **`grpc`** |
+| `LOCATIONS_TRANSPORT` | `http` | **`grpc`** |
 | `USERS_GRPC_URL` | `users:50051` | same |
 | `TRIPS_GRPC_URL` | `trips:50052` | same |
 | `LOCATIONS_GRPC_URL` | `locations:50053` | same |
 
-The HTTP adapters remain until Gate 2; after cutover they are removed from the
-API, but the services keep HTTP health/readiness.
+The HTTP adapters and internal business routes remain one release for
+rollback (`*_TRANSPORT=http`); the services keep HTTP health/readiness.
+Locations HTTP also remains for the agent and trips service.
 
 ### 5.3 Error model
 

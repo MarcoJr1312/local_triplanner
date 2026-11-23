@@ -13,9 +13,8 @@ export interface CreateUsersStoreOptions {
 
 /**
  * The users service owns accounts and notifications after the M10.13
- * decommission; there is no local adapter and no USERS_MODE. During M15 the
- * HTTP adapter remains the default and the gRPC adapter is selected by
- * USERS_TRANSPORT=grpc.
+ * decommission; there is no local adapter and no USERS_MODE. During M15 gRPC is
+ * the default and the HTTP adapter remains one release for rollback.
  */
 export function createUsersStore(options: CreateUsersStoreOptions): UsersStore {
   if (options.transport === 'grpc') {

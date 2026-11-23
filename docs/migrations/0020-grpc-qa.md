@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **QA complete — Gate 2 pending** |
+| Status | **Gate 2 approved (2026-11-23) — option 1: gRPC default, HTTP kept one release** |
 | Cycle | Microservice Code Migration (`19455fa3-28ea-4f03-b195-973c5ddf595e`) |
 | Contract | [`0019-grpc-api.md`](./0019-grpc-api.md) |
 | Branch | `feature/grpc-api` |
@@ -128,12 +128,8 @@ from the API selector.
 
 ## 6. Gate 2 decision
 
-Gate 2 must decide:
-
-1. **Recommended:** flip Compose defaults to `*_TRANSPORT=grpc`, keep the HTTP
-   internal routes for one release as rollback, and remove them in a follow-up.
-2. Flip defaults and remove the users/trips internal HTTP business routes now
-   (locations HTTP stays for agent/trips).
-3. Keep `http` as the default and defer the cutover.
-
-No default change or HTTP route removal is performed before the decision.
+**Approved 2026-11-23 (option 1).** Compose defaults are now
+`USERS_TRANSPORT=grpc`, `TRIPS_TRANSPORT=grpc` and
+`LOCATIONS_TRANSPORT=grpc`. The internal HTTP business routes stay for one
+release as rollback; a follow-up retires them. Locations HTTP remains for the
+agent and trips service regardless.

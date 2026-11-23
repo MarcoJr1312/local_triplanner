@@ -214,7 +214,7 @@ services:
       NODE_ENV: production
       DATABASE_URL: postgres://triplanner:triplanner@postgres:5432/triplanner
       LOCATIONS_URL: http://locations:4300
-      LOCATIONS_TRANSPORT: ${LOCATIONS_TRANSPORT:-http}
+      LOCATIONS_TRANSPORT: ${LOCATIONS_TRANSPORT:-grpc}
       LOCATIONS_GRPC_URL: locations:50053
       APP_URL: http://localhost:${WEB_PORT:-3000}
       LOCAL_PORT: "4000"
@@ -223,11 +223,11 @@ services:
       BOOTSTRAP_LOCAL: "1"
       TRIPS_URL: http://trips:4400
       TRIPS_TIMEOUT_MS: "5000"
-      TRIPS_TRANSPORT: ${TRIPS_TRANSPORT:-http}
+      TRIPS_TRANSPORT: ${TRIPS_TRANSPORT:-grpc}
       TRIPS_GRPC_URL: trips:50052
       USERS_URL: http://users:4500
       USERS_TIMEOUT_MS: "3000"
-      USERS_TRANSPORT: ${USERS_TRANSPORT:-http}
+      USERS_TRANSPORT: ${USERS_TRANSPORT:-grpc}
       USERS_GRPC_URL: users:50051
       BROKER_URL: http://kafka:8080
       BROKER_TOPIC: TripInvitation

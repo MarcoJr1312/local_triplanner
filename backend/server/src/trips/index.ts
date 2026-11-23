@@ -13,8 +13,8 @@ export interface CreateTripsStoreOptions {
 
 /**
  * The trips service owns trip data. After the M9.11 decommission there is no
- * local adapter and no `TRIPS_MODE`; during M15 the HTTP adapter remains the
- * default and the gRPC adapter is selected by TRIPS_TRANSPORT=grpc.
+ * local adapter and no `TRIPS_MODE`; during M15 gRPC is the default and the
+ * HTTP adapter remains one release for rollback.
  */
 export function createTripsStore(options: CreateTripsStoreOptions): TripsStore {
   if (options.transport === 'grpc') {

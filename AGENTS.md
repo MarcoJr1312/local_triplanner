@@ -177,10 +177,17 @@ auth and Dockerfiles.
   the platform agent tables and vector extension are decommissioned. Evidence:
   `docs/migrations/0017-agent-service.md` and `0018-agent-qa.md` (Gate 2
   approved). Release `v1.7.0`.
-- Helm chart 0.11.0: every application workload reads non-secret environment
+- Helm chart 0.12.0: every application workload reads non-secret environment
   from `triplanner-<service>-config` via `envFrom.configMapRef`; secrets stay as
   `secretKeyRef` entries. A `checksum/config` annotation rolls the pod when a
-  value changes. The chart now includes the agent and its pgvector PostgreSQL.
+  value changes. The chart includes the agent and its pgvector PostgreSQL.
+- M15 done (`feature/grpc-api`): native gRPC between the API facade and the
+  users/trips/locations services, with `x-internal-token`/`x-actor-id`
+  metadata, `grpc.health.v1.Health`, stable `x-error-code` mapping and
+  `*_TRANSPORT=grpc` Compose defaults after Gate 2. HTTP internal routes remain
+  one release for rollback; agent/broker/email stay HTTP. Chart 0.12.0 exposes
+  ClusterIP gRPC ports 50051–50053. Evidence:
+  `docs/migrations/0019-grpc-api.md` and `0020-grpc-qa.md`.
 - Test databases: users tests default to `users_test` and trips tests to
   `trips_test` on `127.0.0.1:55433`/`55432` (never the live `users`/`trips`
   databases).
