@@ -24,6 +24,8 @@ spec:
       ports:
         - port: {{ .Values.tripsService.service.port }}
           protocol: TCP
+        - port: {{ .Values.tripsService.service.grpcPort }}
+          protocol: TCP
     {{- if .Values.tripsService.rbacProxy.enabled }}
     - ports:
         - port: {{ .Values.tripsService.rbacProxy.port }}

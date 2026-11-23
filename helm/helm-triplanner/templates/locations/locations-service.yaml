@@ -17,6 +17,10 @@ spec:
     - name: http
       port: {{ .Values.locationsService.service.port }}
       targetPort: http
+    - name: grpc
+      port: {{ .Values.locationsService.service.grpcPort }}
+      targetPort: grpc
+      appProtocol: grpc
     {{- if .Values.locationsService.rbacProxy.enabled }}
     - name: rbac-proxy
       port: {{ .Values.locationsService.rbacProxy.port }}

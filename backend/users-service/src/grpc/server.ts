@@ -11,6 +11,9 @@ import type { NotificationPublic, UserPublic } from '../domain/types.ts';
 const PROTO_PATH =
   process.env.PROTO_PATH ??
   fileURLToPath(new URL('../../../../proto/triplanner/users/v1/users.proto', import.meta.url));
+const HEALTH_PROTO_PATH =
+  process.env.HEALTH_PROTO_PATH ??
+  fileURLToPath(new URL('../../../../proto/grpc/health/v1/health.proto', import.meta.url));
 
 const ERROR_STATUS: Partial<Record<ErrorCode, grpc.status>> = {
   UNAUTHORIZED: grpc.status.UNAUTHENTICATED,
@@ -123,6 +126,19 @@ export async function startUsersGrpcServer(
   const service = options.service;
 
   const server = new grpc.Server();
+  const healthDefinition = loader.loadSync(HEALTH_PROTO_PATH, {
+    keepCase: true,
+    longs: String,
+    enums: String,
+    defaults: false,
+    oneofs: true,
+  });
+  const healthProto = grpc.loadPackageDefinition(healthDefinition) as any;
+  server.addService(healthProto.grpc.health.v1.Health.service, {
+    Check: (_call: grpc.ServerUnaryCall<any, any>, callback: grpc.sendUnaryData<any>) => {
+      callback(null, { status: 'SERVING' });
+    },
+  });
   server.addService(descriptor.service, {
     GetUser: async (call: grpc.ServerUnaryCall<any, any>, callback: grpc.sendUnaryData<any>) => {
       try {

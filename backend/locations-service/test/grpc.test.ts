@@ -13,6 +13,9 @@ const PORT = 50057;
 const PROTO_PATH = fileURLToPath(
   new URL('../../../proto/triplanner/locations/v1/locations.proto', import.meta.url),
 );
+const HEALTH_PROTO_PATH = fileURLToPath(
+  new URL('../../../proto/grpc/health/v1/health.proto', import.meta.url),
+);
 
 const DESTINATION: LocationRow = {
   id: 'toronto',
@@ -81,6 +84,7 @@ const catalogue: LocationsGrpcCatalogue = {
 
 let handle: LocationsGrpcHandle;
 let client: any;
+let healthClient: any;
 
 function call(method: string, request: unknown, token = 'test-token'): Promise<any> {
   return new Promise((resolve, reject) => {
@@ -111,14 +115,36 @@ beforeAll(async () => {
     `127.0.0.1:${PORT}`,
     grpc.credentials.createInsecure(),
   );
+  const healthDefinition = loader.loadSync(HEALTH_PROTO_PATH, {
+    keepCase: true,
+    longs: String,
+    enums: String,
+    defaults: false,
+    oneofs: true,
+  });
+  const healthProto = grpc.loadPackageDefinition(healthDefinition) as any;
+  healthClient = new healthProto.grpc.health.v1.Health(
+    `127.0.0.1:${PORT}`,
+    grpc.credentials.createInsecure(),
+  );
 });
 
 afterAll(async () => {
   client?.close();
+  healthClient?.close();
   await handle?.stop();
 });
 
 describe('locations gRPC', () => {
+  test('reports SERVING on the standard health service', async () => {
+    const response = await new Promise<any>((resolve, reject) => {
+      healthClient.Check({ service: '' }, (error: any, value: any) => {
+        if (error) reject(error);
+        else resolve(value);
+      });
+    });
+    expect(response.status).toBe('SERVING');
+  });
   test('maps a location with nullable and numeric fields', async () => {
     const response = await call('GetById', { id: 'tor-cn-tower' });
     expect(response.item.id).toBe('tor-cn-tower');

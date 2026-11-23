@@ -10,6 +10,7 @@ metadata:
     app.kubernetes.io/component: trips
 data:
   PORT: {{ .Values.tripsService.service.port | quote }}
+  GRPC_PORT: {{ .Values.tripsService.service.grpcPort | quote }}
   POSTGRES_HOST: "triplanner-trips-postgres"
   POSTGRES_PORT: {{ .Values.tripsService.postgres.service.port | quote }}
   DB_CONNECT_ATTEMPTS: "60"

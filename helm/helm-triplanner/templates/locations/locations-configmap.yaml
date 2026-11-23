@@ -10,6 +10,7 @@ metadata:
     app.kubernetes.io/component: locations
 data:
   PORT: {{ .Values.locationsService.service.port | quote }}
+  GRPC_PORT: {{ .Values.locationsService.service.grpcPort | quote }}
   {{- if .Values.locationsService.mongo.url }}
   MONGODB_URL: {{ .Values.locationsService.mongo.url | quote }}
   {{- else }}

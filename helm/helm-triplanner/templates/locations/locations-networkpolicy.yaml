@@ -28,6 +28,8 @@ spec:
       ports:
         - port: {{ .Values.locationsService.service.port }}
           protocol: TCP
+        - port: {{ .Values.locationsService.service.grpcPort }}
+          protocol: TCP
     {{- if .Values.locationsService.rbacProxy.enabled }}
     - ports:
         - port: {{ .Values.locationsService.rbacProxy.port }}

@@ -47,6 +47,9 @@ spec:
             - name: http
               containerPort: {{ .Values.tripsService.service.port }}
               protocol: TCP
+            - name: grpc
+              containerPort: {{ .Values.tripsService.service.grpcPort }}
+              protocol: TCP
           envFrom:
             - configMapRef:
                 name: triplanner-trips-config

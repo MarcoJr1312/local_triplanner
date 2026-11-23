@@ -334,6 +334,7 @@ locationsService:
   service:
     type: ClusterIP
     port: 4300
+    grpcPort: 50053
   mongo:
     # Optional full URL override; normally leave empty and use host/database
     # plus the Secret-backed MONGODB_USERNAME/MONGODB_PASSWORD.
@@ -455,6 +456,7 @@ tripsService:
   service:
     type: ClusterIP
     port: 4400
+    grpcPort: 50052
   postgres:
     enabled: true
     image:
@@ -601,6 +603,7 @@ usersService:
   service:
     type: ClusterIP
     port: 4500
+    grpcPort: 50051
   postgres:
     enabled: true
     image:
@@ -955,5 +958,14 @@ api:
     serviceUrl: http://triplanner-email:4200
   locations:
     serviceUrl: http://triplanner-locations:4300
+    grpcUrl: triplanner-locations:50053
+  trips:
+    serviceUrl: http://triplanner-trips:4400
+    grpcUrl: triplanner-trips:50052
   users:
     serviceUrl: http://triplanner-users:4500
+    grpcUrl: triplanner-users:50051
+  transports:
+    users: grpc
+    trips: grpc
+    locations: grpc

@@ -10,6 +10,7 @@ metadata:
     app.kubernetes.io/component: users
 data:
   PORT: {{ .Values.usersService.service.port | quote }}
+  GRPC_PORT: {{ .Values.usersService.service.grpcPort | quote }}
   POSTGRES_HOST: "triplanner-users-postgres"
   POSTGRES_PORT: {{ .Values.usersService.postgres.service.port | quote }}
   DB_CONNECT_ATTEMPTS: "60"

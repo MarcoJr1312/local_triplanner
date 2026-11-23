@@ -13,6 +13,9 @@ const PORT = 50056;
 const PROTO_PATH = fileURLToPath(
   new URL('../../../proto/triplanner/trips/v1/trips.proto', import.meta.url),
 );
+const HEALTH_PROTO_PATH = fileURLToPath(
+  new URL('../../../proto/grpc/health/v1/health.proto', import.meta.url),
+);
 
 const SNAPSHOTS: Record<string, LocationSnapshot> = {
   toronto: { id: 'toronto', name: 'Toronto', address: 'Ontario', lat: 43.6532, lng: -79.3832 },
@@ -26,6 +29,7 @@ let db: Db | null = null;
 let service: TripsService | null = null;
 let handle: TripsGrpcHandle | null = null;
 let client: any = null;
+let healthClient: any = null;
 
 function call(method: string, request: unknown, actor?: string, token = 'test-token'): Promise<any> {
   return new Promise((resolve, reject) => {
@@ -64,6 +68,18 @@ beforeAll(async () => {
     `127.0.0.1:${PORT}`,
     grpc.credentials.createInsecure(),
   );
+  const healthDefinition = loader.loadSync(HEALTH_PROTO_PATH, {
+    keepCase: true,
+    longs: String,
+    enums: String,
+    defaults: false,
+    oneofs: true,
+  });
+  const healthProto = grpc.loadPackageDefinition(healthDefinition) as any;
+  healthClient = new healthProto.grpc.health.v1.Health(
+    `127.0.0.1:${PORT}`,
+    grpc.credentials.createInsecure(),
+  );
 });
 
 beforeEach(async () => {
@@ -74,11 +90,22 @@ beforeEach(async () => {
 
 afterAll(async () => {
   client?.close();
+  healthClient?.close();
   await handle?.stop();
   await db?.close();
 });
 
 describe('trips gRPC', () => {
+  test('reports SERVING on the standard health service', async () => {
+    if (!healthClient) return;
+    const response = await new Promise<any>((resolve, reject) => {
+      healthClient.Check({ service: '' }, (error: any, value: any) => {
+        if (error) reject(error);
+        else resolve(value);
+      });
+    });
+    expect(response.status).toBe('SERVING');
+  });
   test('creates a trip, adds and updates an item, and manages a reminder', async () => {
     if (!service || !client) return;
 
