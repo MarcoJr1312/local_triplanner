@@ -62,13 +62,13 @@ describe('migrate', () => {
     const first = await migrate(db);
     expect(first.applied).toBe(true);
     expect(first.version).toBe(SCHEMA_VERSION);
-    expect(first.applied_versions).toEqual([1, 2, 3]);
+    expect(first.applied_versions).toEqual([1, 2, 3, 4]);
 
-    expect(await count('SELECT COUNT(*)::int AS count FROM schema_migrations')).toBe(3);
+    expect(await count('SELECT COUNT(*)::int AS count FROM schema_migrations')).toBe(4);
     const versions = await db.query<{ version: number }>(
       'SELECT version FROM schema_migrations ORDER BY version',
     );
-    expect(versions.map((row) => row.version)).toEqual([1, 2, 3]);
+    expect(versions.map((row) => row.version)).toEqual([1, 2, 3, 4]);
   });
 
   test('upgrades an existing v1 database and becomes ready', async () => {
@@ -83,7 +83,7 @@ describe('migrate', () => {
 
     const result = await migrate(db);
     expect(result.applied).toBe(true);
-    expect(result.applied_versions).toEqual([2, 3]);
+    expect(result.applied_versions).toEqual([2, 3, 4]);
     expect(await db.isMigrated()).toBe(true);
 
     const column = await db.one<{ column_name: string }>(

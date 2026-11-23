@@ -77,13 +77,13 @@ export default function ItemCard({
     currentUserId && item.reminder?.recipientIds.includes(currentUserId),
   );
   const canConfigureReminder = canEdit && (item.reminder?.canEdit ?? true);
-  const reminderLabel = reminderOn
-    ? reminderRecipient
+  const reminderLabel = canConfigureReminder
+    ? reminderOn
       ? t('items.reminderAriaOn')
-      : t('items.reminderAriaReadonly')
-    : canConfigureReminder
-      ? t('items.reminderAriaOff')
-      : t('items.reminderAriaReadonly');
+      : t('items.reminderAriaOff')
+    : reminderRecipient
+      ? t('items.reminderAriaReadonly')
+      : t('items.reminderAriaEditorsOnly');
   const categoryColor =
     item.category === 'food'
       ? 'food'

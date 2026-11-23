@@ -50,17 +50,17 @@ that flag with a per-activity configuration and recipient list.
 
 ```sql
 CREATE TABLE IF NOT EXISTS trip_item_reminders (
-  item_id      uuid PRIMARY KEY REFERENCES trip_items(id) ON DELETE CASCADE,
-  trip_id      uuid NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+  item_id      text PRIMARY KEY REFERENCES trip_items(id) ON DELETE CASCADE,
+  trip_id      text NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
   enabled      boolean NOT NULL DEFAULT false,
   lead_minutes integer NOT NULL CHECK (lead_minutes IN (15, 30, 60, 120)),
-  updated_by   uuid NOT NULL,
+  updated_by   text NOT NULL,
   updated_at   timestamptz NOT NULL DEFAULT now()
 );
 
 CREATE TABLE IF NOT EXISTS trip_item_reminder_recipients (
-  item_id  uuid NOT NULL REFERENCES trip_item_reminders(item_id) ON DELETE CASCADE,
-  user_id  uuid NOT NULL,
+  item_id  text NOT NULL REFERENCES trip_item_reminders(item_id) ON DELETE CASCADE,
+  user_id  text NOT NULL,
   sent_at  timestamptz,
   PRIMARY KEY (item_id, user_id)
 );
@@ -152,7 +152,7 @@ Extend `notifications`:
 - `invitation_id`, `role` become nullable.
 - New nullable columns: `item_id text`, `item_title text`, `start_at
   timestamptz`, `lead_minutes integer`, `dedupe_key text`.
-- Unique index `(user_id, dedupe_key) WHERE dedupe_key IS NOT NULL`.
+- Unique index `(user_id, dedupe_key)`; invites carry `NULL` and are unaffected.
 - Invite rows keep their current fields and indexes.
 
 `POST /internal/v1/notifications` branches by `type`:
@@ -198,10 +198,11 @@ GraphQL `Notification` additions: `itemId`, `itemTitle`, `startAt`,
     `REMINDER_TIME_PASSED`, `REMINDER_RECIPIENTS_REQUIRED`, `FORBIDDEN_EDIT`).
 - Notification card:
   - Type `activity_reminder`: title, “{item} starts at {time}”, trip name,
-    “Open trip” button linking to `/trip/{tripId}?day={day}`.
+    “Open trip” button linking to `/trip/{tripId}`.
   - Mark read on open; no accept/decline.
-- Demo items get plausible start times in the seed (10:00, 14:00, 19:00) so the
-  bell is usable; editors can still change them.
+- Demo items get plausible start times in the seed (10:00, 14:00, 19:00) and the
+  demo trip uses `America/Toronto`, so reminder cards show the same wall time
+  the editor saw.
 
 ## 8. Tests and acceptance
 

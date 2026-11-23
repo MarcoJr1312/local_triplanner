@@ -1,6 +1,6 @@
-// Reminder time math, ported from the API. Kept pure and dependency-free.
-// A reminder is due 60 minutes before the item; if less than an hour remains,
-// it is skipped rather than sent late.
+// Reminder time math. Kept pure and dependency-free. The lead time is stored
+// per activity; this module only converts a wall-clock date/time in the trip
+// timezone to a UTC instant.
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -33,12 +33,12 @@ function wallClockAsUtcMs(instantMs: number, timeZone: string): number {
 }
 
 export function wallTimeToUtcIso(dateStr: string, hhmm: string, timeZone: string): string {
-  if (!DATE_RE.test(dateStr)) throw new Error(`Fecha inválida: ${dateStr}`);
-  if (!TIME_RE.test(hhmm)) throw new Error(`Hora inválida: ${hhmm}`);
+  if (!DATE_RE.test(dateStr)) throw new Error(`Invalid date: ${dateStr}`);
+  if (!TIME_RE.test(hhmm)) throw new Error(`Invalid time: ${hhmm}`);
 
   const timeZoneName = timeZone.trim() || 'UTC';
   const naiveMs = Date.parse(`${dateStr}T${hhmm}:00Z`);
-  if (!Number.isFinite(naiveMs)) throw new Error(`Fecha/hora inválida: ${dateStr} ${hhmm}`);
+  if (!Number.isFinite(naiveMs)) throw new Error(`Invalid date/time: ${dateStr} ${hhmm}`);
 
   const offset = wallClockAsUtcMs(naiveMs, timeZoneName) - naiveMs;
   let instantMs = naiveMs - offset;
@@ -46,25 +46,4 @@ export function wallTimeToUtcIso(dateStr: string, hhmm: string, timeZone: string
   if (refined !== offset) instantMs = naiveMs - refined;
 
   return new Date(instantMs).toISOString();
-}
-
-export type ReminderComputation =
-  | { skip: true; startAt: string }
-  | { skip: false; dueAt: string; startAt: string };
-
-export function computeReminderDueAt(
-  dateStr: string,
-  hhmm: string,
-  timeZone: string,
-  now: Date | string = new Date(),
-): ReminderComputation {
-  const startAt = wallTimeToUtcIso(dateStr, hhmm, timeZone);
-  const startMs = Date.parse(startAt);
-  const nowMs = typeof now === 'string' ? Date.parse(now) : now.getTime();
-  const dueAt = new Date(startMs - 60 * 60_000).toISOString();
-
-  if (!Number.isFinite(nowMs) || Date.parse(dueAt) <= nowMs) {
-    return { skip: true, startAt };
-  }
-  return { skip: false, dueAt, startAt };
 }

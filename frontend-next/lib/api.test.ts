@@ -143,6 +143,18 @@ describe('api error localization', () => {
     ).toBe('errors.generic');
     expect(localizeApiError(new ApiError('sin código'), t)).toBe('errors.generic');
   });
+
+  test('maps the reminder validation codes', () => {
+    for (const code of [
+      'REMINDER_TIME_REQUIRED',
+      'REMINDER_TIME_PASSED',
+      'REMINDER_RECIPIENTS_REQUIRED',
+    ]) {
+      expect(localizeApiError(new ApiError('server text', { code }), t)).toBe(
+        `errors.${code}`,
+      );
+    }
+  });
 });
 
 describe('api local invites and notifications', () => {

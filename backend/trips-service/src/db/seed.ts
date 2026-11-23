@@ -66,8 +66,8 @@ export async function seedDemo(db: Db): Promise<SeedResult> {
     await tx.run(
       `INSERT INTO trips
          (id, name, destination_id, destination_name, start_date, end_date,
-          total_budget, owner_id, invite_code)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+          total_budget, timezone, owner_id, invite_code)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        ON CONFLICT DO NOTHING`,
       [
         DEMO_TRIP_ID,
@@ -77,6 +77,7 @@ export async function seedDemo(db: Db): Promise<SeedResult> {
         '2026-12-04',
         '2026-12-06',
         1200,
+        'America/Toronto',
         DEMO_OWNER_ID,
         'DEMO123',
       ],
