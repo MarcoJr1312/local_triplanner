@@ -6,6 +6,7 @@ import { CatalogueService } from './catalogue/service.ts';
 import { HasDataClient } from './hasdata.ts';
 import { LocationsSettingsStore } from './settings.ts';
 import { createHandler, type SeedState } from './http.ts';
+import { startLocationsGrpcServer } from './grpc/server.ts';
 import { OutboxPublisher } from './outbox.ts';
 import { seedFromFile } from './seed.ts';
 import {
@@ -25,6 +26,7 @@ import {
   OUTBOX_INTERVAL_MS,
   BROKER_URL,
   BROKER_TOPIC,
+  GRPC_PORT,
   PORT,
   SEED_CATALOGUE,
   SEED_DATA_PATH,
@@ -151,6 +153,16 @@ const server = Bun.serve({
 });
 
 console.log(`[locations] listening on :${PORT} (collection=${MONGODB_COLLECTION})`);
+
+const grpcServer = await startLocationsGrpcServer({
+  catalogue: cache,
+  port: GRPC_PORT,
+  internalToken: INTERNAL_TOKEN,
+}).catch((error: unknown) => {
+  console.error('[locations] gRPC server failed:', error);
+  process.exit(1);
+});
+console.log(`[locations] gRPC listening on :${GRPC_PORT}`);
 console.log(
   `[locations] provider=${settings.public().provider} hasKey=${settings.public().hasKey} cacheTtlHours=${HASDATA_CACHE_TTL_MS / 3_600_000}`,
 );
@@ -159,6 +171,7 @@ async function shutdown(signal: string): Promise<void> {
   console.log(`[locations] ${signal}; cerrando`);
   outbox.stop();
   server.stop();
+  await grpcServer.stop();
   await cache.close();
   process.exit(0);
 }

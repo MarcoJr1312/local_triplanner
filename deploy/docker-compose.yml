@@ -137,6 +137,9 @@ services:
       BROKER_TOPIC: LocationChanged
       OUTBOX_INTERVAL_MS: "1000"
       OUTBOX_BATCH_SIZE: "50"
+      GRPC_PORT: "50053"
+    expose:
+      - "50053"
     volumes:
       - locationsdata:/app/.data
     depends_on:
@@ -211,6 +214,8 @@ services:
       NODE_ENV: production
       DATABASE_URL: postgres://triplanner:triplanner@postgres:5432/triplanner
       LOCATIONS_URL: http://locations:4300
+      LOCATIONS_TRANSPORT: ${LOCATIONS_TRANSPORT:-http}
+      LOCATIONS_GRPC_URL: locations:50053
       APP_URL: http://localhost:${WEB_PORT:-3000}
       LOCAL_PORT: "4000"
       INTERNAL_TOKEN: ${INTERNAL_TOKEN:-dev-internal-token}

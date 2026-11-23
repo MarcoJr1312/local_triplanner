@@ -20,7 +20,6 @@ export const APP_URL = process.env.APP_URL ?? 'http://localhost:3000';
 // ---- Servicio de catalogo (locations/activities, :4300) ----
 export const LOCATIONS_URL = (process.env.LOCATIONS_URL ?? 'http://127.0.0.1:4300').replace(/\/+$/, '');
 export const LOCATIONS_TIMEOUT_MS = Number(process.env.LOCATIONS_TIMEOUT_MS ?? 2000);
-
 export const PORT = Number(process.env.LOCAL_PORT ?? 4000);
 
 // ---- Servicio agente (FastAPI, :4100) ----
@@ -56,6 +55,8 @@ export const USERS_TRANSPORT = transportEnv('USERS_TRANSPORT');
 export const USERS_GRPC_URL = process.env.USERS_GRPC_URL ?? '127.0.0.1:50051';
 export const TRIPS_TRANSPORT = transportEnv('TRIPS_TRANSPORT');
 export const TRIPS_GRPC_URL = process.env.TRIPS_GRPC_URL ?? '127.0.0.1:50052';
+export const LOCATIONS_TRANSPORT = transportEnv('LOCATIONS_TRANSPORT');
+export const LOCATIONS_GRPC_URL = process.env.LOCATIONS_GRPC_URL ?? '127.0.0.1:50053';
 
 // In-app activity reminder sweep. One API replica runs it in the demo.
 export const REMINDER_SWEEP_MS = Number(process.env.REMINDER_SWEEP_MS ?? 30_000);

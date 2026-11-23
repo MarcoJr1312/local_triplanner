@@ -51,6 +51,7 @@ function buildMongoUrl(): string {
 }
 
 export const PORT = Number(process.env.PORT ?? 4300);
+export const GRPC_PORT = Number(process.env.GRPC_PORT ?? 50053);
 export const MONGODB_URL = process.env.MONGODB_URL ?? buildMongoUrl();
 export const MONGODB_COLLECTION = process.env.MONGODB_COLLECTION ?? 'locations';
 export const INTERNAL_TOKEN = process.env.INTERNAL_TOKEN ?? 'dev-internal-token';
