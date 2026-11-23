@@ -273,3 +273,34 @@ Conditions before merge/tag and before the platform table is dropped:
 - The platform `user_favorites` table was **not** dropped. Live rows were only
   added/removed through the API for isolation, idempotency and migration tests;
   the demo account was restored to `tor-cn-tower` + `tor-rom` before sign-off.
+
+## 7. Gate 2 closure (2026-11-22)
+
+Gate 2 was approved by the human owner (“Approve and decommission”).
+
+Resolved after QA:
+
+- Users tests now default to the dedicated `users_test` database on
+  `127.0.0.1:55433`; running the suite no longer empties the Helm `users`
+  database. The Helm users deployment was reseeded (`demo`, `demo-friend`).
+- The migration report distinguishes actual inserts (`copied`) from
+  `already_present`; the re-run was verified `copied=0`, `already_present=1`.
+- `favoriteLocation` echoes the trimmed location ID.
+- AGENTS/migrations index/contracts updated; manual activities hide the heart.
+
+Decommission:
+
+- Removed `user_favorites` from `backend/db/pg/schema.sql` and the
+  `migrate-users.ts` reference table list.
+- Added `backend/db/pg/decommission-favorites.sql`.
+- Ran `DROP TABLE IF EXISTS user_favorites` on the Compose platform database.
+  After rebuilding the API image (so the old schema could not recreate it),
+  `to_regclass('public.user_favorites')` returned **absent**.
+- Favorites still resolve from the users service after the drop: `CN Tower` and
+  `Royal Ontario Museum` are `isFavorite: true`, and the favorite mutation
+  still succeeds.
+
+The users-down trip-read behavior is accepted: search degrades to
+`isFavorite: false`, while trip reads fail with `USERS_UNAVAILABLE` because
+member enrichment already requires the users service.
+

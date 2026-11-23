@@ -63,16 +63,6 @@ CREATE TABLE IF NOT EXISTS attachment_viewers (
 
 CREATE INDEX IF NOT EXISTS idx_attachment_viewers_user ON attachment_viewers(user_id);
 
--- =========================== USER FAVORITES ==========================
--- location_id references the locations catalogue; user_id is opaque:
--- deliberately no foreign keys.
-CREATE TABLE IF NOT EXISTS user_favorites (
-  user_id     text NOT NULL,
-  location_id text NOT NULL,
-  created_at  timestamptz NOT NULL DEFAULT now(),
-  PRIMARY KEY (user_id, location_id)
-);
-
 -- ========================== USER INTERESTS ==========================
 CREATE TABLE IF NOT EXISTS user_interests (
   id         text PRIMARY KEY,

@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **Approved — Gate 1 (2026-11-22), human instruction: “ok perfect lets execute it”** |
+| Status | **Gate 2 approved (2026-11-22); platform table decommissioned** |
 | Cycle | Microservice Code Migration (`19455fa3-28ea-4f03-b195-973c5ddf595e`) |
 | Integration branch | `refactor/helm` |
 | Work branch | `feature/user-favorites` |
