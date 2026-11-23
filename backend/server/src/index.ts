@@ -22,6 +22,8 @@ import {
   USERS_TIMEOUT_MS,
   USERS_TRANSPORT,
   USERS_GRPC_URL,
+  TRIPS_TRANSPORT,
+  TRIPS_GRPC_URL,
   REMINDER_SWEEP_MS,
 } from './env.ts';
 import { createInternalRouter } from './internal.ts';
@@ -53,6 +55,8 @@ const pubsub = createPubSub() as unknown as PubSub;
 
 const trips = createTripsStore({
   baseUrl: TRIPS_URL,
+  grpcUrl: TRIPS_GRPC_URL,
+  transport: TRIPS_TRANSPORT,
   internalToken: INTERNAL_TOKEN,
   timeoutMs: TRIPS_TIMEOUT_MS,
 });

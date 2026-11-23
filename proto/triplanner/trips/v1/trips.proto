@@ -1,0 +1,365 @@
+syntax = "proto3";
+
+package triplanner.trips.v1;
+
+message Empty {}
+
+message TripSummary {
+  string id = 1;
+  string name = 2;
+  optional string destination_name = 3;
+  string start_date = 4;
+  string end_date = 5;
+  string role = 6;
+  string joined_at = 7;
+}
+
+message Trip {
+  string id = 1;
+  string name = 2;
+  optional string destination_id = 3;
+  optional string destination_name = 4;
+  optional double destination_lat = 5;
+  optional double destination_lng = 6;
+  string start_date = 7;
+  string end_date = 8;
+  double total_budget = 9;
+  optional string cover_preset = 10;
+  optional string cover_photo_url = 11;
+  string timezone = 12;
+  string owner_id = 13;
+  string invite_code = 14;
+  string created_at = 15;
+  string updated_at = 16;
+}
+
+message TripMember {
+  string user_id = 1;
+  string role = 2;
+  string joined_at = 3;
+  optional string invited_email = 4;
+}
+
+message ItemReminder {
+  bool enabled = 1;
+  int32 lead_minutes = 2;
+  repeated string recipient_ids = 3;
+  bool can_edit = 4;
+}
+
+message TripItem {
+  string id = 1;
+  string trip_id = 2;
+  optional string location_id = 3;
+  optional string location_text = 4;
+  optional string location_name = 5;
+  optional string location_address = 6;
+  optional double lat = 7;
+  optional double lng = 8;
+  string title = 9;
+  optional string category = 10;
+  double cost = 11;
+  string day = 12;
+  int32 order = 13;
+  optional string start_time = 14;
+  optional string notes = 15;
+  optional string image_url = 16;
+  optional string created_by = 17;
+  string created_at = 18;
+  optional ItemReminder reminder = 19;
+}
+
+message CategorySpend {
+  string category = 1;
+  double amount = 2;
+}
+
+message TripAggregate {
+  Trip trip = 1;
+  repeated TripMember members = 2;
+  repeated TripItem items = 3;
+  string my_role = 4;
+  double spent = 5;
+  repeated CategorySpend spent_by_category = 6;
+}
+
+message Invitation {
+  string id = 1;
+  string trip_id = 2;
+  optional string email = 3;
+  optional string code = 4;
+  string role = 5;
+  string status = 6;
+  string created_by = 7;
+  string created_at = 8;
+  optional string accepted_at = 9;
+  string channel = 10;
+  optional string invitee_user_id = 11;
+}
+
+message InvitationPreview {
+  Invitation invitation = 1;
+  string trip_id = 2;
+  string trip_name = 3;
+  optional string destination_name = 4;
+  string owner_id = 5;
+}
+
+message DueReminder {
+  string item_id = 1;
+  string trip_id = 2;
+  string trip_name = 3;
+  string item_title = 4;
+  string day = 5;
+  string start_at = 6;
+  string due_at = 7;
+  int32 lead_minutes = 8;
+  repeated string recipient_ids = 9;
+}
+
+message InviteNotify {
+  string inviter_name = 1;
+  string language = 2;
+  string app_url = 3;
+  bool demo = 4;
+}
+
+message JoinNotify {
+  string owner_email = 1;
+  string owner_name = 2;
+  string member_name = 3;
+  string language = 4;
+}
+
+message ListTripsRequest {}
+message GetTripRequest { string trip_id = 1; }
+
+message CreateTripRequest {
+  string name = 1;
+  optional string destination_id = 2;
+  optional string destination_name = 3;
+  string start_date = 4;
+  string end_date = 5;
+  double total_budget = 6;
+  string timezone = 7;
+}
+
+message UpdateTripRequest {
+  string trip_id = 1;
+  optional string name = 2;
+  optional string start_date = 3;
+  optional string end_date = 4;
+  optional string destination_id = 5;
+  bool clear_destination_id = 6;
+  optional string destination_name = 7;
+  bool clear_destination_name = 8;
+  optional double total_budget = 9;
+  optional string cover_preset = 10;
+  bool clear_cover_preset = 11;
+  optional string cover_photo_url = 12;
+  bool remove_cover_photo = 13;
+}
+
+message DeleteTripRequest { string trip_id = 1; }
+message ListMembersRequest { string trip_id = 1; }
+
+message AddMemberRequest {
+  string trip_id = 1;
+  string user_id = 2;
+  string role = 3;
+  optional string invited_email = 4;
+}
+
+message UpdateMemberRoleRequest {
+  string trip_id = 1;
+  string user_id = 2;
+  string role = 3;
+}
+
+message RemoveMemberRequest {
+  string trip_id = 1;
+  string user_id = 2;
+}
+
+message LeaveTripRequest {
+  string trip_id = 1;
+  optional string new_owner_id = 2;
+}
+
+message ListItemsRequest { string trip_id = 1; }
+
+message AddItemRequest {
+  string trip_id = 1;
+  optional string location_id = 2;
+  optional string location_text = 3;
+  string title = 4;
+  string category = 5;
+  double cost = 6;
+  string day = 7;
+  int32 order = 8;
+  optional string start_time = 9;
+  optional string notes = 10;
+  optional string image_url = 11;
+}
+
+message UpdateItemRequest {
+  string trip_id = 1;
+  string item_id = 2;
+  optional string day = 3;
+  optional int32 order = 4;
+  optional string start_time = 5;
+  bool clear_start_time = 6;
+  optional string notes = 7;
+  bool clear_notes = 8;
+  optional string title = 9;
+  optional string location_text = 10;
+  bool clear_location_text = 11;
+  optional double cost = 12;
+}
+
+message SetItemCostRequest {
+  string trip_id = 1;
+  string item_id = 2;
+  double cost = 3;
+}
+
+message MoveItemRequest {
+  string trip_id = 1;
+  string item_id = 2;
+  string day = 3;
+  int32 order = 4;
+}
+
+message DeleteItemRequest {
+  string trip_id = 1;
+  string item_id = 2;
+}
+
+message SetReminderRequest {
+  string trip_id = 1;
+  string item_id = 2;
+  bool enabled = 3;
+  optional int32 lead_minutes = 4;
+  repeated string recipient_ids = 5;
+  optional string start_time = 6;
+  bool clear_start_time = 7;
+}
+
+message GetReminderRequest {
+  string trip_id = 1;
+  string item_id = 2;
+}
+
+message DueRemindersRequest { string now = 1; }
+
+message MarkReminderSentRequest {
+  string item_id = 1;
+  repeated string user_ids = 2;
+}
+
+message GetItemForActorRequest { string item_id = 1; }
+
+message PreviewInvitationRequest { string code = 1; }
+
+message CreateInvitationRequest {
+  string trip_id = 1;
+  string email = 2;
+  string role = 3;
+  optional InviteNotify notify = 4;
+}
+
+message CreateLocalInvitationRequest {
+  string trip_id = 1;
+  string invitee_user_id = 2;
+  string role = 3;
+}
+
+message JoinLocalRequest {
+  string trip_id = 1;
+  string user_id = 2;
+  string invitation_id = 3;
+}
+
+message LocalInvitationActionRequest {
+  string trip_id = 1;
+  string invitation_id = 2;
+  optional string user_id = 3;
+}
+
+message JoinTripRequest {
+  string trip_id = 1;
+  string user_id = 2;
+  string email = 3;
+  string code = 4;
+  optional JoinNotify notify = 5;
+}
+
+message TripResponse { TripAggregate trip = 1; }
+message TripSummariesResponse { repeated TripSummary items = 1; }
+message MemberResponse { TripMember member = 1; }
+message MembersResponse { repeated TripMember items = 1; }
+message ItemsResponse { repeated TripItem items = 1; }
+message ItemResponse { TripItem item = 1; }
+message ReminderResponse { ItemReminder reminder = 1; }
+message DueRemindersResponse { repeated DueReminder items = 1; }
+message ItemForActorResponse {
+  string trip_id = 1;
+  TripItem item = 2;
+}
+message InvitationResponse {
+  Invitation invitation = 1;
+  bool created = 2;
+}
+message InvitationResultResponse {
+  Invitation invitation = 1;
+  bool email_queued = 2;
+}
+message InvitationPreviewResponse { InvitationPreview preview = 1; }
+message LeaveResponse {
+  bool left = 1;
+  TripAggregate trip = 2;
+}
+message JoinLocalResponse {
+  bool joined = 1;
+  TripAggregate trip = 2;
+}
+message JoinTripResponse {
+  bool joined = 1;
+  TripAggregate trip = 2;
+  bool member_email_queued = 3;
+  optional string member_email_reason = 4;
+}
+
+service TripsService {
+  rpc ListTrips(ListTripsRequest) returns (TripSummariesResponse);
+  rpc GetTrip(GetTripRequest) returns (TripResponse);
+  rpc CreateTrip(CreateTripRequest) returns (TripResponse);
+  rpc UpdateTrip(UpdateTripRequest) returns (TripResponse);
+  rpc DeleteTrip(DeleteTripRequest) returns (Empty);
+
+  rpc ListMembers(ListMembersRequest) returns (MembersResponse);
+  rpc AddMember(AddMemberRequest) returns (MemberResponse);
+  rpc UpdateMemberRole(UpdateMemberRoleRequest) returns (MemberResponse);
+  rpc RemoveMember(RemoveMemberRequest) returns (Empty);
+  rpc LeaveTrip(LeaveTripRequest) returns (LeaveResponse);
+
+  rpc ListItems(ListItemsRequest) returns (ItemsResponse);
+  rpc AddItem(AddItemRequest) returns (ItemResponse);
+  rpc UpdateItem(UpdateItemRequest) returns (ItemResponse);
+  rpc SetItemCost(SetItemCostRequest) returns (ItemResponse);
+  rpc MoveItem(MoveItemRequest) returns (ItemResponse);
+  rpc DeleteItem(DeleteItemRequest) returns (ItemResponse);
+  rpc SetReminder(SetReminderRequest) returns (ItemResponse);
+  rpc GetReminder(GetReminderRequest) returns (ReminderResponse);
+  rpc DueReminders(DueRemindersRequest) returns (DueRemindersResponse);
+  rpc MarkReminderSent(MarkReminderSentRequest) returns (Empty);
+  rpc GetItemForActor(GetItemForActorRequest) returns (ItemForActorResponse);
+
+  rpc PreviewInvitation(PreviewInvitationRequest) returns (InvitationPreviewResponse);
+  rpc CreateInvitation(CreateInvitationRequest) returns (InvitationResultResponse);
+  rpc CreateLocalInvitation(CreateLocalInvitationRequest) returns (InvitationResponse);
+  rpc JoinLocal(JoinLocalRequest) returns (JoinLocalResponse);
+  rpc DeclineLocalInvitation(LocalInvitationActionRequest) returns (InvitationResponse);
+  rpc RevokeLocalInvitation(LocalInvitationActionRequest) returns (InvitationResponse);
+  rpc JoinTrip(JoinTripRequest) returns (JoinTripResponse);
+}

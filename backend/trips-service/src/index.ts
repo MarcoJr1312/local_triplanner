@@ -6,6 +6,7 @@ import { createLocationsClient } from './domain/locations.ts';
 import { OutboxRelay } from './domain/outbox.ts';
 import { TripsService } from './domain/service.ts';
 import { isUsingDefaultInternalToken, loadConfig, loadDotEnv } from './env.ts';
+import { startTripsGrpcServer } from './grpc/server.ts';
 import { createHandler } from './http.ts';
 import { createShutdown } from './shutdown.ts';
 
@@ -62,6 +63,16 @@ const server = Bun.serve({
 });
 
 console.log(`[trips] listening on :${config.port}`);
+
+const grpcServer = await startTripsGrpcServer({
+  service,
+  port: config.grpcPort,
+  internalToken: config.internalToken,
+}).catch((error: unknown) => {
+  console.error('[trips] gRPC server failed:', error);
+  process.exit(1);
+});
+console.log(`[trips] gRPC listening on :${config.grpcPort}`);
 console.log(
   config.databaseUrl
     ? '[trips] postgres=dsn'
@@ -77,7 +88,10 @@ const shutdown = createShutdown({
   timeoutMs: config.shutdownTimeoutMs,
   exit: (code) => process.exit(code),
   log: (message) => console.log(message),
-  beforeClose: () => relay.stop(),
+  beforeClose: async () => {
+    await relay.stop();
+    await grpcServer.stop();
+  },
 });
 
 process.on('SIGTERM', () => void shutdown('SIGTERM'));

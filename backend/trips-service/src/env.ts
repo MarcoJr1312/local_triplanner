@@ -33,6 +33,7 @@ export interface OutboxConfig {
 
 export interface Config {
   port: number;
+  grpcPort: number;
   internalToken: string;
   /** Optional full DSN for local tools/tests. Null means discrete fields. */
   databaseUrl: string | null;
@@ -87,6 +88,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
 
   return {
     port: numberEnv(env, 'PORT', 4400, 1, 65_535),
+    grpcPort: numberEnv(env, 'GRPC_PORT', 50052, 1, 65_535),
     internalToken: textEnv(env, 'INTERNAL_TOKEN', DEFAULT_INTERNAL_TOKEN),
     databaseUrl: databaseUrl === '' ? null : databaseUrl,
     postgres: {

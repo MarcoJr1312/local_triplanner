@@ -166,6 +166,9 @@ services:
       BROKER_TOPIC: TripInvitation
       OUTBOX_INTERVAL_MS: "1000"
       SEED_DEMO: "true"
+      GRPC_PORT: "50052"
+    expose:
+      - "50052"
     depends_on:
       trips-postgres:
         condition: service_healthy
@@ -215,6 +218,8 @@ services:
       BOOTSTRAP_LOCAL: "1"
       TRIPS_URL: http://trips:4400
       TRIPS_TIMEOUT_MS: "5000"
+      TRIPS_TRANSPORT: ${TRIPS_TRANSPORT:-http}
+      TRIPS_GRPC_URL: trips:50052
       USERS_URL: http://users:4500
       USERS_TIMEOUT_MS: "3000"
       USERS_TRANSPORT: ${USERS_TRANSPORT:-http}

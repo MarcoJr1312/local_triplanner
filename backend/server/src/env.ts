@@ -54,6 +54,8 @@ function transportEnv(name: string, fallback: ServiceTransport = 'http'): Servic
 
 export const USERS_TRANSPORT = transportEnv('USERS_TRANSPORT');
 export const USERS_GRPC_URL = process.env.USERS_GRPC_URL ?? '127.0.0.1:50051';
+export const TRIPS_TRANSPORT = transportEnv('TRIPS_TRANSPORT');
+export const TRIPS_GRPC_URL = process.env.TRIPS_GRPC_URL ?? '127.0.0.1:50052';
 
 // In-app activity reminder sweep. One API replica runs it in the demo.
 export const REMINDER_SWEEP_MS = Number(process.env.REMINDER_SWEEP_MS ?? 30_000);
