@@ -1,5 +1,9 @@
 # Release notes — v1.6.0 (favorites + activity reminders)
 
+> Superseded. `v1.6.0` was tagged locally but never published. The agent
+> migration and its cumulative features ship in **v1.7.0**. See
+> [`RELEASE_NOTES_v1.7.0.md`](./RELEASE_NOTES_v1.7.0.md).
+
 | Field | Value |
 |---|---|
 | Status | Release candidate; Docker Hub publish and published-stack smoke pending |

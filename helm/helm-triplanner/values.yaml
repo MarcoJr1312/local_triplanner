@@ -28,23 +28,23 @@ images:
     pullPolicy: IfNotPresent
   locations:
     name: marcojr13/triplanner-locations
-    tag: "0.2.1"
+    tag: "1.7.0"
     pullPolicy: IfNotPresent
   trips:
     name: marcojr13/triplanner-trips
-    tag: "1.6.0"
+    tag: "1.7.0"
     pullPolicy: IfNotPresent
   users:
     name: marcojr13/triplanner-users
-    tag: "1.6.0"
+    tag: "1.7.0"
     pullPolicy: IfNotPresent
   agent:
     name: marcojr13/triplanner-agent
-    tag: "1.6.0"
+    tag: "1.7.0"
     pullPolicy: IfNotPresent
   web:
     name: marcojr13/triplanner-web
-    tag: "1.6.0"
+    tag: "1.7.0"
     pullPolicy: IfNotPresent
 
 # MongoDB 7 StatefulSet for the locations catalogue. Single node, no auth:

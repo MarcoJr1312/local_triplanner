@@ -192,12 +192,12 @@ Prerequisites:
 - Images referenced by the chart (override `images.*`):
   `marcojr13/triplanner-kafka:0.1.0`,
   `marcojr13/triplanner-email:0.1.1`,
-  `marcojr13/triplanner-locations:0.2.1`,
-  `marcojr13/triplanner-trips:1.6.0`,
-  `marcojr13/triplanner-users:1.6.0`,
-  `marcojr13/triplanner-agent:1.6.0` and
-  `marcojr13/triplanner-web:1.6.0`. The `1.6.0` tags are published by the
-  per-service workflows when the `v1.6.0` tag is pushed; override the tags for
+  `marcojr13/triplanner-locations:1.7.0`,
+  `marcojr13/triplanner-trips:1.7.0`,
+  `marcojr13/triplanner-users:1.7.0`,
+  `marcojr13/triplanner-agent:1.7.0` and
+  `marcojr13/triplanner-web:1.7.0`. The `1.7.0` tags are published by the
+  per-service workflows when the `v1.7.0` tag is pushed; override the tags for
   a local pre-release acceptance run.
 
 ```bash

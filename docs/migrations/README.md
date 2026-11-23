@@ -36,6 +36,8 @@ Migrations:
   Gate 2 (approved with conditions closed)
 - [`0017-agent-service.md`](./0017-agent-service.md) — agent pgvector sync via
   locations events and prompt enrichment
+- [`0018-agent-qa.md`](./0018-agent-qa.md) — agent migration QA evidence and
+  Gate 2 (approved with conditions closed)
 
 ## Branching (local only)
 

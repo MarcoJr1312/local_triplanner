@@ -1,9 +1,8 @@
 // Internal REST endpoints (loopback only) consumed by the agent service.
 
-import { createHash, timingSafeEqual } from 'node:crypto';
+import { timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { GraphQLError } from 'graphql';
-import { distanceKm } from './geo.ts';
 import { upsertSuggestionChat } from './pg/chats.ts';
 import { isValidMessages } from './chats.ts';
 import { listUserInterests } from './pg/interests.ts';
@@ -14,9 +13,7 @@ import type { AsyncDb } from './pg/db.ts';
 import type { TripMemberRow } from './trips/types.ts';
 import type { TripsStore } from './trips/types.ts';
 import type { UsersStore } from './users/types.ts';
-import type { LocationRow } from './schema-types.ts';
 
-const SEARCH_RADIUS_KM = 75;
 const LOOPBACK = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
 
 // The API port is not published in Compose. Internal calls come from the
@@ -95,16 +92,6 @@ async function resolveUserId(deps: InternalDeps, req: IncomingMessage): Promise<
     if (user) return user.id;
   }
   return headerUserId(req);
-}
-
-function parseTags(s: string | null | undefined): string[] {
-  if (!s) return [];
-  try {
-    const v = JSON.parse(s) as unknown;
-    return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
-  } catch {
-    return [];
-  }
 }
 
 async function destinationCoords(deps: InternalDeps, destinationId: string | null): Promise<{ lat: number | null; lng: number | null }> {
@@ -296,53 +283,6 @@ async function handlePlaceDetails(deps: InternalDeps, res: ServerResponse, body:
   });
 }
 
-async function handlePlacesCache(deps: InternalDeps, req: IncomingMessage, res: ServerResponse, rawTripId: string): Promise<void> {
-  const tripId = decodeURIComponent(rawTripId);
-  const userId = await resolveUserId(deps, req);
-  if (!userId) {
-    json(res, 403, { error: 'NOT_TRIP_MEMBER', message: 'X-User-Id no es miembro del viaje.' });
-    return;
-  }
-
-  let data;
-  try {
-    data = await deps.trips.getTrip(userId, tripId);
-  } catch (error) {
-    if (!respondTripError(res, error)) throw error;
-    return;
-  }
-
-  const destId = data.trip.destination_id;
-  const { lat: destLat, lng: destLng } =
-    data.trip.destination_lat == null || data.trip.destination_lng == null
-      ? await destinationCoords(deps, destId)
-      : { lat: data.trip.destination_lat, lng: data.trip.destination_lng };
-
-  const rows = await deps.catalogue.listPlaces();
-
-  const places = rows
-    .filter((r: LocationRow) => {
-      if (destId && r.parent_id === destId) return true;
-      if (destLat != null && destLng != null && r.lat != null && r.lng != null) {
-        return distanceKm(destLat, destLng, r.lat, r.lng) <= SEARCH_RADIUS_KM;
-      }
-      return false;
-    })
-    .map((r) => ({
-      id: r.id,
-      name: r.name,
-      category: r.category ?? 'activity',
-      description: r.description ?? null,
-      tags: parseTags(r.tags_json),
-      rating: r.rating ?? null,
-      cost: r.cost ?? null,
-    }))
-    .sort((a, b) => a.id.localeCompare(b.id));
-
-  const contentHash = createHash('md5').update(JSON.stringify(places)).digest('hex');
-  json(res, 200, { places, contentHash });
-}
-
 async function handleSaveChat(deps: InternalDeps, res: ServerResponse, body: Record<string, unknown>): Promise<void> {
   const tripId = typeof body.tripId === 'string' ? body.tripId.trim() : '';
   const userId = typeof body.userId === 'string' ? body.userId.trim() : '';
@@ -384,10 +324,6 @@ async function dispatch(deps: InternalDeps, req: IncomingMessage, res: ServerRes
   try {
     if (method === 'GET' && pathname.startsWith('/internal/trip-context/')) {
       await handleTripContext(deps, req, res, pathname.slice('/internal/trip-context/'.length));
-      return;
-    }
-    if (method === 'GET' && pathname.startsWith('/internal/places-cache/')) {
-      await handlePlacesCache(deps, req, res, pathname.slice('/internal/places-cache/'.length));
       return;
     }
     if (method === 'POST' && pathname === '/internal/search-places') {

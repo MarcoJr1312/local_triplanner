@@ -3,14 +3,12 @@
 --
 -- ARCHITECTURE:
 --   * MongoDB (locations service) owns the catalogue; no FKs point at it.
---   * The trips service owns trips, members, items and invitations and the
---     users service owns accounts and notifications, each in its own
---     PostgreSQL database. Postgres here owns favorites, interests, chats,
---     attachment metadata and agent vectors.
---   * Run decommission-trips.sql and decommission-users.sql once on databases
---     created before those cutovers.
-
-CREATE EXTENSION IF NOT EXISTS vector;
+--   * The users service owns accounts and notifications, each in its own
+--     PostgreSQL database. Postgres here owns favorites, interests, chats and
+--     attachment metadata; the agent owns its own pgvector database.
+--   * Run decommission-trips.sql, decommission-users.sql and
+--     decommission-agent-vectors.sql once on databases created before those
+--     cutovers.
 
 -- ============================ TRIPS =============================
 -- Trips, memberships, items and invitations are owned by the trips service
@@ -94,34 +92,3 @@ CREATE TABLE IF NOT EXISTS suggestion_chats (
 
 CREATE INDEX IF NOT EXISTS idx_suggestion_chats_trip_user_day
   ON suggestion_chats(trip_id, user_id, day);
-
--- ==================== AGENT VECTOR INDEX (pgvector) ====================
--- Replaces ChromaDB. One row per place, interest term or transient query.
--- Embeddings are 384-dim (all-MiniLM-L6-v2 through Chroma's ONNX EF).
-CREATE TABLE IF NOT EXISTS agent_embeddings (
-  id             text PRIMARY KEY,
-  kind           text NOT NULL CHECK (kind IN ('place', 'interest', 'query')),
-  destination_id text,
-  user_id        text,
-  session_id     text,
-  document       text NOT NULL,
-  metadata       jsonb NOT NULL DEFAULT '{}'::jsonb,
-  embedding      vector(384) NOT NULL,
-  updated_at     timestamptz NOT NULL DEFAULT now()
-);
-
-CREATE INDEX IF NOT EXISTS idx_agent_embeddings_destination
-  ON agent_embeddings(destination_id, kind);
-CREATE INDEX IF NOT EXISTS idx_agent_embeddings_user
-  ON agent_embeddings(user_id, kind);
-CREATE INDEX IF NOT EXISTS idx_agent_embeddings_session
-  ON agent_embeddings(session_id);
-CREATE INDEX IF NOT EXISTS idx_agent_embeddings_vector
-  ON agent_embeddings USING hnsw (embedding vector_cosine_ops);
-
--- Content hash per destination so re-indexing only happens when data changes.
-CREATE TABLE IF NOT EXISTS agent_index_state (
-  destination_id text PRIMARY KEY,
-  content_hash   text NOT NULL,
-  updated_at     timestamptz NOT NULL DEFAULT now()
-);

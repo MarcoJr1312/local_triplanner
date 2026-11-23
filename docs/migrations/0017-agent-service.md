@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **Proposed — pending Gate 1** |
+| Status | **Gate 2 approved (2026-11-23); release v1.7.0** |
 | Cycle | Microservice Code Migration (`19455fa3-28ea-4f03-b195-973c5ddf595e`) |
 | Integration branch | `refactor/helm` |
 | Work branch | `feature/agent-pgvector` |
@@ -330,9 +330,9 @@ only calls the internal locations REST API.
 | M14.3 | Agent pgvector schema, snapshot/bootstrap and reconcile | Backend |
 | M14.4 | Agent LocationChanged consumer and idempotency | Backend |
 | M14.5 | Prompt enrichment and places-cache removal | Backend |
-| M14.6 | Compose/Helm agent and pgvector workloads | SRE |
-| M14.7 | Acceptance, failure injection and QA | QA |
-| M14.8 | Gate 2, decommission and release | PM/SRE |
+| M14.6 | Compose/Helm agent and pgvector workloads — **done** | SRE |
+| M14.7 | Acceptance, failure injection and QA — **done**; see `0018-agent-qa.md` | QA |
+| M14.8 | Gate 2, decommission and release — **done**; v1.7.0 | PM/SRE |
 
 ## 13. Exit criteria
 

@@ -169,10 +169,18 @@ auth and Dockerfiles.
   dialog; viewers see read-only state. Demo trip uses `America/Toronto`.
   Evidence: `docs/migrations/0014-activity-reminders.md` and
   `0016-reminders-qa.md` (Gate 2 approved). Release `v1.6.0` covers M12 + M13.
-- Helm chart 0.10.0: every application workload reads non-secret environment
+- M14 done (`5c7c8f6`): the agent owns a dedicated PostgreSQL 17 + pgvector
+  database and syncs places from the locations service through a Mongo outbox
+  and broker topic `LocationChanged`, with snapshot bootstrap and periodic
+  reconcile. Weak prompt matches call the locations service once, index the
+  extra places and re-query. Compose/Helm include the agent and its database;
+  the platform agent tables and vector extension are decommissioned. Evidence:
+  `docs/migrations/0017-agent-service.md` and `0018-agent-qa.md` (Gate 2
+  approved). Release `v1.7.0`.
+- Helm chart 0.11.0: every application workload reads non-secret environment
   from `triplanner-<service>-config` via `envFrom.configMapRef`; secrets stay as
   `secretKeyRef` entries. A `checksum/config` annotation rolls the pod when a
-  value changes.
+  value changes. The chart now includes the agent and its pgvector PostgreSQL.
 - Test databases: users tests default to `users_test` and trips tests to
   `trips_test` on `127.0.0.1:55433`/`55432` (never the live `users`/`trips`
   databases).
