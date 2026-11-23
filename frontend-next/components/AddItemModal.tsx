@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { ChevronDown, Clock, Globe, Heart, List, Plus, Search } from 'lucide-react';
+import { Check, ChevronDown, Clock, Globe, Heart, List, Plus, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, mode as apiMode, searchLocations, locationDetails, localizeApiError } from '@/lib/api';
 import { CATEGORY_OPTIONS } from '@/lib/categories';
@@ -375,28 +375,32 @@ export default function AddItemModal({ open, tripId, destinationId, day, onClose
 
   return (
     <Modal open={open} onClose={onClose} title={t('items.addTitle')} size="lg">
-      <div className="mb-4 flex rounded-xl bg-muted p-1">
+      <div className="mb-4 flex rounded-xl border border-border bg-muted p-1">
         <button
           type="button"
           onClick={() => setMode('catalog')}
+          aria-pressed={mode === 'catalog'}
           className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium transition duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40 ${
             mode === 'catalog'
-              ? 'bg-brand-600 text-white shadow-sm'
-              : 'text-foreground/70 hover:text-foreground'
+              ? 'bg-brand-600 font-semibold text-white shadow-md'
+              : 'text-foreground/60 hover:bg-card/70 hover:text-foreground'
           }`}
         >
           <List className="h-4 w-4" /> {t('items.catalog')}
+          {mode === 'catalog' && <Check className="h-3.5 w-3.5" strokeWidth={3} />}
         </button>
         <button
           type="button"
           onClick={() => setMode('manual')}
+          aria-pressed={mode === 'manual'}
           className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium transition duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40 ${
             mode === 'manual'
-              ? 'bg-brand-600 text-white shadow-sm'
-              : 'text-foreground/70 hover:text-foreground'
+              ? 'bg-brand-600 font-semibold text-white shadow-md'
+              : 'text-foreground/60 hover:bg-card/70 hover:text-foreground'
           }`}
         >
           <Plus className="h-4 w-4" /> {t('items.manual')}
+          {mode === 'manual' && <Check className="h-3.5 w-3.5" strokeWidth={3} />}
         </button>
       </div>
 
