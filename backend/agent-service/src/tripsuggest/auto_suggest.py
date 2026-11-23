@@ -73,9 +73,11 @@ def auto_suggest(
     resolved_user_id = str(context.get("userId") or user_id)
 
     # The API context is authoritative; refresh the local interest embeddings
-    # if another stack changed them (for example Compose API + Helm agent).
+    # if another stack changed them (including clearing them).
     context_terms = normalize_terms(context.get("interests") or [])
-    if context_terms and set(context_terms) != set(get_user_interest_terms(resolved_user_id)):
+    if "interests" in context and set(context_terms) != set(
+        get_user_interest_terms(resolved_user_id)
+    ):
         try:
             sync_user_interests(resolved_user_id, context_terms)
         except Exception:

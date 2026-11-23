@@ -317,6 +317,16 @@ def test_weak_match_enrichment_threshold() -> None:
     assert should_enrich(weak, 5) is True
 
 
+def test_clearing_interests_removes_all_terms() -> None:
+    _reset()
+    set_embedder_for_tests(_fake_embedder)
+    sync_user_interests("u-empty", ["food", "museums"])
+    assert get_user_interest_terms("u-empty") == ["food", "museums"]
+    sync_user_interests("u-empty", [])
+    assert get_user_interest_terms("u-empty") == []
+    set_embedder_for_tests(None)
+
+
 def test_demo_mode_returns_actionable_blocks() -> None:
     from tripsuggest.settings import get_settings
 
@@ -364,6 +374,7 @@ TESTS: list[Callable[[], None]] = [
     test_destination_index_shape,
     test_snapshot_sync_versions_and_tombstones,
     test_weak_match_enrichment_threshold,
+    test_clearing_interests_removes_all_terms,
     test_demo_mode_returns_actionable_blocks,
 ]
 

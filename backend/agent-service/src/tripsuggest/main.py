@@ -147,7 +147,8 @@ def _user_interest_terms(user_id: str, context: dict[str, Any]) -> list[str]:
     except Exception:
         logger.exception("failed to load user interests from pgvector")
         agent_terms = []
-    if context_terms and set(context_terms) != set(agent_terms):
+    # An explicit empty list in the API context means "clear my interests".
+    if "interests" in context and set(context_terms) != set(agent_terms):
         try:
             sync_user_interests(user_id, context_terms)
             return context_terms
