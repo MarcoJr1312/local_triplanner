@@ -5,6 +5,19 @@ ingress, a Go HTTP broker, the email consumer with BYOK settings, the
 locations/activities catalogue with its single-node MongoDB StatefulSet, the
 trips service and the users service with their own PostgreSQL databases.
 
+## Internal gRPC
+
+The users, trips and locations Services expose a ClusterIP-only gRPC port
+(`appProtocol: grpc`) beside HTTP:
+`triplanner-users:50051`, `triplanner-trips:50052`,
+`triplanner-locations:50053`. Callers send `x-internal-token` metadata; the
+standard `grpc.health.v1.Health` service answers `SERVING`. HTTP `/health` and
+`/ready` remain the Kubernetes probes, and no Ingress exposes gRPC.
+
+The `api` values at the end of `values.yaml` are informational until the API
+moves into the chart; they list the HTTP and gRPC service URLs and the expected
+`*_TRANSPORT=grpc` settings.
+
 ## Layout
 
 ```

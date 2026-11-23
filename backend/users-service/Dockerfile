@@ -22,6 +22,7 @@ RUN chown -R app:app /app
 
 ENV NODE_ENV=production
 ENV PROTO_PATH=/app/proto/triplanner/users/v1/users.proto
+ENV HEALTH_PROTO_PATH=/app/proto/grpc/health/v1/health.proto
 USER app
 EXPOSE 4500
 EXPOSE 50051

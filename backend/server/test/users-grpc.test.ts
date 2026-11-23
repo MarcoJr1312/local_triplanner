@@ -102,6 +102,10 @@ before(async () => {
       call: grpc.ServerUnaryCall<any, any>,
       callback: grpc.sendUnaryData<any>,
     ) => {
+      if (call.request.username === 'slow') {
+        setTimeout(() => callback(null, { user: USER }), 200);
+        return;
+      }
       if (call.request.username !== USER.username) {
         fail(callback, grpc.status.NOT_FOUND, 'USER_NOT_FOUND');
         return;
@@ -244,6 +248,18 @@ describe('GrpcUsersStore', () => {
     await assert.rejects(
       () => store.login('demo', 'wrong'),
       (error) => codeOf(error) === 'INVALID_CREDENTIALS',
+    );
+  });
+
+  test('maps a deadline to USERS_UNAVAILABLE', async () => {
+    const short = new GrpcUsersStore({
+      baseUrl: `127.0.0.1:${port}`,
+      internalToken: 'secret',
+      timeoutMs: 20,
+    });
+    await assert.rejects(
+      () => short.getByUsername('slow'),
+      (error) => codeOf(error) === 'USERS_UNAVAILABLE',
     );
   });
 

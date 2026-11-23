@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **Proposed — pending Gate 1** |
+| Status | **Gate 1 approved (2026-11-23); M15.1–M15.7 complete, Gate 2 pending** |
 | Cycle | Microservice Code Migration (`19455fa3-28ea-4f03-b195-973c5ddf595e`) |
 | Integration branch | `refactor/helm` |
 | Work branch | `feature/grpc-api` |
@@ -36,6 +36,27 @@ gateway or sidecar is added.
 4. **Dual protocol, phased.** Keep HTTP internal routes and add gRPC; switch
    clients with transport flags; remove HTTP internal business routes only
    after QA and Gate 2.
+
+### 2.1 Implementation notes (post-Gate 1)
+
+These do not change the wire contract; they record how M15.1–M15.6 were built.
+
+- The Bun servers and clients load the committed `.proto` files at runtime with
+  `@grpc/proto-loader` (`keepCase`, no default filling). Generated stubs and
+  `buf` drift checks are deferred; the `.proto` files remain the source of
+  truth and are copied into every image (`PROTO_PATH` / `PROTO_ROOT`).
+- The standard `grpc.health.v1.Health` service is registered in all three
+  servers (`Check` returns `SERVING`). Kubernetes probes still use HTTP
+  `/health` and `/ready`.
+- Locations is read-only over gRPC (`GetById`, `GetByPlaceId`, `GetByDataId`,
+  `Search`, `ListDestinations`, `ListByParent`, `ListPlaces`). `upsert`,
+  `delete`, `clear` and `seed` stay on the internal HTTP service/seed path.
+- The API is still a Compose workload in the Helm transition, so the functional
+  cutover runs in Compose. The chart exposes gRPC on the three ClusterIP
+  Services for the future in-cluster API.
+- Compose transport defaults stay `http` until Gate 2; QA runs with
+  `USERS_TRANSPORT=grpc`, `TRIPS_TRANSPORT=grpc` and
+  `LOCATIONS_TRANSPORT=grpc`.
 
 ## 3. Scope
 

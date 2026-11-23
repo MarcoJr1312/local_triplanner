@@ -22,6 +22,7 @@ RUN mkdir -p /app/.data && chown -R app:app /app
 ENV NODE_ENV=production
 ENV SETTINGS_FILE=/app/.data/locations.json
 ENV PROTO_PATH=/app/proto/triplanner/locations/v1/locations.proto
+ENV HEALTH_PROTO_PATH=/app/proto/grpc/health/v1/health.proto
 USER app
 EXPOSE 4300
 EXPOSE 50053
