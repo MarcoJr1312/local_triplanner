@@ -1,0 +1,107 @@
+syntax = "proto3";
+
+package triplanner.users.v1;
+
+message Empty {}
+
+message User {
+  string id = 1;
+  string username = 2;
+  string email = 3;
+  string display_name = 4;
+  string color = 5;
+  string avatar_url = 6;
+  string language = 7;
+  string created_at = 8;
+  string deleted_at = 9;
+}
+
+message Notification {
+  string id = 1;
+  string user_id = 2;
+  string type = 3;
+  string trip_id = 4;
+  string trip_name = 5;
+  string invitation_id = 6;
+  string inviter_user_id = 7;
+  string role = 8;
+  string item_id = 9;
+  string item_title = 10;
+  string start_at = 11;
+  int32 lead_minutes = 12;
+  string dedupe_key = 13;
+  string status = 14;
+  string created_at = 15;
+  string read_at = 16;
+  User inviter = 17;
+}
+
+message FavoriteLocation {
+  string location_id = 1;
+  string created_at = 2;
+}
+
+message GetUserRequest { string user_id = 1; }
+message GetByUsernameRequest { string username = 1; }
+message GetByEmailRequest { string email = 1; }
+message ListUsersRequest { string query = 1; int32 limit = 2; }
+message BatchUsersRequest { repeated string ids = 1; }
+message LoginRequest { string username = 1; string password = 2; }
+message CreateUserRequest {
+  string username = 1;
+  string password = 2;
+  string display_name = 3;
+  string language = 4;
+}
+message UpdateUserRequest {
+  string user_id = 1;
+  optional string display_name = 2;
+  optional string language = 3;
+  optional string avatar_url = 4;
+  optional string color = 5;
+}
+message DeleteUserRequest { string user_id = 1; }
+message CreateNotificationRequest {
+  string user_id = 1;
+  string type = 2;
+  string trip_id = 3;
+  string trip_name = 4;
+  string invitation_id = 5;
+  string inviter_user_id = 6;
+  string role = 7;
+  string item_id = 8;
+  string item_title = 9;
+  string start_at = 10;
+  int32 lead_minutes = 11;
+  string dedupe_key = 12;
+}
+message ListNotificationsRequest { string user_id = 1; string status = 2; int32 limit = 3; }
+message GetNotificationRequest { string user_id = 1; string notification_id = 2; }
+message UpdateNotificationRequest { string user_id = 1; string notification_id = 2; string status = 3; }
+message ListFavoriteIdsRequest { string user_id = 1; }
+message SetFavoriteRequest { string user_id = 1; string location_id = 2; bool favorite = 3; }
+
+message UserResponse { User user = 1; }
+message UsersResponse { repeated User items = 1; }
+message NotificationResponse { Notification notification = 1; bool created = 2; }
+message NotificationsResponse { repeated Notification items = 1; }
+message FavoriteIdsResponse { repeated string ids = 1; }
+message FavoriteResponse { string location_id = 1; bool favorite = 2; }
+
+service UsersService {
+  rpc GetUser(GetUserRequest) returns (UserResponse);
+  rpc GetByUsername(GetByUsernameRequest) returns (UserResponse);
+  rpc GetByEmail(GetByEmailRequest) returns (UserResponse);
+  rpc ListUsers(ListUsersRequest) returns (UsersResponse);
+  rpc BatchUsers(BatchUsersRequest) returns (UsersResponse);
+  rpc Login(LoginRequest) returns (UserResponse);
+  rpc CreateUser(CreateUserRequest) returns (UserResponse);
+  rpc UpdateUser(UpdateUserRequest) returns (UserResponse);
+  rpc DeleteUser(DeleteUserRequest) returns (Empty);
+  rpc CreateNotification(CreateNotificationRequest) returns (NotificationResponse);
+  rpc ListNotifications(ListNotificationsRequest) returns (NotificationsResponse);
+  rpc GetNotification(GetNotificationRequest) returns (NotificationResponse);
+  rpc UpdateNotification(UpdateNotificationRequest) returns (NotificationResponse);
+  rpc ListFavoriteIds(ListFavoriteIdsRequest) returns (FavoriteIdsResponse);
+  rpc SetFavorite(SetFavoriteRequest) returns (FavoriteResponse);
+}

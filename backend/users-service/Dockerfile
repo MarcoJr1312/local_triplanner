@@ -15,12 +15,16 @@ RUN bun install --frozen-lockfile --production
 COPY backend/users-service/src ./src
 COPY backend/users-service/db ./db
 COPY backend/users-service/scripts ./scripts
+# gRPC contract, resolved through PROTO_PATH.
+COPY proto ./proto
 
 RUN chown -R app:app /app
 
 ENV NODE_ENV=production
+ENV PROTO_PATH=/app/proto/triplanner/users/v1/users.proto
 USER app
 EXPOSE 4500
+EXPOSE 50051
 
 HEALTHCHECK --interval=10s --timeout=3s --start-period=30s --retries=6 \
   CMD sh -c 'curl -f "http://localhost:${PORT:-4500}/ready" || exit 1'

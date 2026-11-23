@@ -38,6 +38,8 @@ Migrations:
   locations events and prompt enrichment
 - [`0018-agent-qa.md`](./0018-agent-qa.md) — agent migration QA evidence and
   Gate 2 (approved with conditions closed)
+- [`0019-grpc-api.md`](./0019-grpc-api.md) — gRPC for the API facade (users,
+  trips, locations)
 
 ## Branching (local only)
 

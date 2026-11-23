@@ -13,6 +13,8 @@ COPY backend/server/package.json backend/server/bun.lock ./
 RUN bun install --frozen-lockfile --production
 
 COPY backend/server/src ./src
+# gRPC contracts, resolved through PROTO_ROOT.
+COPY proto ./proto
 # db:migrate / db:seed resolve ../../db relative to src.
 COPY backend/db/pg ./db/pg
 COPY backend/db/seed-data.json ./db/seed-data.json
@@ -24,6 +26,7 @@ COPY backend/graphql ./graphql
 RUN mkdir -p /app/uploads && chown -R app:app /app
 
 ENV NODE_ENV=production
+ENV PROTO_ROOT=/app/proto
 USER app
 EXPOSE 4000
 

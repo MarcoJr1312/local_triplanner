@@ -4,6 +4,7 @@ import { seedDemoUsers } from './db/seed.ts';
 import { UsersService } from './domain/service.ts';
 import { isUsingDefaultInternalToken, loadConfig, loadDotEnv } from './env.ts';
 import { createHandler } from './http.ts';
+import { startUsersGrpcServer } from './grpc/server.ts';
 import { createShutdown } from './shutdown.ts';
 
 loadDotEnv();
@@ -36,10 +37,11 @@ if (config.seedDemo) {
   );
 }
 
+const service = new UsersService(db);
 const server = Bun.serve({
   hostname: '0.0.0.0',
   port: config.port,
-  fetch: createHandler({ db, internalToken: config.internalToken, service: new UsersService(db) }),
+  fetch: createHandler({ db, internalToken: config.internalToken, service }),
   error(error) {
     console.error('[users] unhandled error:', error);
     return new Response(
@@ -48,6 +50,16 @@ const server = Bun.serve({
     );
   },
 });
+
+const grpcServer = await startUsersGrpcServer({
+  service,
+  port: config.grpcPort,
+  internalToken: config.internalToken,
+}).catch((error: unknown) => {
+  console.error('[users] gRPC server failed:', error);
+  process.exit(1);
+});
+console.log(`[users] gRPC listening on :${config.grpcPort}`);
 
 console.log(`[users] listening on :${config.port}`);
 console.log(
@@ -62,6 +74,7 @@ const shutdown = createShutdown({
   timeoutMs: config.shutdownTimeoutMs,
   exit: (code) => process.exit(code),
   log: (message) => console.log(message),
+  beforeClose: () => grpcServer.stop(),
 });
 
 process.on('SIGTERM', () => void shutdown('SIGTERM'));

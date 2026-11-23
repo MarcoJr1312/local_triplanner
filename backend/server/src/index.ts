@@ -20,6 +20,8 @@ import {
   TRIPS_TIMEOUT_MS,
   USERS_URL,
   USERS_TIMEOUT_MS,
+  USERS_TRANSPORT,
+  USERS_GRPC_URL,
   REMINDER_SWEEP_MS,
 } from './env.ts';
 import { createInternalRouter } from './internal.ts';
@@ -38,6 +40,8 @@ if (BOOTSTRAP_LOCAL) {
 
 const users = createUsersStore({
   baseUrl: USERS_URL,
+  grpcUrl: USERS_GRPC_URL,
+  transport: USERS_TRANSPORT,
   internalToken: INTERNAL_TOKEN,
   timeoutMs: USERS_TIMEOUT_MS,
 });

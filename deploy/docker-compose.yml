@@ -191,6 +191,9 @@ services:
       POSTGRES_PASSWORD: ${USERS_POSTGRES_PASSWORD:-users}
       INTERNAL_TOKEN: ${INTERNAL_TOKEN:-dev-internal-token}
       SEED_DEMO: "true"
+      GRPC_PORT: "50051"
+    expose:
+      - "50051"
     depends_on:
       users-postgres:
         condition: service_healthy
@@ -214,6 +217,8 @@ services:
       TRIPS_TIMEOUT_MS: "5000"
       USERS_URL: http://users:4500
       USERS_TIMEOUT_MS: "3000"
+      USERS_TRANSPORT: ${USERS_TRANSPORT:-http}
+      USERS_GRPC_URL: users:50051
       BROKER_URL: http://kafka:8080
       BROKER_TOPIC: TripInvitation
       REMINDER_SWEEP_MS: ${REMINDER_SWEEP_MS:-30000}

@@ -41,6 +41,20 @@ export const TRIPS_TIMEOUT_MS = Number(process.env.TRIPS_TIMEOUT_MS ?? 5000);
 export const USERS_URL = (process.env.USERS_URL ?? 'http://127.0.0.1:4500').replace(/\/+$/, '');
 export const USERS_TIMEOUT_MS = Number(process.env.USERS_TIMEOUT_MS ?? 3000);
 
+// ---- Internal gRPC transport (M15) ----
+// Each facade service can be reached over HTTP (legacy) or native gRPC.
+export type ServiceTransport = 'http' | 'grpc';
+
+function transportEnv(name: string, fallback: ServiceTransport = 'http'): ServiceTransport {
+  const value = (process.env[name] ?? '').trim().toLowerCase();
+  if (value === 'grpc') return 'grpc';
+  if (value === 'http') return 'http';
+  return fallback;
+}
+
+export const USERS_TRANSPORT = transportEnv('USERS_TRANSPORT');
+export const USERS_GRPC_URL = process.env.USERS_GRPC_URL ?? '127.0.0.1:50051';
+
 // In-app activity reminder sweep. One API replica runs it in the demo.
 export const REMINDER_SWEEP_MS = Number(process.env.REMINDER_SWEEP_MS ?? 30_000);
 
