@@ -1,0 +1,29 @@
+{{- if .Values.locationsService.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: triplanner-locations-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: triplanner-locations
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: locations
+data:
+  PORT: {{ .Values.locationsService.service.port | quote }}
+  {{- if .Values.locationsService.mongo.url }}
+  MONGODB_URL: {{ .Values.locationsService.mongo.url | quote }}
+  {{- else }}
+  MONGODB_HOST: {{ .Values.locationsService.mongo.host | quote }}
+  MONGODB_DB: {{ .Values.locationsService.mongo.database | quote }}
+  MONGODB_AUTH_SOURCE: {{ .Values.locationsService.mongo.authSource | quote }}
+  {{- end }}
+  MONGODB_COLLECTION: {{ .Values.locationsService.mongo.collection | quote }}
+  SEED_CATALOGUE: {{ .Values.locationsService.seed.enabled | quote }}
+  SEED_DATA_PATH: {{ .Values.locationsService.seed.dataPath | quote }}
+  SETTINGS_FILE: {{ .Values.locationsService.settingsFile | quote }}
+  HASDATA_API_BASE: {{ .Values.locationsService.hasdata.apiBase | quote }}
+  HASDATA_CACHE_TTL_HOURS: {{ .Values.locationsService.hasdata.cacheTtlHours | quote }}
+  HASDATA_TIMEOUT_MS: {{ .Values.locationsService.hasdata.timeoutMs | quote }}
+  HASDATA_HL: {{ .Values.locationsService.hasdata.hl | quote }}
+  HASDATA_GL: {{ .Values.locationsService.hasdata.gl | quote }}
+{{- end }}

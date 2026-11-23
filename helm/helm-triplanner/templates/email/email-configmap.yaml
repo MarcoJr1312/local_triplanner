@@ -1,0 +1,32 @@
+{{- if .Values.emailService.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: triplanner-email-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: triplanner-email
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: email
+data:
+  HEALTH_PORT: {{ .Values.emailService.service.port | quote }}
+  BROKER_URL: {{ .Values.emailService.broker.url | quote }}
+  BROKER_TOPIC: {{ .Values.emailService.broker.topic | quote }}
+  BROKER_CONSUMER: {{ .Values.emailService.broker.consumer | quote }}
+  BROKER_DLQ_TOPIC: {{ .Values.emailService.broker.dlqTopic | quote }}
+  BROKER_BATCH_SIZE: {{ .Values.emailService.broker.batchSize | quote }}
+  BROKER_WAIT_SECONDS: {{ .Values.emailService.broker.waitSeconds | quote }}
+  BROKER_REQUEST_TIMEOUT_MS: {{ .Values.emailService.broker.requestTimeoutMs | quote }}
+  BROKER_RETRY_DELAY_MS: {{ .Values.emailService.broker.retryDelayMs | quote }}
+  EMAIL_PROVIDER: {{ .Values.emailService.provider | quote }}
+  EMAIL_SETTINGS_FILE: {{ .Values.emailService.settingsFile | quote }}
+  EMAIL_MAX_ATTEMPTS: {{ .Values.emailService.retry.maxAttempts | quote }}
+  EMAIL_RETRY_BASE_MS: {{ .Values.emailService.retry.baseDelayMs | quote }}
+  RESEND_FROM: {{ .Values.emailService.resend.from | quote }}
+  RESEND_REPLY_TO: {{ .Values.emailService.resend.replyTo | quote }}
+  RESEND_ENDPOINT: {{ .Values.emailService.resend.endpoint | quote }}
+  RESEND_TIMEOUT_MS: {{ .Values.emailService.resend.timeoutMs | quote }}
+  APP_URL: {{ .Values.global.appUrl | quote }}
+  LOG_LEVEL: {{ .Values.emailService.logLevel | quote }}
+  SHUTDOWN_TIMEOUT_MS: {{ .Values.emailService.shutdownTimeoutMs | quote }}
+{{- end }}

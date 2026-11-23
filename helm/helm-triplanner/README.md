@@ -10,6 +10,7 @@ trips service and the users service with their own PostgreSQL databases.
 ```
 templates/
   broker/
+    broker-configmap.yaml
     broker-deployment.yaml
     broker-networkpolicy.yaml
     broker-pvc.yaml
@@ -18,6 +19,7 @@ templates/
     broker-service.yaml
     broker-serviceaccount.yaml
   email/
+    email-configmap.yaml
     email-deployment.yaml
     email-hpa.yaml
     email-networkpolicy.yaml
@@ -28,6 +30,7 @@ templates/
     email-serviceaccount.yaml
     email-test.yaml
   locations/
+    locations-configmap.yaml
     locations-deployment.yaml
     locations-networkpolicy.yaml
     locations-pvc.yaml
@@ -37,6 +40,7 @@ templates/
     locations-serviceaccount.yaml
     locations-test.yaml
   trips/
+    trips-configmap.yaml
     trips-deployment.yaml
     trips-networkpolicy.yaml
     trips-postgres-networkpolicy.yaml
@@ -49,6 +53,7 @@ templates/
     trips-serviceaccount.yaml
     trips-test.yaml
   users/
+    users-configmap.yaml
     users-deployment.yaml
     users-networkpolicy.yaml
     users-postgres-networkpolicy.yaml
@@ -61,6 +66,7 @@ templates/
     users-serviceaccount.yaml
     users-test.yaml
   web/
+    web-configmap.yaml
     web-deployment.yaml
     web-ingress.yaml
     web-networkpolicy.yaml
@@ -79,6 +85,27 @@ values.yaml
 Each microservice owns its folder and every file is prefixed with the service
 name. `_helpers.tpl` and `NOTES.txt` stay at the chart level because they are
 shared.
+
+## Configuration
+
+Every application workload has a ConfigMap rendered from `values.yaml`:
+
+- `triplanner-kafka-config`
+- `triplanner-email-config`
+- `triplanner-locations-config`
+- `triplanner-trips-config`
+- `triplanner-users-config`
+- `triplanner-web-config`
+
+Deployments load the whole ConfigMap with
+`envFrom.configMapRef` and keep only secret values as explicit
+`secretKeyRef` environment entries (`INTERNAL_TOKEN`, PostgreSQL passwords,
+MongoDB credentials, the optional Resend key). The pod template carries a
+`checksum/config` annotation, so changing a value rolls the affected workload.
+
+Never put credentials in a ConfigMap. The optional
+`locationsService.mongo.url` is rendered into the ConfigMap; use a
+credential-free URL or move it to a Secret before using it in a shared cluster.
 
 ## RBAC and kube-rbac-proxy
 

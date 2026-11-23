@@ -23,10 +23,11 @@ spec:
         {{- with .Values.emailService.podLabels }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
-      {{- with .Values.emailService.podAnnotations }}
       annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/email/email-configmap.yaml") . | sha256sum }}
+        {{- with .Values.emailService.podAnnotations }}
         {{- toYaml . | nindent 8 }}
-      {{- end }}
+        {{- end }}
     spec:
       serviceAccountName: {{ include "helm-triplanner.emailServiceAccountName" . }}
       automountServiceAccountToken: {{ if .Values.emailService.rbacProxy.enabled }}true{{ else }}{{ .Values.emailService.serviceAccount.automount }}{{ end }}
@@ -45,41 +46,10 @@ spec:
             - name: http
               containerPort: {{ .Values.emailService.service.port }}
               protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: triplanner-email-config
           env:
-            - name: HEALTH_PORT
-              value: {{ .Values.emailService.service.port | quote }}
-            - name: BROKER_URL
-              value: {{ .Values.emailService.broker.url | quote }}
-            - name: BROKER_TOPIC
-              value: {{ .Values.emailService.broker.topic | quote }}
-            - name: BROKER_CONSUMER
-              value: {{ .Values.emailService.broker.consumer | quote }}
-            - name: BROKER_DLQ_TOPIC
-              value: {{ .Values.emailService.broker.dlqTopic | quote }}
-            - name: BROKER_BATCH_SIZE
-              value: {{ .Values.emailService.broker.batchSize | quote }}
-            - name: BROKER_WAIT_SECONDS
-              value: {{ .Values.emailService.broker.waitSeconds | quote }}
-            - name: BROKER_REQUEST_TIMEOUT_MS
-              value: {{ .Values.emailService.broker.requestTimeoutMs | quote }}
-            - name: BROKER_RETRY_DELAY_MS
-              value: {{ .Values.emailService.broker.retryDelayMs | quote }}
-            - name: EMAIL_PROVIDER
-              value: {{ .Values.emailService.provider | quote }}
-            - name: EMAIL_SETTINGS_FILE
-              value: {{ .Values.emailService.settingsFile | quote }}
-            - name: EMAIL_MAX_ATTEMPTS
-              value: {{ .Values.emailService.retry.maxAttempts | quote }}
-            - name: EMAIL_RETRY_BASE_MS
-              value: {{ .Values.emailService.retry.baseDelayMs | quote }}
-            - name: RESEND_FROM
-              value: {{ .Values.emailService.resend.from | quote }}
-            - name: RESEND_REPLY_TO
-              value: {{ .Values.emailService.resend.replyTo | quote }}
-            - name: RESEND_ENDPOINT
-              value: {{ .Values.emailService.resend.endpoint | quote }}
-            - name: RESEND_TIMEOUT_MS
-              value: {{ .Values.emailService.resend.timeoutMs | quote }}
             {{- if .Values.emailService.resend.existingSecret }}
             - name: RESEND_API_KEY
               valueFrom:
@@ -87,17 +57,11 @@ spec:
                   name: {{ .Values.emailService.resend.existingSecret }}
                   key: {{ .Values.emailService.resend.apiKeyKey }}
             {{- end }}
-            - name: APP_URL
-              value: {{ .Values.global.appUrl | quote }}
             - name: INTERNAL_TOKEN
               valueFrom:
                 secretKeyRef:
                   name: {{ required "emailService.internalToken.existingSecret is required" .Values.emailService.internalToken.existingSecret }}
                   key: {{ .Values.emailService.internalToken.key }}
-            - name: LOG_LEVEL
-              value: {{ .Values.emailService.logLevel | quote }}
-            - name: SHUTDOWN_TIMEOUT_MS
-              value: {{ .Values.emailService.shutdownTimeoutMs | quote }}
           volumeMounts:
             - name: email-settings
               mountPath: {{ .Values.emailService.persistence.mountPath | default "/app/.data" }}

@@ -24,10 +24,11 @@ spec:
         {{- with .Values.tripsService.podLabels }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
-      {{- with .Values.tripsService.podAnnotations }}
       annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/trips/trips-configmap.yaml") . | sha256sum }}
+        {{- with .Values.tripsService.podAnnotations }}
         {{- toYaml . | nindent 8 }}
-      {{- end }}
+        {{- end }}
     spec:
       serviceAccountName: {{ include "helm-triplanner.tripsServiceAccountName" . }}
       automountServiceAccountToken: {{ if .Values.tripsService.rbacProxy.enabled }}true{{ else }}{{ .Values.tripsService.serviceAccount.automount }}{{ end }}
@@ -46,13 +47,10 @@ spec:
             - name: http
               containerPort: {{ .Values.tripsService.service.port }}
               protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: triplanner-trips-config
           env:
-            - name: PORT
-              value: {{ .Values.tripsService.service.port | quote }}
-            - name: POSTGRES_HOST
-              value: triplanner-trips-postgres
-            - name: POSTGRES_PORT
-              value: {{ .Values.tripsService.postgres.service.port | quote }}
             - name: POSTGRES_DB
               valueFrom:
                 secretKeyRef:
@@ -68,33 +66,11 @@ spec:
                 secretKeyRef:
                   name: {{ include "helm-triplanner.tripsPostgresSecretName" . }}
                   key: {{ .Values.tripsService.postgres.auth.passwordKey }}
-            - name: DB_CONNECT_ATTEMPTS
-              value: "60"
-            - name: DB_CONNECT_DELAY_MS
-              value: "500"
             - name: INTERNAL_TOKEN
               valueFrom:
                 secretKeyRef:
                   name: {{ $tokenSecret }}
                   key: {{ .Values.tripsService.internalToken.key }}
-            - name: LOCATIONS_URL
-              value: {{ .Values.tripsService.locations.url | quote }}
-            - name: LOCATIONS_TIMEOUT_MS
-              value: {{ .Values.tripsService.locations.timeoutMs | quote }}
-            - name: BROKER_URL
-              value: {{ .Values.tripsService.broker.url | quote }}
-            - name: BROKER_TOPIC
-              value: {{ .Values.tripsService.broker.topic | quote }}
-            - name: BROKER_TIMEOUT_MS
-              value: {{ .Values.tripsService.broker.timeoutMs | quote }}
-            - name: OUTBOX_INTERVAL_MS
-              value: {{ .Values.tripsService.outbox.intervalMs | quote }}
-            - name: OUTBOX_BATCH_SIZE
-              value: {{ .Values.tripsService.outbox.batchSize | quote }}
-            - name: OUTBOX_MAX_ATTEMPTS
-              value: {{ .Values.tripsService.outbox.maxAttempts | quote }}
-            - name: SEED_DEMO
-              value: {{ .Values.tripsService.seedDemo | quote }}
           volumeMounts:
             - name: tmp
               mountPath: /tmp

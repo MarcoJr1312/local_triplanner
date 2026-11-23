@@ -24,10 +24,11 @@ spec:
         {{- with .Values.usersService.podLabels }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
-      {{- with .Values.usersService.podAnnotations }}
       annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/users/users-configmap.yaml") . | sha256sum }}
+        {{- with .Values.usersService.podAnnotations }}
         {{- toYaml . | nindent 8 }}
-      {{- end }}
+        {{- end }}
     spec:
       serviceAccountName: {{ include "helm-triplanner.usersServiceAccountName" . }}
       automountServiceAccountToken: {{ if .Values.usersService.rbacProxy.enabled }}true{{ else }}{{ .Values.usersService.serviceAccount.automount }}{{ end }}
@@ -46,13 +47,10 @@ spec:
             - name: http
               containerPort: {{ .Values.usersService.service.port }}
               protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: triplanner-users-config
           env:
-            - name: PORT
-              value: {{ .Values.usersService.service.port | quote }}
-            - name: POSTGRES_HOST
-              value: triplanner-users-postgres
-            - name: POSTGRES_PORT
-              value: {{ .Values.usersService.postgres.service.port | quote }}
             - name: POSTGRES_DB
               valueFrom:
                 secretKeyRef:
@@ -68,17 +66,11 @@ spec:
                 secretKeyRef:
                   name: {{ include "helm-triplanner.usersPostgresSecretName" . }}
                   key: {{ .Values.usersService.postgres.auth.passwordKey }}
-            - name: DB_CONNECT_ATTEMPTS
-              value: "60"
-            - name: DB_CONNECT_DELAY_MS
-              value: "500"
             - name: INTERNAL_TOKEN
               valueFrom:
                 secretKeyRef:
                   name: {{ $tokenSecret }}
                   key: {{ .Values.usersService.internalToken.key }}
-            - name: SEED_DEMO
-              value: {{ .Values.usersService.seedDemo | quote }}
           volumeMounts:
             - name: tmp
               mountPath: /tmp

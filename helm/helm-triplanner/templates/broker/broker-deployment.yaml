@@ -23,10 +23,11 @@ spec:
         {{- with .Values.broker.podLabels }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
-      {{- with .Values.broker.podAnnotations }}
       annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/broker/broker-configmap.yaml") . | sha256sum }}
+        {{- with .Values.broker.podAnnotations }}
         {{- toYaml . | nindent 8 }}
-      {{- end }}
+        {{- end }}
     spec:
       serviceAccountName: {{ include "helm-triplanner.brokerServiceAccountName" . }}
       automountServiceAccountToken: {{ if .Values.broker.rbacProxy.enabled }}true{{ else }}{{ .Values.broker.serviceAccount.automount }}{{ end }}
@@ -45,11 +46,9 @@ spec:
             - name: http
               containerPort: {{ .Values.broker.service.port }}
               protocol: TCP
-          env:
-            - name: BROKER_ADDR
-              value: ":{{ .Values.broker.service.port }}"
-            - name: BROKER_DB
-              value: "{{ .Values.broker.persistence.mountPath | default "/data" }}/broker.db"
+          envFrom:
+            - configMapRef:
+                name: triplanner-kafka-config
           volumeMounts:
             - name: broker-data
               mountPath: {{ .Values.broker.persistence.mountPath | default "/data" }}

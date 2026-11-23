@@ -23,10 +23,11 @@ spec:
         {{- with .Values.locationsService.podLabels }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
-      {{- with .Values.locationsService.podAnnotations }}
       annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/locations/locations-configmap.yaml") . | sha256sum }}
+        {{- with .Values.locationsService.podAnnotations }}
         {{- toYaml . | nindent 8 }}
-      {{- end }}
+        {{- end }}
     spec:
       serviceAccountName: {{ include "helm-triplanner.locationsServiceAccountName" . }}
       automountServiceAccountToken: {{ if .Values.locationsService.rbacProxy.enabled }}true{{ else }}{{ .Values.locationsService.serviceAccount.automount }}{{ end }}
@@ -45,20 +46,11 @@ spec:
             - name: http
               containerPort: {{ .Values.locationsService.service.port }}
               protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: triplanner-locations-config
           env:
-            - name: PORT
-              value: {{ .Values.locationsService.service.port | quote }}
-            {{- if .Values.locationsService.mongo.url }}
-            - name: MONGODB_URL
-              value: {{ .Values.locationsService.mongo.url | quote }}
-            {{- else }}
-            - name: MONGODB_HOST
-              value: {{ .Values.locationsService.mongo.host | quote }}
-            - name: MONGODB_DB
-              value: {{ .Values.locationsService.mongo.database | quote }}
-            - name: MONGODB_AUTH_SOURCE
-              value: {{ .Values.locationsService.mongo.authSource | quote }}
-            {{- if .Values.mongo.auth.enabled }}
+            {{- if and (not .Values.locationsService.mongo.url) .Values.mongo.auth.enabled }}
             - name: MONGODB_USERNAME
               valueFrom:
                 secretKeyRef:
@@ -70,25 +62,6 @@ spec:
                   name: {{ include "helm-triplanner.mongoSecretName" . }}
                   key: {{ .Values.mongo.auth.passwordKey }}
             {{- end }}
-            {{- end }}
-            - name: MONGODB_COLLECTION
-              value: {{ .Values.locationsService.mongo.collection | quote }}
-            - name: SEED_CATALOGUE
-              value: {{ .Values.locationsService.seed.enabled | quote }}
-            - name: SEED_DATA_PATH
-              value: {{ .Values.locationsService.seed.dataPath | quote }}
-            - name: SETTINGS_FILE
-              value: {{ .Values.locationsService.settingsFile | quote }}
-            - name: HASDATA_API_BASE
-              value: {{ .Values.locationsService.hasdata.apiBase | quote }}
-            - name: HASDATA_CACHE_TTL_HOURS
-              value: {{ .Values.locationsService.hasdata.cacheTtlHours | quote }}
-            - name: HASDATA_TIMEOUT_MS
-              value: {{ .Values.locationsService.hasdata.timeoutMs | quote }}
-            - name: HASDATA_HL
-              value: {{ .Values.locationsService.hasdata.hl | quote }}
-            - name: HASDATA_GL
-              value: {{ .Values.locationsService.hasdata.gl | quote }}
             - name: INTERNAL_TOKEN
               valueFrom:
                 secretKeyRef:

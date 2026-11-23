@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Status | Release candidate; Docker Hub publish and published-stack smoke pending |
-| Chart | `helm-triplanner` 0.9.0 (`appVersion` 1.6.0) |
+| Chart | `helm-triplanner` 0.10.0 (`appVersion` 1.6.0) |
 | Images | web, API, users and trips `1.6.0`; locations `0.2.1`, email `0.1.1`, broker `0.1.0` unchanged |
 | Contracts | `docs/migrations/0013-user-favorites.md`, `docs/migrations/0014-activity-reminders.md` |
 | QA | `docs/migrations/0015-favorites-qa.md`, `docs/migrations/0016-reminders-qa.md` (both Gate 2 approved) |
@@ -38,6 +38,14 @@
 - Reminder cards show the activity time in the trip timezone; the demo trip is
   now `America/Toronto`.
 - Invite notifications are unchanged.
+
+### Helm configuration
+
+- Every application workload now reads its non-secret environment from a
+  per-service ConfigMap (`triplanner-<service>-config`) via
+  `envFrom.configMapRef`; secrets stay as `secretKeyRef` entries.
+- The pod templates carry a `checksum/config` annotation, so changing a value
+  rolls the affected deployment.
 
 ## Upgrade
 
