@@ -169,6 +169,10 @@ auth and Dockerfiles.
   dialog; viewers see read-only state. Demo trip uses `America/Toronto`.
   Evidence: `docs/migrations/0014-activity-reminders.md` and
   `0016-reminders-qa.md` (Gate 2 approved). Release `v1.6.0` covers M12 + M13.
+- Helm chart 0.10.0: every application workload reads non-secret environment
+  from `triplanner-<service>-config` via `envFrom.configMapRef`; secrets stay as
+  `secretKeyRef` entries. A `checksum/config` annotation rolls the pod when a
+  value changes.
 - Test databases: users tests default to `users_test` and trips tests to
   `trips_test` on `127.0.0.1:55433`/`55432` (never the live `users`/`trips`
   databases).
