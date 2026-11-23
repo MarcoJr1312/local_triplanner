@@ -342,14 +342,14 @@ const TRIP_FIELDS = `
   coverPreset
   coverPhotoUrl
   members { userId username displayName email invitedEmail role joinedAt color avatarUrl }
-  items { id day order activityId title category cost startTime notes imageUrl addedBy isFavorite lat lng locationText reminderEnabled attachments { id fileName mimeType sizeBytes url createdAt uploadedByName viewerIds visibility createdBy } }
+  items { id day order activityId title category cost startTime notes imageUrl addedBy isFavorite lat lng locationText reminder { enabled leadMinutes recipientIds canEdit } attachments { id fileName mimeType sizeBytes url createdAt uploadedByName viewerIds visibility createdBy } }
   myRole
   createdAt
   updatedAt
 `;
 
 const ITEM_FIELDS = `
-  id day order activityId title category cost startTime notes imageUrl addedBy isFavorite lat lng locationText reminderEnabled
+  id day order activityId title category cost startTime notes imageUrl addedBy isFavorite lat lng locationText reminder { enabled leadMinutes recipientIds canEdit }
   attachments { id fileName mimeType sizeBytes url createdAt uploadedByName viewerIds visibility createdBy }
 `;
 
@@ -382,6 +382,10 @@ const NOTIFICATION_FIELDS = `
   tripName
   invitationId
   role
+  itemId
+  itemTitle
+  startAt
+  leadMinutes
   status
   createdAt
   readAt
@@ -410,7 +414,7 @@ const UPDATE_TRIP_COVER = `mutation($tripId: ID!, $input: UpdateTripCoverInput!)
 const ADD_ITEM = `mutation($tripId: ID!, $input: AddItemInput!) { addItem(tripId: $tripId, input: $input) { ${ITEM_FIELDS} } }`;
 const UPDATE_ITEM = `mutation($tripId: ID!, $itemId: ID!, $input: UpdateItemInput!) { updateItem(tripId: $tripId, itemId: $itemId, input: $input) { ${ITEM_FIELDS} } }`;
 const SET_ITEM_COST = `mutation($tripId: ID!, $itemId: ID!, $cost: Float!) { setItemCost(tripId: $tripId, itemId: $itemId, cost: $cost) { ${ITEM_FIELDS} } }`;
-const SET_ITEM_REMINDER = `mutation($itemId: ID!, $enabled: Boolean!) { setItemReminder(itemId: $itemId, enabled: $enabled) { ${ITEM_FIELDS} } }`;
+const SET_ITEM_REMINDER = `mutation($tripId: ID!, $itemId: ID!, $input: ItemReminderInput!) { setItemReminder(tripId: $tripId, itemId: $itemId, input: $input) { ${ITEM_FIELDS} } }`;
 const MOVE_ITEM = `mutation($tripId: ID!, $itemId: ID!, $day: AWSDate!, $order: Int!) { moveItem(tripId: $tripId, itemId: $itemId, day: $day, order: $order) { ${ITEM_FIELDS} } }`;
 const REMOVE_ITEM = `mutation($tripId: ID!, $itemId: ID!) { removeItem(tripId: $tripId, itemId: $itemId) { ${ITEM_FIELDS} } }`;
 
@@ -761,8 +765,21 @@ export const api: TriplannerApi = {
     return data.setItemCost;
   },
 
-  async setItemReminder(itemId: string, enabled: boolean): Promise<TripItem> {
-    const data = await gql<{ setItemReminder: TripItem }>(SET_ITEM_REMINDER, { itemId, enabled });
+  async setItemReminder(
+    tripId: string,
+    itemId: string,
+    input: {
+      enabled: boolean;
+      leadMinutes?: number;
+      recipientIds?: string[];
+      startTime?: string | null;
+    },
+  ): Promise<TripItem> {
+    const data = await gql<{ setItemReminder: TripItem }>(SET_ITEM_REMINDER, {
+      tripId,
+      itemId,
+      input,
+    });
     notify();
     return data.setItemReminder;
   },

@@ -261,6 +261,39 @@ export function createHandler(deps: HttpDeps): (req: Request) => Promise<Respons
         ctx.body,
       ))),
 
+    makeRoute('PUT', '/internal/v1/trips/:id/items/:itemId/reminder', async (ctx) =>
+      json(200, await service().setReminder(
+        ctx.actor,
+        ctx.params.id ?? '',
+        ctx.params.itemId ?? '',
+        ctx.body,
+      ))),
+
+    makeRoute('GET', '/internal/v1/trips/:id/items/:itemId/reminder', async (ctx) =>
+      json(200, await service().getReminder(
+        ctx.actor,
+        ctx.params.id ?? '',
+        ctx.params.itemId ?? '',
+      ))),
+
+    makeRoute('GET', '/internal/v1/reminders/due', async (ctx) => {
+      const raw = ctx.url.searchParams.get('now');
+      const now = raw ? new Date(raw) : new Date();
+      return json(200, {
+        items: await service().dueReminders(
+          Number.isFinite(now.getTime()) ? now : new Date(),
+        ),
+      });
+    }, false),
+
+    makeRoute('POST', '/internal/v1/reminders/:itemId/sent', async (ctx) => {
+      const ids = Array.isArray(ctx.body.user_ids)
+        ? ctx.body.user_ids.filter((value): value is string => typeof value === 'string')
+        : [];
+      await service().markReminderSent(ctx.params.itemId ?? '', ids);
+      return json(200, { ok: true });
+    }, false),
+
     makeRoute('GET', '/internal/v1/items/:itemId', async (ctx) =>
       json(200, await service().getItemForActor(ctx.actor, ctx.params.itemId ?? ''))),
 

@@ -20,11 +20,13 @@ import {
   TRIPS_TIMEOUT_MS,
   USERS_URL,
   USERS_TIMEOUT_MS,
+  REMINDER_SWEEP_MS,
 } from './env.ts';
 import { createInternalRouter } from './internal.ts';
 import { serveUploads } from './uploads.ts';
 import { createTripsStore } from './trips/index.ts';
 import { createUsersStore } from './users/index.ts';
+import { startReminderScheduler } from './reminders.ts';
 
 const databaseUrl = await resolveDatabaseUrl();
 const db = await PgDb.connect(databaseUrl);
@@ -52,6 +54,11 @@ const trips = createTripsStore({
 });
 
 const internalRouter = createInternalRouter({ db, catalogue, internalToken: INTERNAL_TOKEN, trips, users });
+
+const reminderScheduler = startReminderScheduler(
+  { trips, users, pubsub },
+  REMINDER_SWEEP_MS,
+);
 
 const schema = createSchema({
   typeDefs: loadTypeDefs(),
@@ -102,3 +109,10 @@ server.listen(PORT, () => {
 
 // Reminder emails are intentionally disabled in the local demo: there is no
 // email provider. The recruiter tests invitations through the copyable link.
+
+const shutdown = () => {
+  reminderScheduler.stop();
+  server.close(() => process.exit(0));
+};
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);

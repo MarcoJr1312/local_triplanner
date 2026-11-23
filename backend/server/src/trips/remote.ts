@@ -9,8 +9,11 @@ import type {
   AddItemInput,
   CreateInvitationInput,
   CreateTripInput,
+  DueReminderData,
   InvitationResult,
   InviteRole,
+  ItemReminder,
+  ItemReminderInput,
   JoinInput,
   JoinResult,
   TripData,
@@ -350,15 +353,51 @@ export class RemoteTripsStore implements TripsStore {
     userId: string,
     tripId: string,
     itemId: string,
-    enabled: boolean,
+    input: ItemReminderInput,
   ): Promise<TripItemRow> {
     return this.mapItem(
       await this.request<RemoteItem>(
-        'POST',
+        'PUT',
         `/internal/v1/trips/${encodeURIComponent(tripId)}/items/${encodeURIComponent(itemId)}/reminder`,
         userId,
-        { enabled },
+        {
+          enabled: input.enabled,
+          ...(input.leadMinutes !== undefined ? { lead_minutes: input.leadMinutes } : {}),
+          ...(input.recipientIds !== undefined ? { recipient_ids: input.recipientIds } : {}),
+          ...(input.startTime !== undefined ? { start_time: input.startTime } : {}),
+        },
       ),
+    );
+  }
+
+  async getItemReminder(
+    userId: string,
+    tripId: string,
+    itemId: string,
+  ): Promise<ItemReminder> {
+    return this.request<ItemReminder>(
+      'GET',
+      `/internal/v1/trips/${encodeURIComponent(tripId)}/items/${encodeURIComponent(itemId)}/reminder`,
+      userId,
+    );
+  }
+
+  async dueReminders(now?: string): Promise<DueReminderData[]> {
+    const query = now ? `?now=${encodeURIComponent(now)}` : '';
+    const response = await this.request<{ items: DueReminderData[] }>(
+      'GET',
+      `/internal/v1/reminders/due${query}`,
+      null,
+    );
+    return response.items;
+  }
+
+  async markRemindersSent(itemId: string, userIds: string[]): Promise<void> {
+    await this.request<{ ok: boolean }>(
+      'POST',
+      `/internal/v1/reminders/${encodeURIComponent(itemId)}/sent`,
+      null,
+      { user_ids: userIds },
     );
   }
 

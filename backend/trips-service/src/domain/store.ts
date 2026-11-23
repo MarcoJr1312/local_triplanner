@@ -2,9 +2,6 @@
 // database; no platform tables are referenced.
 
 import type { Queryable } from '../db.ts';
-import {
-  computeReminderDueAt,
-} from './reminders.ts';
 import type {
   CategorySpend,
   EmailInvitationRow,
@@ -89,7 +86,6 @@ export type ItemColumns = Partial<
     | 'start_time'
     | 'notes'
     | 'image_url'
-    | 'reminder_enabled'
   >
 >;
 
@@ -375,52 +371,149 @@ export async function deleteItemRow(
   );
 }
 
-/** Recomputes reminder_sent / reminder_due_at after create, edit or toggle. */
-export async function recomputeReminder(
+// ------------------------------------------------------------- reminders
+
+export interface ReminderConfigRow {
+  item_id: string;
+  trip_id: string;
+  enabled: boolean;
+  lead_minutes: number;
+  updated_by: string;
+  recipient_ids: string[];
+}
+
+export interface DueReminderRow {
+  item_id: string;
+  trip_id: string;
+  trip_name: string;
+  timezone: string;
+  item_title: string;
+  day: string;
+  start_time: string;
+  lead_minutes: number;
+  recipient_ids: string[];
+}
+
+export async function listReminderConfigs(
+  db: Queryable,
+  tripId: string,
+): Promise<ReminderConfigRow[]> {
+  return db.query<ReminderConfigRow>(
+    `SELECT r.item_id, r.trip_id, r.enabled, r.lead_minutes, r.updated_by,
+            COALESCE(
+              array_agg(rc.user_id) FILTER (WHERE rc.user_id IS NOT NULL),
+              ARRAY[]::text[]
+            ) AS recipient_ids
+       FROM trip_item_reminders r
+       LEFT JOIN trip_item_reminder_recipients rc ON rc.item_id = r.item_id
+      WHERE r.trip_id = $1
+      GROUP BY r.item_id, r.trip_id, r.enabled, r.lead_minutes, r.updated_by`,
+    [tripId],
+  );
+}
+
+export async function upsertReminder(
+  tx: Queryable,
+  input: {
+    item_id: string;
+    trip_id: string;
+    lead_minutes: number;
+    updated_by: string;
+  },
+): Promise<void> {
+  await tx.run(
+    `INSERT INTO trip_item_reminders
+       (item_id, trip_id, enabled, lead_minutes, updated_by)
+     VALUES ($1, $2, true, $3, $4)
+     ON CONFLICT (item_id) DO UPDATE
+       SET enabled = true,
+           lead_minutes = EXCLUDED.lead_minutes,
+           updated_by = EXCLUDED.updated_by,
+           updated_at = now()`,
+    [input.item_id, input.trip_id, input.lead_minutes, input.updated_by],
+  );
+}
+
+export async function replaceReminderRecipients(
   tx: Queryable,
   itemId: string,
-  now: Date = new Date(),
+  userIds: readonly string[],
 ): Promise<void> {
-  const row = await tx.one<{
-    day: string;
-    start_time: string | null;
-    reminder_enabled: number;
-    timezone: string;
-  }>(
-    `SELECT i.day, i.start_time, i.reminder_enabled, t.timezone
-       FROM trip_items i
-       JOIN trips t ON t.id = i.trip_id
-      WHERE i.id = $1`,
-    [itemId],
-  );
-  if (!row) return;
-
-  if (!row.reminder_enabled || !row.start_time) {
-    await tx.run('UPDATE trip_items SET reminder_sent = $1, reminder_due_at = NULL WHERE id = $2', [
-      row.reminder_enabled ? 0 : 1,
-      itemId,
-    ]);
+  if (userIds.length === 0) {
+    await tx.run('DELETE FROM trip_item_reminder_recipients WHERE item_id = $1', [itemId]);
     return;
   }
-
-  try {
-    const computed = computeReminderDueAt(row.day, row.start_time, row.timezone || 'UTC', now);
-    if (computed.skip) {
-      await tx.run('UPDATE trip_items SET reminder_sent = 1, reminder_due_at = NULL WHERE id = $1', [
-        itemId,
-      ]);
-    } else {
-      await tx.run(
-        'UPDATE trip_items SET reminder_sent = 0, reminder_due_at = $1 WHERE id = $2',
-        [computed.dueAt, itemId],
-      );
-    }
-  } catch {
-    // Invalid time zone or date: mark it terminal instead of failing the write.
-    await tx.run('UPDATE trip_items SET reminder_sent = 1, reminder_due_at = NULL WHERE id = $1', [
-      itemId,
-    ]);
+  await tx.run(
+    `DELETE FROM trip_item_reminder_recipients
+      WHERE item_id = $1 AND user_id <> ALL($2::text[])`,
+    [itemId, userIds],
+  );
+  for (const userId of userIds) {
+    await tx.run(
+      `INSERT INTO trip_item_reminder_recipients (item_id, user_id)
+       VALUES ($1, $2)
+       ON CONFLICT DO NOTHING`,
+      [itemId, userId],
+    );
   }
+}
+
+export async function deleteReminder(tx: Queryable, itemId: string): Promise<void> {
+  await tx.run('DELETE FROM trip_item_reminders WHERE item_id = $1', [itemId]);
+}
+
+export async function listDueReminders(db: Queryable): Promise<DueReminderRow[]> {
+  return db.query<DueReminderRow>(
+    `SELECT r.item_id, r.trip_id, t.name AS trip_name, t.timezone,
+            i.title AS item_title, i.day, i.start_time, r.lead_minutes,
+            COALESCE(
+              array_agg(rc.user_id) FILTER (WHERE rc.user_id IS NOT NULL AND rc.sent_at IS NULL),
+              ARRAY[]::text[]
+            ) AS recipient_ids
+       FROM trip_item_reminders r
+       JOIN trips t ON t.id = r.trip_id
+       JOIN trip_items i ON i.id = r.item_id
+       LEFT JOIN trip_item_reminder_recipients rc ON rc.item_id = r.item_id
+      WHERE r.enabled = true AND i.start_time IS NOT NULL
+      GROUP BY r.item_id, r.trip_id, t.name, t.timezone,
+               i.title, i.day, i.start_time, r.lead_minutes`,
+  );
+}
+
+export async function markReminderRecipientsSent(
+  db: Queryable,
+  itemId: string,
+  userIds: readonly string[],
+  sentAt: string,
+): Promise<void> {
+  if (userIds.length === 0) return;
+  await db.run(
+    `UPDATE trip_item_reminder_recipients
+        SET sent_at = $3
+      WHERE item_id = $1 AND user_id = ANY($2::text[]) AND sent_at IS NULL`,
+    [itemId, userIds, sentAt],
+  );
+}
+
+export async function removeUserFromTripReminders(
+  db: Queryable,
+  tripId: string,
+  userId: string,
+): Promise<void> {
+  await db.run(
+    `DELETE FROM trip_item_reminder_recipients rc
+      USING trip_item_reminders r
+      WHERE rc.item_id = r.item_id AND r.trip_id = $1 AND rc.user_id = $2`,
+    [tripId, userId],
+  );
+  await db.run(
+    `DELETE FROM trip_item_reminders r
+      WHERE r.trip_id = $1
+        AND NOT EXISTS (
+          SELECT 1 FROM trip_item_reminder_recipients rc WHERE rc.item_id = r.item_id
+        )`,
+    [tripId],
+  );
 }
 
 export function computeTripStats(

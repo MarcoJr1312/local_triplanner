@@ -88,6 +88,76 @@ async function invite(
   });
 }
 
+describe('activity reminder notifications', () => {
+  test('creates one reminder per user/dedupe key and lists it', async () => {
+    const user = await createUser('reminder-user');
+    const payload = {
+      user_id: user.id,
+      type: 'activity_reminder',
+      trip_id: 'demo-trip',
+      trip_name: 'Toronto',
+      item_id: 'demo-item-1',
+      item_title: 'CN Tower',
+      start_at: '2026-12-04T10:00:00.000Z',
+      lead_minutes: 60,
+      dedupe_key: 'activity_reminder:demo-item-1:user:due',
+    };
+
+    const first = await call('/internal/v1/notifications', {
+      method: 'POST',
+      body: payload,
+    });
+    expect(first.status).toBe(201);
+    const notification = await body<NotificationPublic>(first);
+    expect(notification).toMatchObject({
+      type: 'activity_reminder',
+      trip_id: 'demo-trip',
+      item_id: 'demo-item-1',
+      item_title: 'CN Tower',
+      lead_minutes: 60,
+      status: 'unread',
+      invitation_id: null,
+      role: null,
+    });
+    expect(notification.start_at).toBe('2026-12-04T10:00:00.000Z');
+
+    const second = await call('/internal/v1/notifications', {
+      method: 'POST',
+      body: payload,
+    });
+    expect(second.status).toBe(200);
+    expect((await body<NotificationPublic>(second)).id).toBe(notification.id);
+
+    const list = await body<{ items: NotificationPublic[] }>(
+      await call(`/internal/v1/users/${user.id}/notifications`, { actor: user.id }),
+    );
+    expect(list.items).toHaveLength(1);
+    expect(list.items[0]?.type).toBe('activity_reminder');
+  });
+
+  test('rejects an invalid lead time', async () => {
+    const user = await createUser('reminder-invalid');
+    const response = await call('/internal/v1/notifications', {
+      method: 'POST',
+      body: {
+        user_id: user.id,
+        type: 'activity_reminder',
+        trip_id: 'demo-trip',
+        trip_name: 'Toronto',
+        item_id: 'demo-item-1',
+        item_title: 'CN Tower',
+        start_at: '2026-12-04T10:00:00.000Z',
+        lead_minutes: 7,
+        dedupe_key: 'k',
+      },
+    });
+    expect(response.status).toBe(400);
+    expect(await body<{ error: string }>(response)).toMatchObject({
+      error: 'INVALID_ARGUMENT',
+    });
+  });
+});
+
 describe('local invite notifications', () => {
   test('creates a notification with the inviter snapshot and lists it for the invitee', async () => {
     const invitee = await createUser('invitee');

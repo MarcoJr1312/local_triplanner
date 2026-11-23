@@ -47,10 +47,28 @@ export interface TripItemRow {
   notes: string | null;
   image_url: string | null;
   created_by: string | null;
-  reminder_enabled: number;
-  reminder_sent: number;
-  reminder_due_at: string | null;
   created_at: string;
+  /** Attached by the service for GraphQL; not a trip_items column. */
+  reminder?: ItemReminderConfig;
+}
+
+export interface ItemReminderConfig {
+  enabled: boolean;
+  lead_minutes: number;
+  recipient_ids: string[];
+  can_edit: boolean;
+}
+
+export interface DueReminder {
+  item_id: string;
+  trip_id: string;
+  trip_name: string;
+  item_title: string;
+  day: string;
+  start_at: string;
+  due_at: string;
+  lead_minutes: number;
+  recipient_ids: string[];
 }
 
 export interface TripSummaryRow {

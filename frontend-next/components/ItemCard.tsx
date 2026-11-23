@@ -45,7 +45,7 @@ interface ItemCardProps {
   onRemove: () => void;
   onCostChange: (cost: number) => void;
   onToggleFavorite: () => void;
-  onToggleReminder?: () => void;
+  onOpenReminder?: () => void;
 }
 
 export default function ItemCard({
@@ -61,7 +61,7 @@ export default function ItemCard({
   onRemove,
   onCostChange,
   onToggleFavorite,
-  onToggleReminder,
+  onOpenReminder,
 }: ItemCardProps) {
   const { t, locale } = useI18n();
   const [editingCost, setEditingCost] = useState(false);
@@ -72,13 +72,18 @@ export default function ItemCard({
     item.addedBy === currentUserId ? t('items.you') : adder?.displayName ?? t('items.someMember');
   const Icon = CATEGORY_ICONS[item.category] ?? MapPin;
   const attachmentCount = item.attachments?.length ?? 0;
-  const reminderOn = item.reminderEnabled === 1;
-  const reminderDisabled = !item.startTime || !item.day;
-  const reminderLabel = reminderDisabled
-    ? t('items.reminderNoTime')
-    : reminderOn
+  const reminderOn = Boolean(item.reminder?.enabled);
+  const reminderRecipient = Boolean(
+    currentUserId && item.reminder?.recipientIds.includes(currentUserId),
+  );
+  const canConfigureReminder = canEdit && (item.reminder?.canEdit ?? true);
+  const reminderLabel = reminderOn
+    ? reminderRecipient
       ? t('items.reminderAriaOn')
-      : t('items.reminderAriaOff');
+      : t('items.reminderAriaReadonly')
+    : canConfigureReminder
+      ? t('items.reminderAriaOff')
+      : t('items.reminderAriaReadonly');
   const categoryColor =
     item.category === 'food'
       ? 'food'
@@ -204,11 +209,11 @@ export default function ItemCard({
             </span>
           )}
 
-          {canEdit && onToggleReminder && (
+          {onOpenReminder && (canConfigureReminder || reminderOn) && (
             <button
               type="button"
-              onClick={onToggleReminder}
-              disabled={reminderDisabled}
+              onClick={canConfigureReminder ? onOpenReminder : undefined}
+              disabled={!canConfigureReminder}
               aria-label={reminderLabel}
               title={reminderLabel}
               className={`fav hide-sm${reminderOn ? ' text-primary' : ''}`}

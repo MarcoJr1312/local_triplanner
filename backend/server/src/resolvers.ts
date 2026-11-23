@@ -42,7 +42,7 @@ import {
   type UpdateLocationsSettingsInput,
 } from './locations-settings.ts';
 import type { TripItemRow, TripMemberRow, TripRowFull } from './trips/types.ts';
-import type { TripData, TripRole, TripsStore, UpdateTripInput } from './trips/types.ts';
+import type { ItemReminder, TripData, TripRole, TripsStore, UpdateTripInput } from './trips/types.ts';
 import type { LocationRow, Profile } from './schema-types.ts';
 import type { UsersStore, NotificationRecord } from './users/types.ts';
 import {
@@ -139,7 +139,7 @@ interface ItemGql {
   notes: string | null;
   imageUrl: string | null;
   addedBy: string;
-  reminderEnabled: number;
+  reminder: ItemReminder;
   locationText: string | null;
   lat: number | null;
   lng: number | null;
@@ -262,7 +262,13 @@ const toTripItem = (row: ItemRow): ItemGql => ({
   notes: row.notes ?? null,
   imageUrl: row.image_url ?? null,
   addedBy: row.created_by ?? '',
-  reminderEnabled: row.reminder_enabled ?? 1,
+  reminder:
+    row.reminder ?? {
+      enabled: false,
+      lead_minutes: 60,
+      recipient_ids: [],
+      can_edit: true,
+    },
   locationText: row.location_text ?? null,
   lat: row.lat ?? null,
   lng: row.lng ?? null,
@@ -472,16 +478,20 @@ interface NotificationGql {
   type: string;
   tripId: string;
   tripName: string;
-  invitationId: string;
+  invitationId: string | null;
   inviterUserId: string | null;
   inviter: Profile | null;
-  role: string;
+  role: string | null;
+  itemId: string | null;
+  itemTitle: string | null;
+  startAt: string | null;
+  leadMinutes: number | null;
   status: string;
   createdAt: string;
   readAt: string | null;
 }
 
-function toNotificationGql(record: NotificationRecord, inviter: Profile | null): NotificationGql {
+export function toNotificationGql(record: NotificationRecord, inviter: Profile | null): NotificationGql {
   return {
     id: record.id,
     type: record.type,
@@ -491,6 +501,10 @@ function toNotificationGql(record: NotificationRecord, inviter: Profile | null):
     inviterUserId: record.inviter_user_id,
     inviter,
     role: record.role,
+    itemId: record.item_id,
+    itemTitle: record.item_title,
+    startAt: record.start_at,
+    leadMinutes: record.lead_minutes,
     status: record.status,
     createdAt: record.created_at,
     readAt: record.read_at,
@@ -855,6 +869,10 @@ export const resolvers: {
         ctx.currentUserId,
         notificationId,
       );
+      const invitationId = notification.invitation_id;
+      if (notification.type !== 'trip_invite' || !invitationId) {
+        throw gqlError('INVITE_NOT_FOUND', 'Invitación no encontrada.');
+      }
       if (notification.status === 'declined') {
         throw gqlError('INVITE_ALREADY_USED', 'La invitación ya fue utilizada.');
       }
@@ -867,7 +885,7 @@ export const resolvers: {
       const result = await ctx.trips.joinLocal(
         ctx.currentUserId,
         notification.trip_id,
-        notification.invitation_id,
+        invitationId,
       );
 
       // Membership is authoritative; a notification write failure must not undo it.
@@ -898,6 +916,10 @@ export const resolvers: {
         ctx.currentUserId,
         notificationId,
       );
+      const invitationId = notification.invitation_id;
+      if (notification.type !== 'trip_invite' || !invitationId) {
+        throw gqlError('INVITE_NOT_FOUND', 'Invitación no encontrada.');
+      }
       if (notification.status === 'accepted') {
         throw gqlError('INVITE_ALREADY_USED', 'La invitación ya fue utilizada.');
       }
@@ -908,7 +930,7 @@ export const resolvers: {
       await ctx.trips.declineLocalInvitation(
         ctx.currentUserId,
         notification.trip_id,
-        notification.invitation_id,
+        invitationId,
       );
       const updated = await ctx.users.updateNotification(
         ctx.currentUserId,
@@ -1130,10 +1152,29 @@ export const resolvers: {
     },
 
     setItemReminder: async (_, args, ctx) => {
-      const { itemId, enabled } = args as Args<{ itemId: string; enabled: boolean }>;
-      const { tripId } = await ctx.trips.getItemForActor(ctx.currentUserId, itemId);
-      const item = await ctx.trips.setItemReminder(ctx.currentUserId, tripId, itemId, enabled);
-      publishTrip(ctx, tripId, 'setItemReminder', { itemId, tripId, enabled }, ctx.currentUserId);
+      const { tripId, itemId, input } = args as Args<{
+        tripId: string;
+        itemId: string;
+        input: {
+          enabled: boolean;
+          leadMinutes?: number | null;
+          recipientIds?: string[] | null;
+          startTime?: string | null;
+        };
+      }>;
+      const item = await ctx.trips.setItemReminder(ctx.currentUserId, tripId, itemId, {
+        enabled: input.enabled,
+        leadMinutes: input.leadMinutes ?? undefined,
+        recipientIds: input.recipientIds ?? undefined,
+        startTime: input.startTime ?? undefined,
+      });
+      publishTrip(
+        ctx,
+        tripId,
+        'setItemReminder',
+        { itemId, tripId, enabled: input.enabled },
+        ctx.currentUserId,
+      );
       return toTripItem(item);
     },
 
@@ -1574,6 +1615,15 @@ export const resolvers: {
       const { activityId } = parent as { activityId?: string | null };
       if (!activityId) return false;
       return (await userFavoriteIds(ctx)).has(activityId);
+    },
+    reminder: (parent) => {
+      const reminder = (parent as ItemGql).reminder;
+      return {
+        enabled: reminder.enabled,
+        leadMinutes: reminder.lead_minutes,
+        recipientIds: reminder.recipient_ids,
+        canEdit: reminder.can_edit,
+      };
     },
     lat: (parent) => (parent as ItemGql).lat ?? null,
     lng: (parent) => (parent as ItemGql).lng ?? null,

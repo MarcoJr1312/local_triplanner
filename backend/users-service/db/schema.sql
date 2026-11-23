@@ -54,19 +54,40 @@ CREATE INDEX IF NOT EXISTS idx_favorite_locations_user
 CREATE TABLE IF NOT EXISTS notifications (
   id              uuid PRIMARY KEY,
   user_id         uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  type            text NOT NULL CHECK (type IN ('trip_invite')),
+  type            text NOT NULL CHECK (type IN ('trip_invite', 'activity_reminder')),
   trip_id         text NOT NULL,
   trip_name       text NOT NULL,
-  invitation_id   text NOT NULL,
+  invitation_id   text,
   inviter_user_id uuid REFERENCES users(id) ON DELETE SET NULL,
-  role            text NOT NULL CHECK (role IN ('editor', 'viewer')),
+  role            text CHECK (role IN ('editor', 'viewer')),
+  item_id         text,
+  item_title      text,
+  start_at        timestamptz,
+  lead_minutes    integer,
+  dedupe_key      text,
   status          text NOT NULL DEFAULT 'unread'
                     CHECK (status IN ('unread', 'read', 'accepted', 'declined')),
   created_at      timestamptz NOT NULL DEFAULT now(),
   read_at         timestamptz
 );
 
+-- Existing v2 databases: make invite-only columns optional and add reminder
+-- fields. Every statement is idempotent and runs when schema v3 is applied.
+ALTER TABLE notifications ALTER COLUMN invitation_id DROP NOT NULL;
+ALTER TABLE notifications ALTER COLUMN role DROP NOT NULL;
+ALTER TABLE notifications DROP CONSTRAINT IF EXISTS notifications_type_check;
+ALTER TABLE notifications
+  ADD CONSTRAINT notifications_type_check
+  CHECK (type IN ('trip_invite', 'activity_reminder'));
+ALTER TABLE notifications ADD COLUMN IF NOT EXISTS item_id text;
+ALTER TABLE notifications ADD COLUMN IF NOT EXISTS item_title text;
+ALTER TABLE notifications ADD COLUMN IF NOT EXISTS start_at timestamptz;
+ALTER TABLE notifications ADD COLUMN IF NOT EXISTS lead_minutes integer;
+ALTER TABLE notifications ADD COLUMN IF NOT EXISTS dedupe_key text;
+
 CREATE INDEX IF NOT EXISTS idx_notifications_user
   ON notifications(user_id, created_at DESC);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_notifications_invitation
   ON notifications(user_id, invitation_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_notifications_dedupe
+  ON notifications(user_id, dedupe_key);

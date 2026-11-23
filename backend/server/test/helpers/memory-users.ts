@@ -6,6 +6,7 @@ import { usersError } from '../../src/users/errors.ts';
 import type {
   CreateNotificationData,
   CreateNotificationResult,
+  CreateReminderNotificationData,
   CreateUserData,
   NotificationRecord,
   NotificationStatus,
@@ -166,6 +167,45 @@ export class MemoryUsersStore implements UsersStore {
       invitation_id: input.invitationId,
       inviter_user_id: input.inviterUserId,
       role: input.role,
+      item_id: null,
+      item_title: null,
+      start_at: null,
+      lead_minutes: null,
+      dedupe_key: null,
+      status: 'unread',
+      created_at: new Date().toISOString(),
+      read_at: null,
+    };
+    this.notifications.set(notification.id, notification);
+    return { notification, created: true };
+  }
+
+  async createReminderNotification(
+    input: CreateReminderNotificationData,
+  ): Promise<CreateNotificationResult> {
+    const target = this.users.get(input.userId);
+    if (!target || target.deleted_at) {
+      throw usersError('USER_NOT_FOUND', 'Usuario no encontrado.');
+    }
+    const existing = [...this.notifications.values()].find(
+      (row) => row.user_id === input.userId && row.dedupe_key === input.dedupeKey,
+    );
+    if (existing) return { notification: existing, created: false };
+
+    const notification: NotificationRecord = {
+      id: randomUUID(),
+      user_id: input.userId,
+      type: 'activity_reminder',
+      trip_id: input.tripId,
+      trip_name: input.tripName,
+      invitation_id: null,
+      inviter_user_id: null,
+      role: null,
+      item_id: input.itemId,
+      item_title: input.itemTitle,
+      start_at: input.startAt,
+      lead_minutes: input.leadMinutes,
+      dedupe_key: input.dedupeKey,
       status: 'unread',
       created_at: new Date().toISOString(),
       read_at: null,

@@ -127,16 +127,34 @@ export function requiredString(
   max = 255,
 ): string {
   if (typeof value !== 'string') {
-    throw new AppError('INVALID_ARGUMENT', `${field} es obligatorio.`);
+    throw new AppError('INVALID_ARGUMENT', `${field} is required.`);
   }
   const trimmed = value.trim();
   if (trimmed.length < min || trimmed.length > max) {
     throw new AppError(
       'INVALID_ARGUMENT',
-      `${field} debe tener entre ${min} y ${max} caracteres.`,
+      `${field} must be between ${min} and ${max} characters.`,
     );
   }
   return trimmed;
+}
+
+export function requiredInteger(
+  value: unknown,
+  field: string,
+  min: number,
+  max: number,
+): number {
+  if (typeof value !== 'number' || !Number.isInteger(value)) {
+    throw new AppError('INVALID_ARGUMENT', `${field} must be an integer.`);
+  }
+  if (value < min || value > max) {
+    throw new AppError(
+      'INVALID_ARGUMENT',
+      `${field} must be between ${min} and ${max}.`,
+    );
+  }
+  return value;
 }
 
 export function optionalString(

@@ -16,11 +16,14 @@ import {
   type LocationsClient,
 } from './locations.ts';
 import * as store from './store.ts';
+import { wallTimeToUtcIso } from './reminders.ts';
 import type {
   InvitationPreview,
   InvitationResult,
   InvitationRole,
+  ItemReminderConfig,
   ItemWriteResult,
+  DueReminder,
   JoinResult,
   LocalInvitationResult,
   LocalInvitationRow,
@@ -73,6 +76,61 @@ interface ResolvedPlace {
 }
 
 const MAX_MONEY = 1_000_000_000;
+const DEFAULT_LEAD_MINUTES = 60;
+const REMINDER_LEADS = new Set([15, 30, 60, 120]);
+
+function disabledReminder(canEdit: boolean): ItemReminderConfig {
+  return {
+    enabled: false,
+    lead_minutes: DEFAULT_LEAD_MINUTES,
+    recipient_ids: [],
+    can_edit: canEdit,
+  };
+}
+
+function toReminder(
+  row: store.ReminderConfigRow | undefined,
+  canEdit: boolean,
+): ItemReminderConfig {
+  if (!row) return disabledReminder(canEdit);
+  return {
+    enabled: Boolean(row.enabled),
+    lead_minutes: row.lead_minutes,
+    recipient_ids: row.recipient_ids,
+    can_edit: canEdit,
+  };
+}
+
+function reminderRecipients(value: unknown): string[] {
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new AppError(
+      'REMINDER_RECIPIENTS_REQUIRED',
+      'Select at least one trip member for the reminder.',
+    );
+  }
+  const seen = new Set<string>();
+  const ids: string[] = [];
+  for (const raw of value) {
+    if (typeof raw !== 'string') {
+      throw new AppError('INVALID_ARGUMENT', 'recipient_ids must contain strings.');
+    }
+    const id = raw.trim();
+    if (id.length < 1 || id.length > 128) {
+      throw new AppError('INVALID_ARGUMENT', 'recipient_ids contains an invalid id.');
+    }
+    if (!seen.has(id)) {
+      seen.add(id);
+      ids.push(id);
+    }
+  }
+  if (ids.length === 0) {
+    throw new AppError(
+      'REMINDER_RECIPIENTS_REQUIRED',
+      'Select at least one trip member for the reminder.',
+    );
+  }
+  return ids;
+}
 
 export class TripsService {
   private readonly brokerTopic: string;
@@ -94,8 +152,18 @@ export class TripsService {
   async getTrip(actorId: string, tripId: string): Promise<TripAggregate> {
     const id = pathId(tripId, 'trip_id');
     const trip = await this.requireTrip(id);
-    await this.requireRole(id, actorId);
-    return store.buildAggregate(this.db, trip, actorId);
+    const role = await this.requireRole(id, actorId);
+    const aggregate = await store.buildAggregate(this.db, trip, actorId);
+    const configs = await store.listReminderConfigs(this.db, id);
+    const byItem = new Map(configs.map((row) => [row.item_id, row]));
+    const canEdit = role !== 'viewer';
+    return {
+      ...aggregate,
+      items: aggregate.items.map((item) => ({
+        ...item,
+        reminder: toReminder(byItem.get(item.id), canEdit),
+      })),
+    };
   }
 
   async listMembers(actorId: string, tripId: string): Promise<TripMemberRow[]> {
@@ -108,8 +176,14 @@ export class TripsService {
   async listItems(actorId: string, tripId: string): Promise<TripItemRow[]> {
     const id = pathId(tripId, 'trip_id');
     await this.requireTrip(id);
-    await this.requireRole(id, actorId);
-    return store.listItems(this.db, id);
+    const role = await this.requireRole(id, actorId);
+    const items = await store.listItems(this.db, id);
+    const configs = await store.listReminderConfigs(this.db, id);
+    const byItem = new Map(configs.map((row) => [row.item_id, row]));
+    return items.map((item) => ({
+      ...item,
+      reminder: toReminder(byItem.get(item.id), role !== 'viewer'),
+    }));
   }
 
   async getItemForActor(
@@ -119,8 +193,11 @@ export class TripsService {
     const id = pathId(itemId, 'item_id');
     const item = await store.getItemAnyTrip(this.db, id);
     if (!item) throw new AppError('ITEM_NOT_FOUND', 'Ítem no encontrado.');
-    await this.requireRole(item.trip_id, actorId);
-    return { trip_id: item.trip_id, item };
+    const role = await this.requireRole(item.trip_id, actorId);
+    return {
+      trip_id: item.trip_id,
+      item: await this.attachReminder(item, role !== 'viewer'),
+    };
   }
 
   async getContext(actorId: string, tripId: string): Promise<TripContext> {
@@ -384,7 +461,11 @@ export class TripsService {
       );
     }
 
-    const removed = await this.db.transaction((tx) => store.removeMemberRow(tx, id, targetId));
+    const removed = await this.db.transaction(async (tx) => {
+      const ok = await store.removeMemberRow(tx, id, targetId);
+      if (ok) await store.removeUserFromTripReminders(tx, id, targetId);
+      return ok;
+    });
     if (!removed) throw new AppError('MEMBER_NOT_FOUND', 'Miembro no encontrado.');
     return { removed: true };
   }
@@ -412,11 +493,15 @@ export class TripsService {
       if (!targetRole) {
         throw new AppError('INVALID_TRANSFER_TARGET', 'El nuevo propietario debe ser otro miembro.');
       }
-      await this.db.transaction((tx) =>
-        store.transferOwnershipAndLeave(tx, id, actorId, newOwnerId),
-      );
+      await this.db.transaction(async (tx) => {
+        await store.transferOwnershipAndLeave(tx, id, actorId, newOwnerId);
+        await store.removeUserFromTripReminders(tx, id, actorId);
+      });
     } else {
-      await this.db.transaction((tx) => store.removeMemberRow(tx, id, actorId));
+      await this.db.transaction(async (tx) => {
+        await store.removeMemberRow(tx, id, actorId);
+        await store.removeUserFromTripReminders(tx, id, actorId);
+      });
     }
 
     const updated = await this.requireTrip(id);
@@ -771,11 +856,10 @@ export class TripsService {
         image_url: imageUrl,
         created_by: actorId,
       });
-      await store.recomputeReminder(tx, itemId);
       return (await store.getItem(tx, id, itemId)) ?? row;
     });
 
-    return { ...item, place_resolved: place.resolved };
+    return { ...(await this.attachReminder(item, true)), place_resolved: place.resolved };
   }
 
   async updateItem(
@@ -829,11 +913,10 @@ export class TripsService {
 
     await this.db.transaction(async (tx) => {
       await store.updateItemColumns(tx, id, targetItemId, columns);
-      await store.recomputeReminder(tx, targetItemId);
     });
 
     const item = await this.requireItem(id, targetItemId);
-    return { ...item, place_resolved: placeResolved };
+    return { ...(await this.attachReminder(item, true)), place_resolved: placeResolved };
   }
 
   async deleteItem(
@@ -851,7 +934,7 @@ export class TripsService {
       store.deleteItemRow(tx, id, targetItemId),
     );
     if (!deleted) throw new AppError('ITEM_NOT_FOUND', 'Ítem no encontrado.');
-    return deleted;
+    return { ...deleted, reminder: disabledReminder(true) };
   }
 
   async moveItem(
@@ -871,9 +954,8 @@ export class TripsService {
 
     await this.db.transaction(async (tx) => {
       await store.updateItemColumns(tx, id, targetItemId, { day, order });
-      await store.recomputeReminder(tx, targetItemId);
     });
-    return this.requireItem(id, targetItemId);
+    return this.attachReminder(await this.requireItem(id, targetItemId), true);
   }
 
   async setReminder(
@@ -884,22 +966,163 @@ export class TripsService {
   ): Promise<TripItemRow> {
     const id = pathId(tripId, 'trip_id');
     const targetItemId = pathId(itemId, 'item_id');
-    await this.requireTrip(id);
+    const trip = await this.requireTrip(id);
     this.requireEditor(await this.requireRole(id, actorId));
-    await this.requireItem(id, targetItemId);
+    const item = await this.requireItem(id, targetItemId);
 
     const enabled = requiredBoolean(body, 'enabled');
+    if (!enabled) {
+      await this.db.transaction((tx) => store.deleteReminder(tx, targetItemId));
+      return {
+        ...(await this.requireItem(id, targetItemId)),
+        reminder: disabledReminder(true),
+      };
+    }
+
+    if (!has(body, 'lead_minutes')) {
+      throw new AppError('INVALID_ARGUMENT', 'lead_minutes is required.');
+    }
+    const leadMinutes = requiredInteger(body, 'lead_minutes', 15, 120);
+    if (!REMINDER_LEADS.has(leadMinutes)) {
+      throw new AppError(
+        'INVALID_ARGUMENT',
+        'lead_minutes must be 15, 30, 60 or 120.',
+      );
+    }
+
+    const recipients = reminderRecipients(body.recipient_ids);
+    const members = await store.listMembers(this.db, id);
+    const memberIds = new Set(members.map((member) => member.user_id));
+    if (recipients.some((recipient) => !memberIds.has(recipient))) {
+      throw new AppError(
+        'REMINDER_RECIPIENTS_REQUIRED',
+        'All reminder recipients must be current trip members.',
+      );
+    }
+
+    const providedStart = has(body, 'start_time')
+      ? optionalTime(body, 'start_time')
+      : undefined;
+    const startTime = providedStart ?? item.start_time;
+    if (!startTime) {
+      throw new AppError(
+        'REMINDER_TIME_REQUIRED',
+        'Add a start time to enable the reminder.',
+      );
+    }
+
+    let dueAt: string;
+    try {
+      const startAt = wallTimeToUtcIso(item.day, startTime, trip.timezone || 'UTC');
+      dueAt = new Date(Date.parse(startAt) - leadMinutes * 60_000).toISOString();
+    } catch {
+      throw new AppError('INVALID_ARGUMENT', 'The activity time is invalid.');
+    }
+    if (Date.parse(dueAt) <= Date.now()) {
+      throw new AppError(
+        'REMINDER_TIME_PASSED',
+        'The reminder time has already passed; choose a later time or a shorter lead.',
+      );
+    }
 
     await this.db.transaction(async (tx) => {
-      await store.updateItemColumns(tx, id, targetItemId, {
-        reminder_enabled: enabled ? 1 : 0,
+      if (providedStart !== undefined && providedStart !== item.start_time) {
+        await store.updateItemColumns(tx, id, targetItemId, {
+          start_time: providedStart,
+        });
+      }
+      await store.upsertReminder(tx, {
+        item_id: targetItemId,
+        trip_id: id,
+        lead_minutes: leadMinutes,
+        updated_by: actorId,
       });
-      await store.recomputeReminder(tx, targetItemId);
+      await store.replaceReminderRecipients(tx, targetItemId, recipients);
     });
-    return this.requireItem(id, targetItemId);
+
+    return {
+      ...(await this.requireItem(id, targetItemId)),
+      reminder: {
+        enabled: true,
+        lead_minutes: leadMinutes,
+        recipient_ids: recipients,
+        can_edit: true,
+      },
+    };
+  }
+
+  async getReminder(
+    actorId: string,
+    tripId: string,
+    itemId: string,
+  ): Promise<ItemReminderConfig> {
+    const id = pathId(tripId, 'trip_id');
+    const targetItemId = pathId(itemId, 'item_id');
+    await this.requireTrip(id);
+    const role = await this.requireRole(id, actorId);
+    await this.requireItem(id, targetItemId);
+    const configs = await store.listReminderConfigs(this.db, id);
+    return toReminder(
+      configs.find((config) => config.item_id === targetItemId),
+      role !== 'viewer',
+    );
+  }
+
+  /** Internal dispatcher: due reminders with unsent recipients. */
+  async dueReminders(now: Date = new Date()): Promise<DueReminder[]> {
+    const rows = await store.listDueReminders(this.db);
+    const out: DueReminder[] = [];
+    for (const row of rows) {
+      if (row.recipient_ids.length === 0) continue;
+      try {
+        const startAt = wallTimeToUtcIso(row.day, row.start_time, row.timezone || 'UTC');
+        const dueAt = new Date(
+          Date.parse(startAt) - row.lead_minutes * 60_000,
+        ).toISOString();
+        if (Date.parse(dueAt) > now.getTime()) continue;
+        out.push({
+          item_id: row.item_id,
+          trip_id: row.trip_id,
+          trip_name: row.trip_name,
+          item_title: row.item_title,
+          day: row.day,
+          start_at: startAt,
+          due_at: dueAt,
+          lead_minutes: row.lead_minutes,
+          recipient_ids: row.recipient_ids,
+        });
+      } catch {
+        // Invalid time zone/time is skipped; the item edit repairs it.
+      }
+    }
+    return out;
+  }
+
+  async markReminderSent(itemId: string, userIds: readonly string[]): Promise<void> {
+    const id = pathId(itemId, 'item_id');
+    await store.markReminderRecipientsSent(
+      this.db,
+      id,
+      userIds,
+      new Date().toISOString(),
+    );
   }
 
   // --------------------------------------------------------------- helpers
+
+  private async attachReminder(
+    item: TripItemRow,
+    canEdit: boolean,
+  ): Promise<TripItemRow> {
+    const configs = await store.listReminderConfigs(this.db, item.trip_id);
+    return {
+      ...item,
+      reminder: toReminder(
+        configs.find((config) => config.item_id === item.id),
+        canEdit,
+      ),
+    };
+  }
 
   private async requireTrip(tripId: string) {
     const trip = await store.getTrip(this.db, tripId);

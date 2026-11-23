@@ -315,6 +315,66 @@ describe('members', () => {
 });
 
 describe('items', () => {
+  test('validates reminder roles, recipients, time and past due', async () => {
+    if (!db) return;
+    const id = await newTrip();
+    await service.addMember('u1', id, { user_id: 'u2', role: 'viewer' });
+
+    const timed = await service.addItem('u1', id, {
+      day: '2030-01-01',
+      title: 'Timed',
+      start_time: '10:00',
+    });
+    await expectCode(
+      () =>
+        service.setReminder('u2', id, timed.id, {
+          enabled: true,
+          lead_minutes: 60,
+          recipient_ids: ['u2'],
+        }),
+      'FORBIDDEN_EDIT',
+    );
+
+    await expectCode(
+      () =>
+        service.setReminder('u1', id, timed.id, {
+          enabled: true,
+          lead_minutes: 60,
+          recipient_ids: ['ghost'],
+        }),
+      'REMINDER_RECIPIENTS_REQUIRED',
+    );
+
+    const untimed = await service.addItem('u1', id, {
+      day: '2030-01-01',
+      title: 'No time',
+    });
+    await expectCode(
+      () =>
+        service.setReminder('u1', id, untimed.id, {
+          enabled: true,
+          lead_minutes: 60,
+          recipient_ids: ['u1'],
+        }),
+      'REMINDER_TIME_REQUIRED',
+    );
+
+    const past = await service.addItem('u1', id, {
+      day: '2020-01-01',
+      title: 'Past',
+      start_time: '10:00',
+    });
+    await expectCode(
+      () =>
+        service.setReminder('u1', id, past.id, {
+          enabled: true,
+          lead_minutes: 60,
+          recipient_ids: ['u1'],
+        }),
+      'REMINDER_TIME_PASSED',
+    );
+  });
+
   test('editors add, update, move, remind and delete; viewers cannot', async () => {
     if (!db) return;
     const id = await newTrip();
@@ -336,8 +396,8 @@ describe('items', () => {
     expect(item.location_address).toBe('301 Front St W');
     expect(item.lat).toBeCloseTo(43.6426);
     expect(item.place_resolved).toBe(true);
-    expect(item.reminder_enabled).toBe(1);
-    expect(item.reminder_due_at).not.toBeNull();
+    expect(item.reminder?.enabled).toBe(false);
+    expect(item.reminder?.lead_minutes).toBe(60);
 
     await expectCode(
       () =>
@@ -362,10 +422,18 @@ describe('items', () => {
     expect(moved.day).toBe('2030-01-02');
     expect(moved.order).toBe(2);
 
+    const reminder = await service.setReminder('u2', id, item.id, {
+      enabled: true,
+      lead_minutes: 60,
+      recipient_ids: ['u2'],
+      start_time: '10:00',
+    });
+    expect(reminder.reminder?.enabled).toBe(true);
+    expect(reminder.reminder?.lead_minutes).toBe(60);
+    expect(reminder.reminder?.recipient_ids).toEqual(['u2']);
+
     const off = await service.setReminder('u2', id, item.id, { enabled: false });
-    expect(off.reminder_enabled).toBe(0);
-    expect(off.reminder_sent).toBe(1);
-    expect(off.reminder_due_at).toBeNull();
+    expect(off.reminder?.enabled).toBe(false);
 
     const other = await service.addItem('u2', id, {
       day: '2030-01-02',

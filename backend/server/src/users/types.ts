@@ -22,9 +22,14 @@ export interface NotificationRecord {
   type: string;
   trip_id: string;
   trip_name: string;
-  invitation_id: string;
+  invitation_id: string | null;
   inviter_user_id: string | null;
-  role: string;
+  role: string | null;
+  item_id: string | null;
+  item_title: string | null;
+  start_at: string | null;
+  lead_minutes: number | null;
+  dedupe_key: string | null;
   status: NotificationStatus;
   created_at: string;
   read_at: string | null;
@@ -59,6 +64,17 @@ export interface CreateNotificationResult {
   created: boolean;
 }
 
+export interface CreateReminderNotificationData {
+  userId: string;
+  tripId: string;
+  tripName: string;
+  itemId: string;
+  itemTitle: string;
+  startAt: string;
+  leadMinutes: number;
+  dedupeKey: string;
+}
+
 export interface UsersStore {
   /** Includes soft-deleted accounts for member/attachment enrichment. */
   getUser(id: string): Promise<UserRecord | null>;
@@ -74,6 +90,9 @@ export interface UsersStore {
   updateUser(id: string, patch: UpdateUserData): Promise<UserRecord>;
   deleteUser(id: string): Promise<void>;
   createNotification(input: CreateNotificationData): Promise<CreateNotificationResult>;
+  createReminderNotification(
+    input: CreateReminderNotificationData,
+  ): Promise<CreateNotificationResult>;
   listNotifications(userId: string, status?: NotificationStatus | null): Promise<NotificationRecord[]>;
   getNotification(userId: string, id: string): Promise<NotificationRecord>;
   updateNotification(

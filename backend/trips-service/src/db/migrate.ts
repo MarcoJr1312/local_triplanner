@@ -18,6 +18,7 @@ interface Migration {
 const MIGRATIONS: Migration[] = [
   { version: 1, path: '../../db/schema.sql' },
   { version: 2, path: '../../db/migrations/002-local-invitations.sql' },
+  { version: 3, path: '../../db/migrations/003-activity-reminders.sql' },
 ];
 
 export interface MigrateResult {

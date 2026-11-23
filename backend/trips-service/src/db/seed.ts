@@ -19,6 +19,7 @@ interface DemoItem {
   cost: number;
   day: string;
   order: number;
+  startTime: string;
 }
 
 const DAYS = ['2026-12-04', '2026-12-05', '2026-12-06'] as const;
@@ -35,11 +36,24 @@ const PICKS = [
   { locationId: 'tor-bar-raval', title: 'Bar Raval', category: 'nightlife', cost: 20 },
 ];
 
+const START_TIMES = [
+  '10:00',
+  '14:00',
+  '19:00',
+  '09:30',
+  '13:00',
+  '20:00',
+  '11:00',
+  '15:30',
+  '21:00',
+];
+
 export const DEMO_ITEMS: DemoItem[] = PICKS.map((pick, index) => ({
   id: `demo-item-${index + 1}`,
   ...pick,
   day: DAYS[Math.min(Math.floor(index / 3), DAYS.length - 1)] ?? DAYS[0],
   order: index % 3,
+  startTime: START_TIMES[index] ?? '10:00',
 }));
 
 export interface SeedResult {
@@ -78,8 +92,8 @@ export async function seedDemo(db: Db): Promise<SeedResult> {
     for (const item of DEMO_ITEMS) {
       await tx.run(
         `INSERT INTO trip_items
-           (id, trip_id, location_id, title, category, cost, day, "order", created_by)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+           (id, trip_id, location_id, title, category, cost, day, "order", start_time, created_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
          ON CONFLICT DO NOTHING`,
         [
           item.id,
@@ -90,6 +104,7 @@ export async function seedDemo(db: Db): Promise<SeedResult> {
           item.cost,
           item.day,
           item.order,
+          item.startTime,
           DEMO_OWNER_ID,
         ],
       );

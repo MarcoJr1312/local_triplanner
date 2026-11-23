@@ -102,7 +102,6 @@ export interface TripItem {
   cost: number | null;
   notes: string | null;
   dayNumber: number | null;
-  reminderEnabled?: number;
   createdAt: string;
 }
 

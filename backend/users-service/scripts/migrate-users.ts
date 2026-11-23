@@ -406,6 +406,7 @@ export async function migrateUsers(options: MigrationOptions): Promise<Migration
     const platformRefs: [string, string][] = [
       ['item_attachments', 'created_by'],
       ['attachment_viewers', 'user_id'],
+      ['user_favorites', 'user_id'],
       ['user_interests', 'user_id'],
       ['suggestion_chats', 'user_id'],
       ['agent_embeddings', 'user_id'],

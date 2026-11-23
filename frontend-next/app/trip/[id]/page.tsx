@@ -36,6 +36,7 @@ import CalendarView from '@/components/CalendarView';
 import CategoryBars from '@/components/CategoryBars';
 import ItemCard from '@/components/ItemCard';
 import LocationDetailModal from '@/components/LocationDetailModal';
+import ReminderDialog from '@/components/ReminderDialog';
 import MembersPanel from '@/components/MembersPanel';
 import AddItemModal from '@/components/AddItemModal';
 import SuggestionsPanel from '@/components/SuggestionsPanel';
@@ -157,23 +158,9 @@ function TripDetailContent() {
     }
   };
 
-  // Overrides optimistas del recordatorio (0/1) por item. El backend refresca
-  // el valor real via notify/publishTrip tras la mutation.
-  const [reminderOverrides, setReminderOverrides] = useState<Record<string, number>>({});
-
-  const handleToggleReminder = async (item: TripItem) => {
-    if (!item.startTime) return;
-    const current = reminderOverrides[item.id] ?? item.reminderEnabled ?? 0;
-    const next = current === 1 ? 0 : 1;
-    setReminderOverrides((prev) => ({ ...prev, [item.id]: next }));
-    try {
-      await api.setItemReminder(item.id, next === 1);
-      toast.success(t(next === 1 ? 'items.reminderOn' : 'items.reminderOff'));
-    } catch (err) {
-      setReminderOverrides((prev) => ({ ...prev, [item.id]: current }));
-      toast.error(localizeApiError(err, t));
-    }
-  };
+  // Reminder configuration lives in the trips service; the dialog edits the
+  // selected item and the trip subscription refreshes the bell state.
+  const [reminderItem, setReminderItem] = useState<TripItem | null>(null);
 
   // Ruta del dia: items con coordenadas o con ubicacion manual (texto),
   // ordenados por hora; sin hora al final. Items sin ninguna ubicacion quedan
@@ -722,7 +709,6 @@ function TripDetailContent() {
                         item={{
                           ...item,
                           isFavorite: favOverrides[item.id] ?? item.isFavorite,
-                          reminderEnabled: reminderOverrides[item.id] ?? item.reminderEnabled,
                         }}
                         members={trip.members}
                         canEdit={canEdit}
@@ -739,7 +725,7 @@ function TripDetailContent() {
                         onRemove={() => handleRemove(item.id)}
                         onCostChange={(cost) => handleCostChange(item.id, cost)}
                         onToggleFavorite={() => handleToggleFavorite(item)}
-                        onToggleReminder={() => handleToggleReminder(item)}
+                        onOpenReminder={() => setReminderItem(item)}
                       />
                     ))}
                   </div>
@@ -880,20 +866,22 @@ function TripDetailContent() {
       />
       <LocationDetailModal
         open={!!detailItem}
-        item={
-          detailItem
-            ? {
-                ...detailItem,
-                reminderEnabled: reminderOverrides[detailItem.id] ?? detailItem.reminderEnabled,
-              }
-            : null
-        }
+        item={detailItem}
         tripId={trip.id}
         members={trip.members}
         canEdit={canEdit}
         onClose={() => setDetailItem(null)}
         onEdit={(it) => setEditingItem(it)}
-        onToggleReminder={() => detailItem && handleToggleReminder(detailItem)}
+        onOpenReminder={() => detailItem && setReminderItem(detailItem)}
+      />
+      <ReminderDialog
+        open={!!reminderItem}
+        tripId={trip.id}
+        item={reminderItem}
+        members={trip.members}
+        currentUserId={user?.userId ?? null}
+        onClose={() => setReminderItem(null)}
+        onSaved={() => setReminderItem(null)}
       />
     </AppShell>
   );

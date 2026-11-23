@@ -45,7 +45,7 @@ extend type Mutation {
   removeItemAttachment(attachmentId: ID!): Attachment
   favoriteLocation(locationId: ID!, favorite: Boolean!): FavoriteResult!
   saveSuggestionChat(tripId: ID!, day: String!, messages: [ChatMessageInput!]!): SuggestionChat!
-  setItemReminder(itemId: ID!, enabled: Boolean!): TripItem!
+  setItemReminder(tripId: ID!, itemId: ID!, input: ItemReminderInput!): TripItem!
   setMyInterests(terms: [String!]!): [String!]!
   updateLlmSettings(input: UpdateLlmSettingsInput!): LlmSettings!
   updateEmailSettings(input: UpdateEmailSettingsInput!): EmailSettings!
@@ -111,8 +111,22 @@ extend type TripItem {
   isFavorite: Boolean!
   lat: Float
   lng: Float
-  reminderEnabled: Int!
+  reminder: ItemReminder!
   locationText: String
+}
+
+type ItemReminder {
+  enabled: Boolean!
+  leadMinutes: Int!
+  recipientIds: [ID!]!
+  canEdit: Boolean!
+}
+
+input ItemReminderInput {
+  enabled: Boolean!
+  leadMinutes: Int
+  recipientIds: [ID!]
+  startTime: String
 }
 
 extend input AddItemInput {
@@ -161,9 +175,13 @@ type Notification {
   type: String!
   tripId: ID!
   tripName: String!
-  invitationId: ID!
+  invitationId: ID
   inviter: UserProfile
-  role: MemberRole!
+  role: MemberRole
+  itemId: ID
+  itemTitle: String
+  startAt: AWSDateTime
+  leadMinutes: Int
   status: String!
   createdAt: AWSDateTime!
   readAt: AWSDateTime

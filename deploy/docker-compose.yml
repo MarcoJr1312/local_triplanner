@@ -170,6 +170,7 @@ services:
       TRIPS_TIMEOUT_MS: "5000"
       USERS_URL: http://users:4500
       USERS_TIMEOUT_MS: "3000"
+      REMINDER_SWEEP_MS: ${REMINDER_SWEEP_MS:-30000}
     volumes:
       - uploads:/app/uploads
     depends_on:

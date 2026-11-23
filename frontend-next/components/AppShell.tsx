@@ -22,7 +22,7 @@ const NOTIFICATION_STATUS_KEY: Record<Notification['status'], TranslationKey> = 
 };
 
 export default function AppShell({ children }: { children: ReactNode }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const { user, signOut } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
@@ -239,69 +239,121 @@ export default function AppShell({ children }: { children: ReactNode }) {
           <p className="text-sm text-muted-foreground">{t('notifications.empty')}</p>
         ) : (
           <ul className="grid gap-2">
-            {notifications.map((notification) => (
-              <li
-                key={notification.id}
-                className="rounded-xl border border-border bg-muted/30 p-3"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-foreground">
-                      {notification.tripName}
-                    </p>
-                    <p className="truncate text-xs text-muted">
-                      {t('notifications.invitedBy', {
-                        name:
-                          notification.inviter?.displayName ??
-                          notification.inviter?.username ??
-                          '—',
-                      })}
-                    </p>
-                    <p className="text-[11px] text-muted">
-                      {notification.role === 'editor'
-                        ? t('invite.roleEditor')
-                        : t('invite.roleViewer')}
-                    </p>
-                  </div>
-                  <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10.5px] font-semibold text-muted-foreground">
-                    {t(NOTIFICATION_STATUS_KEY[notification.status])}
-                  </span>
-                </div>
+            {notifications.map((notification) => {
+              const isReminder = notification.type === 'activity_reminder';
+              const startLabel = notification.startAt
+                ? new Date(notification.startAt).toLocaleTimeString(
+                    locale === 'en' ? 'en-US' : 'es-ES',
+                    { hour: '2-digit', minute: '2-digit' },
+                  )
+                : '';
+              return (
+                <li
+                  key={notification.id}
+                  className="rounded-xl border border-border bg-muted/30 p-3"
+                >
+                  {isReminder ? (
+                    <>
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-foreground">
+                            {t('notifications.reminderTitle')}
+                          </p>
+                          <p className="truncate text-xs text-muted">
+                            {t('notifications.reminderBody', {
+                              item: notification.itemTitle ?? '',
+                              time: startLabel,
+                            })}
+                          </p>
+                          <p className="truncate text-[11px] text-muted">
+                            {notification.tripName}
+                            {notification.leadMinutes
+                              ? ` · ${t('notifications.reminderLead', {
+                                  minutes: notification.leadMinutes,
+                                })}`
+                              : ''}
+                          </p>
+                        </div>
+                        <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10.5px] font-semibold text-muted-foreground">
+                          {t(NOTIFICATION_STATUS_KEY[notification.status])}
+                        </span>
+                      </div>
+                      <div className="mt-2">
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-sm"
+                          onClick={() => {
+                            setShowNotifications(false);
+                            router.push(`/trip/${notification.tripId}`);
+                          }}
+                        >
+                          {t('notifications.openTrip')}
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-foreground">
+                            {notification.tripName}
+                          </p>
+                          <p className="truncate text-xs text-muted">
+                            {t('notifications.invitedBy', {
+                              name:
+                                notification.inviter?.displayName ??
+                                notification.inviter?.username ??
+                                '—',
+                            })}
+                          </p>
+                          <p className="text-[11px] text-muted">
+                            {notification.role === 'editor'
+                              ? t('invite.roleEditor')
+                              : t('invite.roleViewer')}
+                          </p>
+                        </div>
+                        <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10.5px] font-semibold text-muted-foreground">
+                          {t(NOTIFICATION_STATUS_KEY[notification.status])}
+                        </span>
+                      </div>
 
-                {(notification.status === 'unread' || notification.status === 'read') && (
-                  <div className="mt-2 flex gap-2">
-                    <button
-                      type="button"
-                      className="btn btn-primary btn-sm"
-                      onClick={() => handleAccept(notification)}
-                    >
-                      {t('notifications.accept')}
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-ghost btn-sm"
-                      onClick={() => handleDecline(notification)}
-                    >
-                      {t('notifications.decline')}
-                    </button>
-                  </div>
-                )}
-                {notification.status === 'accepted' && (
-                  <div className="mt-2">
-                    <button
-                      type="button"
-                      className="btn btn-ghost btn-sm"
-                      onClick={() => {
-                        setShowNotifications(false);
-                        router.push(`/trip/${notification.tripId}`);
-                      }}
-                    >
-                      {t('notifications.openTrip')}
-                    </button>
-                  </div>
-                )}
-              </li>
-            ))}
+                      {(notification.status === 'unread' || notification.status === 'read') && (
+                        <div className="mt-2 flex gap-2">
+                          <button
+                            type="button"
+                            className="btn btn-primary btn-sm"
+                            onClick={() => handleAccept(notification)}
+                          >
+                            {t('notifications.accept')}
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-ghost btn-sm"
+                            onClick={() => handleDecline(notification)}
+                          >
+                            {t('notifications.decline')}
+                          </button>
+                        </div>
+                      )}
+                      {notification.status === 'accepted' && (
+                        <div className="mt-2">
+                          <button
+                            type="button"
+                            className="btn btn-ghost btn-sm"
+                            onClick={() => {
+                              setShowNotifications(false);
+                              router.push(`/trip/${notification.tripId}`);
+                            }}
+                          >
+                            {t('notifications.openTrip')}
+                          </button>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         )}
         <div className="mt-5 flex justify-end">

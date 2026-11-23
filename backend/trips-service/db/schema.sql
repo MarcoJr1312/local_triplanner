@@ -67,9 +67,6 @@ CREATE TABLE IF NOT EXISTS trip_items (
   notes            text,
   image_url        text,
   created_by       text,
-  reminder_enabled integer NOT NULL DEFAULT 1,
-  reminder_sent    integer NOT NULL DEFAULT 0,
-  reminder_due_at  timestamptz,
   created_at       timestamptz NOT NULL DEFAULT now()
 );
 

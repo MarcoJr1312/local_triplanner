@@ -32,9 +32,13 @@ export interface Notification {
   type: string;
   tripId: string;
   tripName: string;
-  invitationId: string;
+  invitationId?: string | null;
   inviter?: UserProfile | null;
-  role: MemberRole;
+  role?: MemberRole | null;
+  itemId?: string | null;
+  itemTitle?: string | null;
+  startAt?: string | null;
+  leadMinutes?: number | null;
   status: 'unread' | 'read' | 'accepted' | 'declined';
   createdAt: string;
   readAt?: string | null;
@@ -54,6 +58,13 @@ export interface CreateUserInput {
   language?: 'es' | 'en' | null;
 }
 
+export interface TripItemReminder {
+  enabled: boolean;
+  leadMinutes: number;
+  recipientIds: string[];
+  canEdit: boolean;
+}
+
 export interface TripItem {
   id: ID;
   day: AWSDate;
@@ -71,7 +82,7 @@ export interface TripItem {
   lat?: number | null;
   lng?: number | null;
   locationText?: string | null;
-  reminderEnabled?: number;
+  reminder?: TripItemReminder;
 }
 
 export type AttachmentVisibility = 'private' | 'shared' | 'legacy';
@@ -335,7 +346,16 @@ export interface TriplannerApi {
   addItem(tripId: ID, input: AddItemInput): Promise<TripItem>;
   updateItem(tripId: ID, itemId: ID, input: UpdateItemInput): Promise<TripItem>;
   setItemCost(tripId: ID, itemId: ID, cost: number): Promise<TripItem>;
-  setItemReminder(itemId: ID, enabled: boolean): Promise<TripItem>;
+  setItemReminder(
+    tripId: ID,
+    itemId: ID,
+    input: {
+      enabled: boolean;
+      leadMinutes?: number;
+      recipientIds?: string[];
+      startTime?: string | null;
+    },
+  ): Promise<TripItem>;
   moveItem(tripId: ID, itemId: ID, day: AWSDate, order: number): Promise<TripItem>;
   removeItem(tripId: ID, itemId: ID): Promise<TripItem>;
 

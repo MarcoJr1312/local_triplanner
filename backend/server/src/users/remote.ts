@@ -4,6 +4,7 @@
 import type {
   CreateNotificationData,
   CreateNotificationResult,
+  CreateReminderNotificationData,
   CreateUserData,
   NotificationRecord,
   NotificationStatus,
@@ -38,9 +39,14 @@ interface RemoteNotification {
   type: string;
   trip_id: string;
   trip_name: string;
-  invitation_id: string;
+  invitation_id: string | null;
   inviter_user_id: string | null;
-  role: string;
+  role: string | null;
+  item_id: string | null;
+  item_title: string | null;
+  start_at: string | null;
+  lead_minutes: number | null;
+  dedupe_key: string | null;
   status: string;
   created_at: string;
   read_at: string | null;
@@ -70,6 +76,11 @@ function toNotification(raw: RemoteNotification): NotificationRecord {
     invitation_id: raw.invitation_id,
     inviter_user_id: raw.inviter_user_id,
     role: raw.role,
+    item_id: raw.item_id,
+    item_title: raw.item_title,
+    start_at: raw.start_at,
+    lead_minutes: raw.lead_minutes,
+    dedupe_key: raw.dedupe_key,
     status: raw.status as NotificationStatus,
     created_at: raw.created_at,
     read_at: raw.read_at,
@@ -179,6 +190,26 @@ export class RemoteUsersStore implements UsersStore {
       invitation_id: input.invitationId,
       inviter_user_id: input.inviterUserId,
       role: input.role,
+    });
+    return {
+      notification: toNotification(response.data as RemoteNotification),
+      created: response.status === 201,
+    };
+  }
+
+  async createReminderNotification(
+    input: CreateReminderNotificationData,
+  ): Promise<CreateNotificationResult> {
+    const response = await this.send('POST', '/internal/v1/notifications', null, {
+      user_id: input.userId,
+      type: 'activity_reminder',
+      trip_id: input.tripId,
+      trip_name: input.tripName,
+      item_id: input.itemId,
+      item_title: input.itemTitle,
+      start_at: input.startAt,
+      lead_minutes: input.leadMinutes,
+      dedupe_key: input.dedupeKey,
     });
     return {
       notification: toNotification(response.data as RemoteNotification),

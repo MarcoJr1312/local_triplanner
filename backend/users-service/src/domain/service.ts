@@ -33,6 +33,7 @@ import {
   pathNotificationId,
   pathUuid,
   requiredId,
+  requiredInteger,
   requiredPassword,
   requiredString,
   searchLimit,
@@ -220,6 +221,9 @@ export class UsersService {
   async createNotification(
     body: Record<string, unknown>,
   ): Promise<{ notification: NotificationPublic; created: boolean }> {
+    if (body.type === 'activity_reminder') {
+      return this.createReminderNotification(body);
+    }
     const userId = pathUuid(String(body.user_id ?? ''));
     const target = await store.findActiveById(this.db, userId);
     if (!target) throw new AppError('USER_NOT_FOUND', 'Usuario no encontrado.');
@@ -244,6 +248,42 @@ export class UsersService {
       invitationId: requiredId(body.invitation_id, 'invitation_id'),
       inviterUserId,
       role: notificationRole(body.role),
+    });
+
+    const row = await notifications.findById(this.db, result.id);
+    if (!row) throw new Error('notification disappeared after insert');
+    return { notification: toPublicNotification(row), created: result.created };
+  }
+
+  private async createReminderNotification(
+    body: Record<string, unknown>,
+  ): Promise<{ notification: NotificationPublic; created: boolean }> {
+    const userId = pathUuid(String(body.user_id ?? ''));
+    const target = await store.findActiveById(this.db, userId);
+    if (!target) throw new AppError('USER_NOT_FOUND', 'User not found.');
+
+    const leadMinutes = requiredInteger(body.lead_minutes, 'lead_minutes', 1, 1440);
+    if (![15, 30, 60, 120].includes(leadMinutes)) {
+      throw new AppError(
+        'INVALID_ARGUMENT',
+        'lead_minutes must be 15, 30, 60 or 120.',
+      );
+    }
+    const startAt = requiredString(body.start_at, 'start_at', 1, 40);
+    if (!Number.isFinite(Date.parse(startAt))) {
+      throw new AppError('INVALID_ARGUMENT', 'start_at must be an ISO timestamp.');
+    }
+
+    const result = await notifications.insertReminder(this.db, {
+      id: randomUUID(),
+      userId,
+      tripId: requiredId(body.trip_id, 'trip_id'),
+      tripName: requiredString(body.trip_name, 'trip_name', 1, 200),
+      itemId: requiredId(body.item_id, 'item_id'),
+      itemTitle: requiredString(body.item_title, 'item_title', 1, 300),
+      startAt,
+      leadMinutes,
+      dedupeKey: requiredString(body.dedupe_key, 'dedupe_key', 1, 256),
     });
 
     const row = await notifications.findById(this.db, result.id);

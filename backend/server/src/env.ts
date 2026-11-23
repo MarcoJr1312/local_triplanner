@@ -41,6 +41,9 @@ export const TRIPS_TIMEOUT_MS = Number(process.env.TRIPS_TIMEOUT_MS ?? 5000);
 export const USERS_URL = (process.env.USERS_URL ?? 'http://127.0.0.1:4500').replace(/\/+$/, '');
 export const USERS_TIMEOUT_MS = Number(process.env.USERS_TIMEOUT_MS ?? 3000);
 
+// In-app activity reminder sweep. One API replica runs it in the demo.
+export const REMINDER_SWEEP_MS = Number(process.env.REMINDER_SWEEP_MS ?? 30_000);
+
 // ---- Token interno (endpoints REST /internal/*) ----
 export const INTERNAL_TOKEN = process.env.INTERNAL_TOKEN ?? 'dev-internal-token';
 

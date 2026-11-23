@@ -51,10 +51,34 @@ export interface TripItemRow {
   notes: string | null;
   image_url: string | null;
   created_by: string | null;
-  reminder_enabled: number;
-  reminder_sent: number;
-  reminder_due_at: string | null;
   created_at: string;
+  reminder?: ItemReminder;
+}
+
+export interface ItemReminder {
+  enabled: boolean;
+  lead_minutes: number;
+  recipient_ids: string[];
+  can_edit: boolean;
+}
+
+export interface ItemReminderInput {
+  enabled: boolean;
+  leadMinutes?: number;
+  recipientIds?: string[];
+  startTime?: string | null;
+}
+
+export interface DueReminderData {
+  item_id: string;
+  trip_id: string;
+  trip_name: string;
+  item_title: string;
+  day: string;
+  start_at: string;
+  due_at: string;
+  lead_minutes: number;
+  recipient_ids: string[];
 }
 
 export interface TripData {
@@ -229,8 +253,15 @@ export interface TripsStore {
     userId: string,
     tripId: string,
     itemId: string,
-    enabled: boolean,
+    input: ItemReminderInput,
   ): Promise<TripItemRow>;
+  getItemReminder(
+    userId: string,
+    tripId: string,
+    itemId: string,
+  ): Promise<ItemReminder>;
+  dueReminders(now?: string): Promise<DueReminderData[]>;
+  markRemindersSent(itemId: string, userIds: string[]): Promise<void>;
   getItemForActor(
     userId: string,
     itemId: string,

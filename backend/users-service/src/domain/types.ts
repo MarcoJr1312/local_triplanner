@@ -65,9 +65,14 @@ export interface NotificationRow {
   type: string;
   trip_id: string;
   trip_name: string;
-  invitation_id: string;
+  invitation_id: string | null;
   inviter_user_id: string | null;
-  role: string;
+  role: string | null;
+  item_id: string | null;
+  item_title: string | null;
+  start_at: string | null;
+  lead_minutes: number | null;
+  dedupe_key: string | null;
   status: string;
   created_at: string;
   read_at: string | null;
@@ -93,10 +98,14 @@ export interface NotificationPublic {
   type: string;
   trip_id: string;
   trip_name: string;
-  invitation_id: string;
+  invitation_id: string | null;
   inviter_user_id: string | null;
   inviter: UserPublic | null;
-  role: string;
+  role: string | null;
+  item_id: string | null;
+  item_title: string | null;
+  start_at: string | null;
+  lead_minutes: number | null;
   status: string;
   created_at: string;
   read_at: string | null;
@@ -127,6 +136,10 @@ export function toPublicNotification(row: NotificationJoinedRow): NotificationPu
     inviter_user_id: row.inviter_user_id,
     inviter,
     role: row.role,
+    item_id: row.item_id,
+    item_title: row.item_title,
+    start_at: row.start_at,
+    lead_minutes: row.lead_minutes,
     status: row.status,
     created_at: row.created_at,
     read_at: row.read_at,
