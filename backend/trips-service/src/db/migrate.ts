@@ -20,6 +20,7 @@ const MIGRATIONS: Migration[] = [
   { version: 2, path: '../../db/migrations/002-local-invitations.sql' },
   { version: 3, path: '../../db/migrations/003-activity-reminders.sql' },
   { version: 4, path: '../../db/migrations/004-demo-timezone.sql' },
+  { version: 5, path: '../../db/migrations/005-demo-coordinates.sql' },
 ];
 
 export interface MigrateResult {

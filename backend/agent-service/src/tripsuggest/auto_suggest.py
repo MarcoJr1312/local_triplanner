@@ -10,8 +10,13 @@ from __future__ import annotations
 from typing import Any
 
 from tripsuggest.backend import BackendClient
-from tripsuggest.interests import score_from_distance
-from tripsuggest.vector_store import query_places_by_vector, user_interest_vector
+from tripsuggest.interests import normalize_terms, score_from_distance
+from tripsuggest.vector_store import (
+    get_user_interest_terms,
+    query_places_by_vector,
+    sync_user_interests,
+    user_interest_vector,
+)
 
 _Q_DOC_BUFFER = 10
 
@@ -66,6 +71,15 @@ def auto_suggest(
     """Load trip context + places, then run :func:`build_auto_suggest`."""
     context = client.get_trip_context(trip_id, user_id, user_email)
     resolved_user_id = str(context.get("userId") or user_id)
+
+    # The API context is authoritative; refresh the local interest embeddings
+    # if another stack changed them (for example Compose API + Helm agent).
+    context_terms = normalize_terms(context.get("interests") or [])
+    if context_terms and set(context_terms) != set(get_user_interest_terms(resolved_user_id)):
+        try:
+            sync_user_interests(resolved_user_id, context_terms)
+        except Exception:
+            pass
 
     vector = user_interest_vector(resolved_user_id)
     if vector is None:

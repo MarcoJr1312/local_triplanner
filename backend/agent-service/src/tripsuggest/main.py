@@ -140,15 +140,20 @@ def _merge_places(
 
 
 def _user_interest_terms(user_id: str, context: dict[str, Any]) -> list[str]:
-    """Interests for the prompt/boost: pgvector first, backend context fallback."""
+    """Keep the agent DB interests aligned with the API context."""
+    context_terms = normalize_terms(context.get("interests") or [])
     try:
-        terms = get_user_interest_terms(user_id)
+        agent_terms = get_user_interest_terms(user_id)
     except Exception:
         logger.exception("failed to load user interests from pgvector")
-        terms = []
-    if terms:
-        return terms
-    return normalize_terms(context.get("interests") or [])
+        agent_terms = []
+    if context_terms and set(context_terms) != set(agent_terms):
+        try:
+            sync_user_interests(user_id, context_terms)
+            return context_terms
+        except Exception:
+            logger.exception("failed to sync interests from the API context")
+    return agent_terms or context_terms
 
 
 def _internal_token_ok(provided: str | None) -> bool:

@@ -65,15 +65,17 @@ export async function seedDemo(db: Db): Promise<SeedResult> {
   await db.transaction(async (tx) => {
     await tx.run(
       `INSERT INTO trips
-         (id, name, destination_id, destination_name, start_date, end_date,
-          total_budget, timezone, owner_id, invite_code)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+         (id, name, destination_id, destination_name, destination_lat, destination_lng,
+          start_date, end_date, total_budget, timezone, owner_id, invite_code)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
        ON CONFLICT DO NOTHING`,
       [
         DEMO_TRIP_ID,
         'Fin de semana en Toronto',
         'toronto',
         'Toronto',
+        43.6532,
+        -79.3832,
         '2026-12-04',
         '2026-12-06',
         1200,

@@ -37,7 +37,7 @@ export interface Db extends Queryable {
 }
 
 /** Latest schema version applied by src/db/migrate.ts. */
-export const LATEST_SCHEMA_VERSION = 4;
+export const LATEST_SCHEMA_VERSION = 5;
 
 class Sql implements Queryable {
   constructor(private readonly client: Pool | PoolClient) {}
