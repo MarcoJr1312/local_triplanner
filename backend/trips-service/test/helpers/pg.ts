@@ -2,8 +2,9 @@ import { connect, type Db } from '../../src/db.ts';
 import { loadConfig } from '../../src/env.ts';
 
 // Local throwaway Postgres for the service tests. CI overrides this with
-// TEST_TRIPS_DATABASE_URL (or TRIPS_DATABASE_URL).
-const DEFAULT_TEST_URL = 'postgres://trips:trips@127.0.0.1:55432/trips';
+// TEST_TRIPS_DATABASE_URL (or TRIPS_DATABASE_URL). Never point the default at
+// the live `trips` database: the suite drops and recreates its schema.
+const DEFAULT_TEST_URL = 'postgres://trips:trips@127.0.0.1:55432/trips_test';
 
 export async function connectTestDb(): Promise<Db | null> {
   const url =
@@ -27,6 +28,6 @@ export async function connectTestDb(): Promise<Db | null> {
 
 export async function resetSchema(db: Db): Promise<void> {
   await db.exec(
-    'DROP TABLE IF EXISTS outbox, invitations, trip_items, trip_members, trips, schema_migrations CASCADE',
+    'DROP TABLE IF EXISTS trip_item_reminder_recipients, trip_item_reminders, outbox, invitations, trip_items, trip_members, trips, schema_migrations CASCADE',
   );
 }

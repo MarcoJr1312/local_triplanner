@@ -159,8 +159,9 @@ auth and Dockerfiles.
   trip IDs and catalogue IDs, manual activities have no heart, and failures
   show a localized error. Contract `docs/migrations/0013-user-favorites.md`;
   migration script `backend/users-service/scripts/migrate-favorites.ts`.
-- Test databases: users tests default to `users_test` on `127.0.0.1:55433`
-  (never the live `users` database); trips tests use the trips test database.
+- Test databases: users tests default to `users_test` and trips tests to
+  `trips_test` on `127.0.0.1:55433`/`55432` (never the live `users`/`trips`
+  databases).
 Do not assume the target architecture is already implemented — check the
 current tree.
 

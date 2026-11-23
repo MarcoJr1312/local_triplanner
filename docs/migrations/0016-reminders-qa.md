@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **QA complete - Gate 2 recommendation: HOLD (two P2 defects)** |
+| Status | **QA complete - P2s resolved in 1dc9658; Gate 2 recommendation: APPROVE WITH CONDITIONS (see section 7)** |
 | Cycle | Microservice Code Migration (`19455fa3-28ea-4f03-b195-973c5ddf595e`) |
 | Slice | M13 - activity reminders (trips config, users inbox, API dispatch, UI) |
 | Contract | `docs/migrations/0014-activity-reminders.md` (Gate 1 approved 2026-11-22) |
@@ -287,6 +287,8 @@ None.
 
 ## 6. Gate 2 recommendation
 
+> Historical: this was the recommendation at the time of the original report. It is superseded by section 7 after commit 1dc9658 (P2s resolved).
+
 **HOLD - do not merge/tag as-is.** Two P2 defects block sign-off under the QA
 rubric:
 
@@ -314,3 +316,123 @@ known demo limitation, P2-1 can be downgraded to P3 and the slice becomes
   tests, AGENTS/README updates) as follow-ups.
 
 **No Orkai status was changed by this session; the decision is the human's.**
+## 7. Post-QA resolution (commit 1dc9658)
+
+| Field | Value |
+|---|---|
+| Re-verification commit | `1dc9658030745acd973d72ac377c851a0523121b` |
+| Date | 2026-11-22 local (2026-11-23, about 03:58Z) |
+| Compose | trips and web rebuilt (`trips sha256:9a77ff87...`, `web sha256:8b532dce...`); API `sha256:780719e9...` and users `sha256:c39c0162...` unchanged |
+| Helm | release revision **34**; users `0.1.1-dev2`, trips `0.1.1-dev5`, web `1.3.0-dev6` |
+| Suites | trips 67/67, users 67/67, API 73/73, frontend **33/33**; `tsc` exit 0 in all four |
+| Helm test | **5/5 suites Succeeded** |
+| Verdict | **Both P2 defects resolved; no P1/P2 remain.** Gate 2 recommendation updated to **APPROVE WITH CONDITIONS** (section 7.6) |
+
+### 7.1 P2-1 timezone - RESOLVED
+
+| # | Check | Result | Evidence |
+|---|---|---|---|
+| 7.1.1 | Compose demo trip uses the Toronto timezone and schema v4 | PASS | `select timezone from trips where id='demo-trip'` -> `America/Toronto`; `schema_migrations` -> 1, 2, 3, 4 |
+| 7.1.2 | Helm demo trip uses the Toronto timezone and schema v4 (trips `0.1.1-dev5`) | PASS | `kubectl exec triplanner-trips-postgres-0 ...` -> `America/Toronto`; versions 1-4 |
+| 7.1.3 | CN Tower 10:00 with 60-min lead computes the Toronto instant | PASS | Compose and Helm internal due endpoint (now `2026-12-04T14:30Z`) both returned `start_at=2026-12-04T15:00:00.000Z`, `due_at=2026-12-04T14:00:00.000Z`; a query at `13:30Z` returned `{items:[]}` |
+| 7.1.4 | Live reminder with a Toronto wall time reaches both recipients without reload | PASS | Item `7025526e...` day `2026-11-22` time `23:05` (Toronto) -> `start_at=2026-11-23T04:05:00Z`, `due_at=03:50Z`; demo and marco SSE events at `03:50:01Z` through the web proxy; 2 users rows with `start_at` = `2026-11-23 04:05:00+00` |
+| 7.1.5 | Notification card shows the same wall time the editor set | PASS | Browser in `America/Toronto`: `QA M13 live Toronto starts at 11:05 PM`; item `startTime` = `23:05`; `start_at` = `04:05Z` |
+| 7.1.6 | Dedupe after a reset `sent_at` (second sweep) | PASS | Count 2 before and after; `sent_at` re-marked `03:50:28.562Z`; no extra SSE event |
+| 7.1.7 | No timezone regression to other trips or demo data | PASS | Only `demo-trip` is `America/Toronto`; the other four trips remain `UTC`; demo trip still 10 items, 2 members and the original seed times; 0 reminder configs after cleanup |
+
+**P2-1 closed.**
+
+### 7.2 P2-2 localization - RESOLVED
+
+| # | Check | Result | Evidence |
+|---|---|---|---|
+| 7.2.1 | English and Spanish keys exist for the three reminder codes | PASS | `en.ts`/`es.ts` add `errors.REMINDER_TIME_REQUIRED`, `errors.REMINDER_TIME_PASSED`, `errors.REMINDER_RECIPIENTS_REQUIRED` |
+| 7.2.2 | Past-due dialog shows the specific English message, not the generic error | PASS | Temp trip/item day `2026-11-23`, start `00:01`, save with lead 60 -> `That reminder time has already passed. Choose a later time or a shorter lead.`; zero console errors |
+| 7.2.3 | Frontend mapping test | PASS | frontend `33/33`; the new test asserts `localizeApiError` maps all three codes to `errors.<CODE>` |
+| 7.2.4 | Cleanup | PASS | Temp trip `350643ef...` and its item deleted; Compose trips back to 5; 0 reminder configs |
+
+**P2-2 closed.**
+
+### 7.3 P3 fixes verified
+
+| ID | Post-fix state | Evidence | Status |
+|---|---|---|---|
+| P3-1 | Viewer bell labels no longer imply a control the viewer can use | marco session, Compose: reminder recipient -> `Reminder configured` (disabled); non-recipient with an active reminder -> `Only the owner or an editor can set reminders` (disabled); item with no reminder -> no bell; no `Turn on/off reminder` labels; 0 console errors | **Closed** (see residual wording in 7.5) |
+| P3-2 | Contract now documents the shipped `/trip/{id}` link (no `?day`) | `docs/migrations/0014-activity-reminders.md` diff | Closed (doc) |
+| P3-3 | Contract uses `text` ids and snake_case due payload | Contract section 3/4 diff; live due payload | Closed (doc) |
+| P3-4 | Contract describes the full unique `(user_id, dedupe_key)` index | Contract section 5 diff; `\d notifications` | Closed (doc) |
+| P3-5 | Dead `computeReminderDueAt` removed; only `wallTimeToUtcIso` remains | `backend/trips-service/src/domain/reminders.ts` diff; `git grep computeReminderDueAt` -> none | Closed |
+| P3-6 | Error-code mapping test added; dialog/viewer/live-bell UI still only manually verified | frontend `33/33`; new `maps the reminder validation codes`; no component tests for `ReminderDialog`/`AppShell` | **Partially closed** |
+| P3-7 | Internal `start_time: null` edge unchanged | code unchanged; GraphQL still converts `null` to `undefined` | Open (P3) |
+| P3-8 | `AGENTS.md` still ends at M12; index still omits 0015/0016; no M13 release notes | `git show --stat 1dc9658` does not touch AGENTS/README/release notes | Open (P3) |
+| P3-9 | Chart `values.yaml` still points at pre-M13 tags (release step) | `helm template` images users `0.1.0`, trips `0.1.1`, web `1.3.0`; the live release uses `--set` dev tags | Open (P3, M13.7) |
+| P3-10 | Expired reminders still silent (no log/metric) | no change | Open (P3) |
+
+### 7.4 New environment finding during re-verification - P3-11 (trips test isolation)
+
+The trips suite default is `postgres://trips:trips@127.0.0.1:55432/trips`
+(`backend/trips-service/test/helpers/pg.ts`). Port `55432` on this host is a
+`kubectl port-forward svc/triplanner-trips-postgres 55432:5432`, i.e. **the Helm
+trips database, not a dedicated test database**. `resetSchema()` drops
+`outbox, invitations, trip_items, trip_members, trips, schema_migrations
+CASCADE`, so running the suite resets the Helm demo data.
+
+Observed during this run:
+
+- Before the suites: Helm `trips` DB had `demo-trip`, 9 items and timezone
+  `America/Toronto`.
+- After the suites: the Helm DB had a single fixture trip `Toronto` (owner `u1`,
+  members `u1`/`u2`, 2 invitations), **0 items**, 0 reminders; the trips pod logged
+  `outbox tick error: relation "outbox" does not exist` from 03:53:24Z.
+- The chart `helm test` hooks are non-destructive (busybox `wget` on `/ready`); the
+  reset came from the local service suite, not the chart hook.
+- The Helm web points at the Compose API, so the ingress demo path was unaffected.
+- Restore: deleted the fixture trip and ran
+  `kubectl rollout restart deploy/triplanner-trips`; the pod re-applied the seed
+  (`demo seed: 9 items in demo-trip`), schema v4, timezone `America/Toronto`,
+  0 reminder configs, no outbox errors, and `helm test` was 5/5 again.
+
+**Recommendation:** give the trips suite a dedicated `trips_test` database (the
+same fix M12 applied to users on `55433`), or remove the port-forward before running
+the suite. This is a QA/acceptance environment issue, not an M13 code defect, but it
+must not be repeated during the final Helm acceptance.
+
+### 7.5 Remaining P3 after re-verification
+
+- **P3-1 residual:** the recipient viewer tooltip is `Reminder configured`, not the
+  contract's literal "Reminder set for {time} ({lead} before)". No false affordance
+  remains; cosmetic wording only.
+- **P3-6:** no component tests for the dialog, recipient selection, viewer read-only
+  state, live bell update or notification card; the error-mapping test is the only
+  new frontend coverage.
+- **P3-7:** internal `start_time: null` with `enabled=true` can still clear the item
+  time while keeping the config (not reachable from GraphQL).
+- **P3-8:** AGENTS.md, the migrations index and release notes are not updated for M13.
+- **P3-9:** chart `values.yaml`/`appVersion` still point at pre-M13 images.
+- **P3-10:** expired reminders are not observable.
+- **P3-11:** trips test suite uses the Helm database (section 7.4).
+- **Process note:** contract 0014 was edited after Gate 1 (text ids, snake_case,
+  full index, no `?day`, Toronto timezone) to match the shipped implementation.
+  Record a Gate 1 re-approval if the process requires one.
+
+### 7.6 Updated Gate 2 recommendation
+
+**APPROVE WITH CONDITIONS.** No P1 or P2 defects remain; both original P2s were
+reproduced against the old build and verified fixed in `1dc9658` on both Compose and
+Helm.
+
+Conditions:
+
+1. **M13.7 release step:** publish the M13 images (`web`, `api`, `users`, `trips`)
+   and bump `helm/helm-triplanner/values.yaml`, `appVersion` and the release notes;
+   re-run `helm test` and the published-stack smoke. Until then the chart defaults
+   still deploy pre-M13 services.
+2. **Test isolation before final Helm acceptance:** move the trips suite to a
+   dedicated `trips_test` database (or stop the 55432 port-forward) and re-seed the
+   Helm trips deployment after any suite run. The Helm demo data was restored in this
+   run (`demo-trip`, 9 items, `America/Toronto`, schema v4, 0 reminders).
+3. **Optional P3 follow-ups:** component tests for the reminder UI, AGENTS/README/
+   release notes, expiry observability, the exact recipient tooltip wording, and the
+   internal `start_time: null` guard.
+
+No Orkai status was changed by this session; the Gate 2 decision is the human's.
