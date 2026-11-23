@@ -26,6 +26,10 @@ Migrations:
   behind nginx ingress (web-only slice)
 - [`0012-frontend-qa.md`](./0012-frontend-qa.md) — frontend Helm QA evidence and
   Gate 2 recommendation
+- [`0013-user-favorites.md`](./0013-user-favorites.md) — private favorites move
+  to the users service
+- [`0014-activity-reminders.md`](./0014-activity-reminders.md) — activity
+  reminders with selected recipients
 
 ## Branching (local only)
 

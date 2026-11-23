@@ -6,17 +6,21 @@ import { randomUUID } from 'node:crypto';
 import type { Db } from '../db.ts';
 import { isProtectedUserId } from '../db/seed.ts';
 import { AppError } from '../errors.ts';
+import * as favorites from './favorites-store.ts';
 import * as notifications from './notifications-store.ts';
 import * as store from './store.ts';
 import {
+  toPublicFavorite,
   toPublicNotification,
   toPublicUser,
+  type FavoritePublic,
   type NotificationJoinedRow,
   type NotificationPublic,
   type UserPublic,
 } from './types.ts';
 import {
   batchIds,
+  favoriteLocationId,
   loginUsername,
   notificationLimit,
   notificationRole,
@@ -191,6 +195,26 @@ export class UsersService {
     return { deleted: true };
   }
 
+  // --------------------------------------------------------- favorites
+
+  async listFavorites(userId: string): Promise<FavoritePublic[]> {
+    const id = await this.requireActiveId(userId);
+    const rows = await favorites.listForUser(this.db, id);
+    return rows.map(toPublicFavorite);
+  }
+
+  async setFavorite(
+    userId: string,
+    locationId: string,
+    favorite: boolean,
+  ): Promise<{ location_id: string; favorite: boolean }> {
+    const id = await this.requireActiveId(userId);
+    const location = favoriteLocationId(locationId);
+    if (favorite) await favorites.add(this.db, id, location);
+    else await favorites.remove(this.db, id, location);
+    return { location_id: location, favorite };
+  }
+
   // ------------------------------------------------------- notifications
 
   async createNotification(
@@ -290,5 +314,12 @@ export class UsersService {
     const row = await store.findAnyById(this.db, pathUuid(id));
     if (!row) throw new AppError('USER_NOT_FOUND', 'Usuario no encontrado.');
     return row;
+  }
+
+  private async requireActiveId(id: string): Promise<string> {
+    const userId = pathUuid(id);
+    const row = await store.findActiveById(this.db, userId);
+    if (!row) throw new AppError('USER_NOT_FOUND', 'Usuario no encontrado.');
+    return userId;
   }
 }

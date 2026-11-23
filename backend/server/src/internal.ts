@@ -6,7 +6,6 @@ import { GraphQLError } from 'graphql';
 import { distanceKm } from './geo.ts';
 import { upsertSuggestionChat } from './pg/chats.ts';
 import { isValidMessages } from './chats.ts';
-import { favoriteIdsForUser } from './pg/favorites.ts';
 import { listUserInterests } from './pg/interests.ts';
 import { searchLocationsWithCatalogue } from './catalogue/search.ts';
 import { CatalogueUnavailableError } from './catalogue/remote.ts';
@@ -234,8 +233,16 @@ async function handleSearchPlaces(deps: InternalDeps, res: ServerResponse, body:
     }
   }
 
-  const rows = await searchLocationsWithCatalogue({ catalogue: deps.catalogue, db: deps.db, q, lat, lng, userId });
-  const favIds = userId ? await favoriteIdsForUser(deps.db, userId) : new Set<string>();
+  const favorites = userId
+    ? await deps.users.listFavoriteIds(userId).catch(() => new Set<string>())
+    : new Set<string>();
+  const rows = await searchLocationsWithCatalogue({
+    catalogue: deps.catalogue,
+    q,
+    lat,
+    lng,
+    favorites,
+  });
   json(
     res,
     200,
@@ -249,7 +256,7 @@ async function handleSearchPlaces(deps: InternalDeps, res: ServerResponse, body:
       imageUrl: r.image_url ?? null,
       lat: r.lat,
       lng: r.lng,
-      isFavorite: favIds.has(r.id),
+      isFavorite: favorites.has(r.id),
     })),
   );
 }

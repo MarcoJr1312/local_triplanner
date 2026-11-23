@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { connect, type Db, type Queryable } from '../db.ts';
 import { loadConfig, loadDotEnv } from '../env.ts';
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 const MIGRATION_LOCK_ID = 740_002;
 const SCHEMA_PATH = fileURLToPath(new URL('../../db/schema.sql', import.meta.url));
 

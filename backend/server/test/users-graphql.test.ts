@@ -242,6 +242,29 @@ describe('users and local invites over GraphQL', () => {
     assert.ok(!JSON.stringify(list.data).includes('password'));
   });
 
+  test('favorites are private per user and accept opaque ids', async () => {
+    const on = await run(
+      'mutation($id: ID!) { favoriteLocation(locationId: $id, favorite: true) { locationId favorite } }',
+      invitee.id,
+      { id: 'tor-cn-tower' },
+    );
+    assert.equal(on.errors, undefined);
+    assert.deepEqual(
+      { ...((on.data as { favoriteLocation: Record<string, unknown> }).favoriteLocation) },
+      { locationId: 'tor-cn-tower', favorite: true },
+    );
+    assert.deepEqual([...(await users.listFavoriteIds(invitee.id))], ['tor-cn-tower']);
+    assert.equal((await users.listFavoriteIds(inviter.id)).size, 0);
+
+    const off = await run(
+      'mutation($id: ID!) { favoriteLocation(locationId: $id, favorite: false) { locationId favorite } }',
+      invitee.id,
+      { id: 'tor-cn-tower' },
+    );
+    assert.equal(off.errors, undefined);
+    assert.equal((await users.listFavoriteIds(invitee.id)).size, 0);
+  });
+
   test('resolves invites by username, stores a notification and publishes it', async () => {
     published.length = 0;
     const result = await run(INVITE, inviter.id, {

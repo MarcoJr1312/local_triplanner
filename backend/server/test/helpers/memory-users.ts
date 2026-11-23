@@ -28,6 +28,7 @@ interface StoredUser extends UserRecord {
 export class MemoryUsersStore implements UsersStore {
   private readonly users = new Map<string, StoredUser>();
   private readonly notifications = new Map<string, NotificationRecord>();
+  private readonly favorites = new Map<string, Set<string>>();
 
   private publicUser(user: StoredUser): UserRecord {
     const { password: _password, ...publicUser } = user;
@@ -206,5 +207,21 @@ export class MemoryUsersStore implements UsersStore {
     row.status = status;
     row.read_at = row.read_at ?? new Date().toISOString();
     return row;
+  }
+
+  async listFavoriteIds(userId: string): Promise<Set<string>> {
+    return new Set(this.favorites.get(userId) ?? []);
+  }
+
+  async setFavorite(
+    userId: string,
+    locationId: string,
+    favorite: boolean,
+  ): Promise<boolean> {
+    const current = this.favorites.get(userId) ?? new Set<string>();
+    if (favorite) current.add(locationId);
+    else current.delete(locationId);
+    this.favorites.set(userId, current);
+    return favorite;
   }
 }

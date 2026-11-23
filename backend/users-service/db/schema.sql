@@ -35,6 +35,19 @@ CREATE UNIQUE INDEX IF NOT EXISTS users_username_lower
 CREATE UNIQUE INDEX IF NOT EXISTS users_email_lower
   ON users (lower(email)) WHERE email IS NOT NULL AND deleted_at IS NULL;
 
+-- ========================== FAVORITE PLACES ======================
+-- Private per-user favorites. location_id is an opaque reference to the
+-- locations service catalogue: no foreign key and no catalogue validation.
+CREATE TABLE IF NOT EXISTS favorite_locations (
+  user_id     uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  location_id text NOT NULL CHECK (length(location_id) BETWEEN 1 AND 128),
+  created_at  timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (user_id, location_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_favorite_locations_user
+  ON favorite_locations(user_id, created_at DESC);
+
 -- ========================== NOTIFICATIONS ========================
 -- Local trip invites. There is no outbox: the API publishes onNotification
 -- after this row is created and no email is ever sent.

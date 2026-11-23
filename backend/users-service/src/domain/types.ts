@@ -40,6 +40,23 @@ export function toPublicUser(row: UserRow): UserPublic {
   };
 }
 
+// --------------------------------------------------------- favorites
+
+export interface FavoriteRow {
+  user_id: string;
+  location_id: string;
+  created_at: string;
+}
+
+export interface FavoritePublic {
+  location_id: string;
+  created_at: string;
+}
+
+export function toPublicFavorite(row: FavoriteRow): FavoritePublic {
+  return { location_id: row.location_id, created_at: row.created_at };
+}
+
 // --------------------------------------------------------- notifications
 
 export interface NotificationRow {

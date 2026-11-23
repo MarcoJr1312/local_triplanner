@@ -50,6 +50,12 @@ export function requireInternalToken(req: Request, expected: string): void {
   }
 }
 
+function requireSelf(actor: string, userId: string): void {
+  if (actor !== userId) {
+    throw new AppError('FORBIDDEN', 'No autorizado para modificar estos favoritos.');
+  }
+}
+
 export function requireActor(req: Request): string {
   const actor = req.headers.get('x-actor-id')?.trim();
   if (!actor) {
@@ -154,6 +160,24 @@ export function createHandler(deps: HttpDeps): (req: Request) => Promise<Respons
 
     makeRoute('POST', '/internal/v1/users/batch', async (ctx) =>
       json(200, { items: await service().batchUsers(ctx.body.ids) })),
+
+    makeRoute('GET', '/internal/v1/users/:id/favorites', async (ctx) => {
+      const id = ctx.params.id ?? '';
+      requireSelf(ctx.actor, id);
+      return json(200, { items: await service().listFavorites(id) });
+    }, true),
+
+    makeRoute('PUT', '/internal/v1/users/:id/favorites/:locationId', async (ctx) => {
+      const id = ctx.params.id ?? '';
+      requireSelf(ctx.actor, id);
+      return json(200, await service().setFavorite(id, ctx.params.locationId ?? '', true));
+    }, true),
+
+    makeRoute('DELETE', '/internal/v1/users/:id/favorites/:locationId', async (ctx) => {
+      const id = ctx.params.id ?? '';
+      requireSelf(ctx.actor, id);
+      return json(200, await service().setFavorite(id, ctx.params.locationId ?? '', false));
+    }, true),
 
     makeRoute('POST', '/internal/v1/users', async (ctx) =>
       json(201, await service().createUser(ctx.body))),

@@ -35,6 +35,18 @@ export function pathNotificationId(value: string): string {
   return value;
 }
 
+/** Opaque catalogue ids are trimmed but never validated against locations. */
+export function favoriteLocationId(value: string): string {
+  const trimmed = String(value ?? '').trim();
+  if (trimmed.length < 1 || trimmed.length > 128) {
+    throw new AppError(
+      'INVALID_ARGUMENT',
+      'location_id debe tener entre 1 y 128 caracteres.',
+    );
+  }
+  return trimmed;
+}
+
 export function requiredId(value: unknown, field: string, max = 128): string {
   return requiredString(value, field, 1, max);
 }

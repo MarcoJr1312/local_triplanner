@@ -18,7 +18,6 @@ import {
   removeAttachmentsByTrip,
   removeAttachmentsByItem,
 } from './pg/attachments.ts';
-import { setFavorite, favoriteIdsForUser, isFavorite } from './pg/favorites.ts';
 import { listUserInterests, replaceUserInterests } from './pg/interests.ts';
 import { syncInterestsToAgent, type InterestsSync } from './interests.ts';
 import { listSuggestionChats, upsertSuggestionChat } from './pg/chats.ts';
@@ -68,6 +67,8 @@ export interface Ctx {
   trips: TripsStore;
   users: UsersStore;
   syncInterests?: InterestsSync;
+  /** Request-scoped favorite set; one users-service call per request. */
+  favoriteIds?: Promise<Set<string>>;
 }
 
 export type Resolver = (parent: unknown, args: Record<string, unknown>, ctx: Ctx) => unknown;
@@ -532,6 +533,19 @@ const PROTECTED_USER_IDS = new Set([
   DEMO_FRIEND_UUID,
 ]);
 
+async function userFavoriteIds(ctx: Ctx): Promise<Set<string>> {
+  if (!ctx.favoriteIds) {
+    ctx.favoriteIds = ctx.users.listFavoriteIds(ctx.currentUserId).catch((error) => {
+      console.warn(
+        '[api] favorite lookup failed; continuing without favorites:',
+        error instanceof Error ? error.message : error,
+      );
+      return new Set<string>();
+    });
+  }
+  return ctx.favoriteIds;
+}
+
 async function buildTrip(ctx: Ctx, data: TripData): Promise<TripGql> {
   const members = (await enrichMembers(ctx.users, data.members)).map(toMember);
 
@@ -603,7 +617,7 @@ export const resolvers: {
             a.name.localeCompare(b.name),
         )
         .slice(0, 10);
-      const favIds = await favoriteIdsForUser(ctx.db, ctx.currentUserId);
+      const favIds = await userFavoriteIds(ctx);
       return rows.map((r) => ({ ...toActivity(r), isFavorite: favIds.has(r.id) }));
     },
 
@@ -614,22 +628,21 @@ export const resolvers: {
 
     searchLocations: async (_, args, ctx) => {
       const { q, lat, lng } = args as Args<{ q: string; lat?: number | null; lng?: number | null }>;
+      const favIds = await userFavoriteIds(ctx);
       const rows = await searchLocationsWithCatalogue({
         catalogue: ctx.catalogue,
-        db: ctx.db,
         q,
         lat,
         lng,
-        userId: ctx.currentUserId,
+        favorites: favIds,
       });
-      const favIds = await favoriteIdsForUser(ctx.db, ctx.currentUserId);
       return rows.map((r) => locationRowToGraphQL(r, favIds));
     },
 
     locationById: async (_, args, ctx) => {
       const { id } = args as Args<{ id: string }>;
       const row = await ctx.catalogue.getById(id);
-      const favIds = await favoriteIdsForUser(ctx.db, ctx.currentUserId);
+      const favIds = await userFavoriteIds(ctx);
       return locationRowToGraphQL(row, favIds);
     },
 
@@ -637,7 +650,7 @@ export const resolvers: {
       const { placeId } = args as Args<{ placeId: string }>;
       const existing = await ctx.catalogue.getByPlaceId(placeId);
       if (!existing) return null;
-      const favIds = await favoriteIdsForUser(ctx.db, ctx.currentUserId);
+      const favIds = await userFavoriteIds(ctx);
       return locationRowToGraphQL(existing, favIds);
     },
 
@@ -1464,13 +1477,14 @@ export const resolvers: {
     favoriteLocation: async (_, args, ctx) => {
       const { locationId, favorite } = args as Args<{ locationId: string; favorite: boolean }>;
       try {
-        const state = await setFavorite(ctx.db, ctx.currentUserId, locationId, favorite, async (id) =>
-          Boolean(await ctx.catalogue.getById(id)),
-        );
+        const state = await ctx.users.setFavorite(ctx.currentUserId, locationId, favorite);
         return { locationId, favorite: state };
       } catch (e) {
-        if (e instanceof GraphQLError) throw e;
-        throw gqlError('FAVORITE_SAVE_FAILED', e instanceof Error ? e.message : 'No se pudo actualizar el favorito.');
+        if (e instanceof GraphQLError) {
+          const code = e.extensions?.code;
+          if (code === 'USERS_UNAVAILABLE' || code === 'FORBIDDEN') throw e;
+        }
+        throw gqlError('FAVORITE_SAVE_FAILED', "Couldn't update the favorite.");
       }
     },
 
@@ -1556,10 +1570,10 @@ export const resolvers: {
         uploaderNames(ctx),
       );
     },
-    isFavorite: (parent, __, ctx) => {
+    isFavorite: async (parent, __, ctx) => {
       const { activityId } = parent as { activityId?: string | null };
       if (!activityId) return false;
-      return isFavorite(ctx.db, ctx.currentUserId, activityId);
+      return (await userFavoriteIds(ctx)).has(activityId);
     },
     lat: (parent) => (parent as ItemGql).lat ?? null,
     lng: (parent) => (parent as ItemGql).lng ?? null,

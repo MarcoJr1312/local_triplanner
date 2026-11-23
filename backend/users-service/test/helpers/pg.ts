@@ -27,5 +27,7 @@ export async function connectTestDb(): Promise<Db | null> {
 }
 
 export async function resetSchema(db: Db): Promise<void> {
-  await db.exec('DROP TABLE IF EXISTS notifications, users, schema_migrations CASCADE');
+  await db.exec(
+    'DROP TABLE IF EXISTS favorite_locations, notifications, users, schema_migrations CASCADE',
+  );
 }

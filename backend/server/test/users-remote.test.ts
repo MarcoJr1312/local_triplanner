@@ -109,6 +109,44 @@ describe('RemoteUsersStore', () => {
     assert.deepEqual(calls[1]?.body, { display_name: 'New', language: 'en' });
   });
 
+  test('lists and toggles favorites as the actor', async () => {
+    const calls: { url: string; method: string; actor?: string }[] = [];
+    const store = storeWith(async (input, init) => {
+      const method = init?.method ?? 'GET';
+      calls.push({
+        url: String(input),
+        method,
+        actor: ((init?.headers ?? {}) as Record<string, string>)['x-actor-id'],
+      });
+      if (method === 'GET') {
+        return Response.json({ items: [{ location_id: 'tor-cn-tower', created_at: 'now' }] });
+      }
+      return Response.json({
+        location_id: 'tor-cn-tower',
+        favorite: method === 'PUT',
+      });
+    });
+
+    const ids = await store.listFavoriteIds(USER.id);
+    assert.deepEqual([...ids], ['tor-cn-tower']);
+    assert.equal(calls[0]?.method, 'GET');
+    assert.equal(
+      calls[0]?.url,
+      `http://users/internal/v1/users/${USER.id}/favorites`,
+    );
+
+    assert.equal(await store.setFavorite(USER.id, 'tor cn tower', true), true);
+    assert.equal(calls[1]?.method, 'PUT');
+    assert.equal(
+      calls[1]?.url,
+      `http://users/internal/v1/users/${USER.id}/favorites/tor%20cn%20tower`,
+    );
+    assert.equal(calls[1]?.actor, USER.id);
+
+    assert.equal(await store.setFavorite(USER.id, 'tor-cn-tower', false), false);
+    assert.equal(calls[2]?.method, 'DELETE');
+  });
+
   test('batches users and skips the call for an empty list', async () => {
     let calls = 0;
     const store = storeWith(async () => {

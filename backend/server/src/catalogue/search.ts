@@ -1,10 +1,9 @@
 // Catalogue-backed location search. The local runner has no external place
 // provider: every result comes from MongoDB. Favorites-first ordering and the
-// 75 km radius stay here.
+// 75 km radius stay here. Favorites are supplied by the caller (users
+// service); this module no longer reads any database.
 
 import { distanceKm } from '../geo.ts';
-import type { AsyncDb } from '../pg/db.ts';
-import { favoriteIdsForUser } from '../pg/favorites.ts';
 import type { LocationRow } from '../schema-types.ts';
 import { SEARCH_RADIUS_KM, type LocationCatalogue } from './types.ts';
 
@@ -20,7 +19,7 @@ function withinRadius(rows: LocationRow[], lat?: number | null, lng?: number | n
   );
 }
 
-function rank(rows: LocationRow[], favorites: Set<string>): LocationRow[] {
+function rank(rows: LocationRow[], favorites: ReadonlySet<string>): LocationRow[] {
   return [...rows].sort((a, b) => {
     const favA = favorites.has(a.id) ? 0 : 1;
     const favB = favorites.has(b.id) ? 0 : 1;
@@ -34,36 +33,32 @@ function rank(rows: LocationRow[], favorites: Set<string>): LocationRow[] {
 // Catalogue search, favorites first, limited to the destination area.
 export async function searchCatalogue(
   catalogue: LocationCatalogue,
-  db: AsyncDb,
   q: string,
   options: CatalogueSearchOptions = {},
   limit = 20,
-  userId?: string | null,
+  favorites: ReadonlySet<string> = new Set<string>(),
 ): Promise<LocationRow[]> {
   const rows = await catalogue.search(q, 100, { lat: options.lat, lng: options.lng });
-  const favorites = userId ? await favoriteIdsForUser(db, userId) : new Set<string>();
   const filtered = withinRadius(rows, options.lat, options.lng);
   return rank(filtered, favorites).slice(0, limit);
 }
 
 export interface CatalogueSearchDeps {
   catalogue: LocationCatalogue;
-  db: AsyncDb;
   q: string;
   lat?: number | null;
   lng?: number | null;
-  userId?: string | null;
+  favorites?: ReadonlySet<string>;
 }
 
 // GraphQL/internal search entry point. Kept async for callers that expect the
 // old cache-first signature; there is no remote fallback anymore.
 export async function searchLocationsWithCatalogue({
   catalogue,
-  db,
   q,
   lat,
   lng,
-  userId,
+  favorites = new Set<string>(),
 }: CatalogueSearchDeps): Promise<LocationRow[]> {
-  return searchCatalogue(catalogue, db, q, { lat, lng }, 20, userId);
+  return searchCatalogue(catalogue, q, { lat, lng }, 20, favorites);
 }

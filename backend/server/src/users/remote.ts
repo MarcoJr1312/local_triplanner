@@ -238,6 +238,28 @@ export class RemoteUsersStore implements UsersStore {
     }
   }
 
+  async listFavoriteIds(userId: string): Promise<Set<string>> {
+    const data = await this.request<{ items: { location_id: string }[] }>(
+      'GET',
+      `/internal/v1/users/${encodeURIComponent(userId)}/favorites`,
+      userId,
+    );
+    return new Set(data.items.map((item) => item.location_id));
+  }
+
+  async setFavorite(
+    userId: string,
+    locationId: string,
+    favorite: boolean,
+  ): Promise<boolean> {
+    const data = await this.request<{ favorite: boolean }>(
+      favorite ? 'PUT' : 'DELETE',
+      `/internal/v1/users/${encodeURIComponent(userId)}/favorites/${encodeURIComponent(locationId)}`,
+      userId,
+    );
+    return data.favorite;
+  }
+
   private async request<T>(
     method: string,
     path: string,

@@ -51,7 +51,6 @@ export async function insertUser(_db: AsyncDb, _displayName = 'Test User'): Prom
 }
 
 export async function deleteUser(db: AsyncDb, userId: string): Promise<void> {
-  await db.prepare('DELETE FROM user_favorites WHERE user_id = ?').run(userId);
   await db.prepare('DELETE FROM user_interests WHERE user_id = ?').run(userId);
   await db.prepare('DELETE FROM suggestion_chats WHERE user_id = ?').run(userId);
   await db.prepare('DELETE FROM attachment_viewers WHERE user_id = ?').run(userId);

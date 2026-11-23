@@ -294,10 +294,11 @@ export default function AddItemModal({ open, tripId, destinationId, day, onClose
     setActivities((prev) => prev.map((a) => (a.id === id ? { ...a, isFavorite: next } : a)));
     try {
       await api.favoriteLocation(id, next);
-    } catch {
-      // rollback silencioso: el proximo refresh del backend corrige el estado
+    } catch (err) {
+      // rollback: el proximo refresh del backend corrige el estado
       setSearchResults((prev) => prev.map((l) => (l.id === id ? { ...l, isFavorite: current } : l)));
       setActivities((prev) => prev.map((a) => (a.id === id ? { ...a, isFavorite: current } : a)));
+      toast.error(localizeApiError(err, t));
     }
   };
 

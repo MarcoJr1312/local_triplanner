@@ -151,8 +151,9 @@ function TripDetailContent() {
     setFavOverrides((prev) => ({ ...prev, [item.id]: next }));
     try {
       await api.favoriteLocation(item.activityId, next);
-    } catch {
+    } catch (err) {
       setFavOverrides((prev) => ({ ...prev, [item.id]: !next }));
+      toast.error(localizeApiError(err, t));
     }
   };
 

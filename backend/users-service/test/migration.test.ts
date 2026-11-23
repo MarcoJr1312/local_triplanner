@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
 import { Client } from 'pg';
 import { migrateUsers, stableUuid } from '../scripts/migrate-users.ts';
+import { migrateFavorites } from '../scripts/migrate-favorites.ts';
 import {
   DEMO_FRIEND_UUID,
   DEMO_PASSWORD,
@@ -57,6 +58,7 @@ CREATE TABLE item_attachments (id text PRIMARY KEY, created_by text);
 CREATE TABLE user_favorites (
   user_id text NOT NULL REFERENCES users(id),
   location_id text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (user_id, location_id)
 );
 CREATE TABLE notifications (
@@ -260,5 +262,42 @@ describe('migrateUsers', () => {
     expect(second.verification.non_uuid_platform_ids).toBe(0);
     expect(second.verification.dangling_references).toBe(0);
     expect(second.users).toBe(3);
+  });
+
+  test('copies favorites after the UUID cutover and is idempotent', async () => {
+    if (!available) return;
+
+    const first = await migrateFavorites({
+      legacyUrl: PLATFORM_URL,
+      usersUrl: USERS_URL,
+      apply: true,
+      log: () => undefined,
+    });
+    expect(first.applied).toBe(true);
+    expect(first.read).toBe(1);
+    expect(first.copied).toBe(1);
+
+    const service = new Client({ connectionString: USERS_URL });
+    await service.connect();
+    try {
+      expect(
+        await scalar(
+          service,
+          'SELECT location_id FROM favorite_locations WHERE user_id = $1',
+          [DEMO_USER_UUID],
+        ),
+      ).toBe('tor-cn-tower');
+      expect(await scalar(service, 'SELECT COUNT(*)::int FROM favorite_locations')).toBe(1);
+    } finally {
+      await service.end();
+    }
+
+    const second = await migrateFavorites({
+      legacyUrl: PLATFORM_URL,
+      usersUrl: USERS_URL,
+      apply: true,
+      log: () => undefined,
+    });
+    expect(second.copied).toBe(1);
   });
 });

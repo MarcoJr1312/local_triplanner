@@ -81,4 +81,7 @@ export interface UsersStore {
     id: string,
     status: 'read' | 'accepted' | 'declined',
   ): Promise<NotificationRecord>;
+  /** Private favorites; location IDs are opaque catalogue references. */
+  listFavoriteIds(userId: string): Promise<Set<string>>;
+  setFavorite(userId: string, locationId: string, favorite: boolean): Promise<boolean>;
 }
