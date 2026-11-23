@@ -143,7 +143,7 @@ auth and Dockerfiles.
   users/notifications decommission. No `USERS_MODE`; the API is remote-only.
   Evidence: `docs/migrations/0008-users-service.md`,
   `0009-users-cutover.md` and `0010-users-qa.md`. M10.14 (image publish,
-  Helm acceptance, tag v1.4.0) is pending.
+  Helm acceptance, tag) ships in `v1.6.0`.
 - M11 done (`2da2fe3`): the Next.js web is a Helm workload (`triplanner-web`)
   behind nginx ingress at `http://triplanner.localhost`, chart 0.8.0. Adds
   `/api/health` + `/api/ready` (readiness gates on config only and reports API
@@ -152,13 +152,23 @@ auth and Dockerfiles.
   `deploy/docker-compose.frontend-helm.yml` transition overlay that publishes
   the still-Compose API/agent. Evidence:
   `docs/migrations/0011-frontend-service.md` and `0012-frontend-qa.md`
-  (Gate 2 approved). M10.14 and the web image publish move to tag `v1.5.0`.
+  (Gate 2 approved). The web image and M10.14 ship in `v1.6.0`.
 - M12 (private favorites): `favorite_locations` lives in the users service
-  (schema v2), the API uses a request-scoped favorite set from `UsersStore`,
-  and the platform `pg/favorites` module is gone. The heart works for legacy
-  trip IDs and catalogue IDs, manual activities have no heart, and failures
-  show a localized error. Contract `docs/migrations/0013-user-favorites.md`;
-  migration script `backend/users-service/scripts/migrate-favorites.ts`.
+  (favorites schema v2; users is now at v3 with reminder notifications), the
+  API uses a request-scoped favorite set from `UsersStore`, and the platform
+  `pg/favorites` module is gone. The heart works for legacy trip IDs and
+  catalogue IDs, manual activities have no heart, and failures show a localized
+  error. Contract `docs/migrations/0013-user-favorites.md`; migration script
+  `backend/users-service/scripts/migrate-favorites.ts`.
+- M13 done (`52190cc`): activity reminders. Trips owns one reminder per
+  activity (owner/editor only, selected member recipients, mandatory activity
+  time, leads 15/30/60/120) in schema v4; the users service stores
+  `activity_reminder` notifications with a per-user dedupe key; the API sweeps
+  due reminders every 30 s, applies a 15-minute grace, publishes
+  `onNotification` and marks recipients sent. The bell opens a configuration
+  dialog; viewers see read-only state. Demo trip uses `America/Toronto`.
+  Evidence: `docs/migrations/0014-activity-reminders.md` and
+  `0016-reminders-qa.md` (Gate 2 approved). Release `v1.6.0` covers M12 + M13.
 - Test databases: users tests default to `users_test` and trips tests to
   `trips_test` on `127.0.0.1:55433`/`55432` (never the live `users`/`trips`
   databases).

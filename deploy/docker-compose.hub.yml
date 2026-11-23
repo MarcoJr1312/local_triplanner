@@ -154,7 +154,7 @@ services:
     restart: unless-stopped
 
   users:
-    image: ${DOCKERHUB_USERNAME:-marcojr13}/triplanner-users:${USERS_IMAGE_TAG:-0.1.0}
+    image: ${DOCKERHUB_USERNAME:-marcojr13}/triplanner-users:${USERS_IMAGE_TAG:-1.6.0}
     container_name: local_triplanner-users
     pull_policy: always
     environment:

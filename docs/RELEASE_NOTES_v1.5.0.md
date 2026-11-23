@@ -1,5 +1,9 @@
 # Release notes — v1.5.0 (frontend on Helm + users service)
 
+> Superseded. `v1.5.0` was tagged locally but never published. The favorites
+> and reminder features ship in **v1.6.0**. See
+> [`RELEASE_NOTES_v1.6.0.md`](./RELEASE_NOTES_v1.6.0.md).
+
 | Field | Value |
 |---|---|
 | Status | Release candidate; Docker Hub publish and published-stack smoke pending |

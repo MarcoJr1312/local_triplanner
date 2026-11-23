@@ -30,6 +30,10 @@ Migrations:
   to the users service
 - [`0014-activity-reminders.md`](./0014-activity-reminders.md) — activity
   reminders with selected recipients
+- [`0015-favorites-qa.md`](./0015-favorites-qa.md) — favorites QA evidence and
+  Gate 2 (approved)
+- [`0016-reminders-qa.md`](./0016-reminders-qa.md) — reminders QA evidence and
+  Gate 2 (approved with conditions closed)
 
 ## Branching (local only)
 

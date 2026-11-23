@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **Approved — Gate 1 (2026-11-22), human instruction: “ok perfect lets execute it”** |
+| Status | **Gate 2 approved (2026-11-22); release v1.6.0** |
 | Cycle | Microservice Code Migration (`19455fa3-28ea-4f03-b195-973c5ddf595e`) |
 | Integration branch | `refactor/helm` |
 | Work branch | `feature/activity-reminders` |
@@ -240,8 +240,8 @@ GraphQL `Notification` additions: `itemId`, `itemTitle`, `startAt`,
 | M13.3 | Users notification extension and tests | Backend |
 | M13.4 | API reminder store, scheduler and pubsub | Backend |
 | M13.5 | Frontend bell dialog, notification card and seed times | Backend |
-| M13.6 | Compose/Helm acceptance, failure injection and QA | QA |
-| M13.7 | Gate 2 and release | PM/SRE |
+| M13.6 | Compose/Helm acceptance, failure injection and QA — **done**; see `0016-reminders-qa.md` | QA |
+| M13.7 | Gate 2 and release — **done**; `docs/RELEASE_NOTES_v1.6.0.md` | PM/SRE |
 
 ## 11. Exit criteria
 

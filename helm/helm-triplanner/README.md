@@ -153,11 +153,11 @@ Prerequisites:
   `marcojr13/triplanner-kafka:0.1.0`,
   `marcojr13/triplanner-email:0.1.1`,
   `marcojr13/triplanner-locations:0.2.1`,
-  `marcojr13/triplanner-trips:0.1.1`,
-  `marcojr13/triplanner-users:0.1.0` and
-  `marcojr13/triplanner-web:1.3.0`. The web tag is built locally for the
-  frontend slice; `web.yml` publishes it when the release tag is pushed. The
-  backend images are the published v1.4.0 set.
+  `marcojr13/triplanner-trips:1.6.0`,
+  `marcojr13/triplanner-users:1.6.0` and
+  `marcojr13/triplanner-web:1.6.0`. The `1.6.0` tags are published by the
+  per-service workflows when the `v1.6.0` tag is pushed; override the tags for
+  a local pre-release acceptance run.
 
 ```bash
 kubectl create namespace triplanner

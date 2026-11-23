@@ -436,3 +436,16 @@ Conditions:
    internal `start_time: null` guard.
 
 No Orkai status was changed by this session; the Gate 2 decision is the human's.
+
+## 8. Gate 2 closure (2026-11-22)
+
+The human owner approved Gate 2 (“Approve Gate 2”). The trips suite now defaults
+to a dedicated `trips_test` database on `127.0.0.1:55432` and `resetSchema`
+drops the reminder tables, so running the suite no longer resets the Helm
+`trips` database. The Helm demo trip was restored (`demo-trip`, 9 items,
+`America/Toronto`, schema v4).
+
+Release packaging: chart 0.9.0, `appVersion` 1.6.0, images
+`web/api/users/trips:1.6.0` published on tag `v1.6.0`; release notes
+`docs/RELEASE_NOTES_v1.6.0.md`. Publication and the published-stack smoke
+remain the release step.
