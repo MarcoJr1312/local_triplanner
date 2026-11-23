@@ -259,6 +259,7 @@ because the node cached the previous `1.3.0` tag by digest; the published
 | D-08 | `web.yml` builds the image on pull requests (`push: false`). | Workflow diff. |
 | D-09 | Compose web rebuilt from this branch; the container healthcheck is `/api/health`. | `local_triplanner-web` healthy; `/api/ready` 200 in the container. |
 | D-10 | The web row in the port table no longer implies a port-forward; it is reached through the ingress. | Chart README. |
+| D-11 (manual test) | Adding a catalog, manual or suggested activity sent `order: -1`; the trips service rejected it with a Spanish validation message. The service now treats `-1` as append (`MAX(order)+1`), and the UI never falls back to raw server messages: unknown codes show the localized generic error, `INVALID_ARGUMENT` has en/es keys. | Compose and ingress Playwright runs: Catalog → Cafe → Add closes the modal, shows "Activity added", item count 9→10, new order 3, no visible error; item cleaned up afterwards. Trips-service suite 66/66. |
 
 Re-run evidence on revision 29:
 

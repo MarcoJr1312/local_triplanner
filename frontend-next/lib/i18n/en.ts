@@ -638,6 +638,8 @@ export const en: typeof es = {
   'errors.backendUnreachable': "Couldn't connect to the local backend.",
   'errors.backendStatus': 'The local backend responded with status {status}.',
   'errors.invalidRequest': 'Invalid request.',
+  'errors.INVALID_ARGUMENT': 'Some fields are invalid. Check the form and try again.',
+  'errors.TRIPS_UNAVAILABLE': 'The trips service is unavailable. Try again in a moment.',
   'errors.generic': 'Something went wrong. Please try again.',
   'errors.TRIP_NOT_FOUND': 'Trip not found.',
   'errors.ITEM_NOT_FOUND': 'Activity not found.',

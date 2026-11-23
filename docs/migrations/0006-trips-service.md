@@ -268,6 +268,10 @@ CREATE INDEX IF NOT EXISTS idx_outbox_pending
 | POST | `/internal/v1/trips/{id}/join` | any | Atomic membership + accept + owner notification |
 | GET | `/internal/v1/trips/{id}/context` | member | Agent context (trip + days + member ids) |
 
+`POST /items` accepts `order: -1` as an append marker: the service resolves it
+to `MAX("order") + 1` for that day inside the insert transaction. Explicit
+orders must be integers in `0..1000000`.
+
 ### 6.3 Authorization matrix
 
 | Operation | owner | editor | viewer |

@@ -286,6 +286,21 @@ export async function listItems(db: Queryable, tripId: string): Promise<TripItem
   );
 }
 
+/** Next append position for a day. `-1` from clients means "append". */
+export async function nextItemOrder(
+  db: Queryable,
+  tripId: string,
+  day: string,
+): Promise<number> {
+  const row = await db.one<{ next: number }>(
+    `SELECT COALESCE(MAX("order"), -1) + 1 AS next
+       FROM trip_items
+      WHERE trip_id = $1 AND day = $2`,
+    [tripId, day],
+  );
+  return row?.next ?? 0;
+}
+
 export async function getItem(
   db: Queryable,
   tripId: string,

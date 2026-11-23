@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { ChevronRight, Search, Star } from 'lucide-react';
-import { searchLocations } from '@/lib/api';
+import { localizeApiError, searchLocations } from '@/lib/api';
 import { formatMoney } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import type { Location } from '@/lib/types';
@@ -36,7 +36,7 @@ function SearchContent() {
     try {
       setResults(await searchLocations(term));
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('errors.generic'));
+      setError(localizeApiError(err, t));
       setResults([]);
     } finally {
       setLoading(false);

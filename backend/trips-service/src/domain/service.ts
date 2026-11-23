@@ -734,7 +734,11 @@ export class TripsService {
 
     const itemId = optionalId(body, 'id') ?? randomUUID();
     const day = requiredDate(body, 'day');
-    const order = has(body, 'order') ? requiredInteger(body, 'order', 0, 1_000_000) : 0;
+    // `order: -1` is the client's append marker; resolve it inside the
+    // transaction so new items land at the end of the day.
+    const requestedOrder = has(body, 'order')
+      ? requiredInteger(body, 'order', -1, 1_000_000)
+      : 0;
     const title = requiredString(body, 'title', 300);
     const category = optionalString(body, 'category', 64) ?? 'activity';
     const cost = has(body, 'cost') ? requiredNumber(body, 'cost', 0, MAX_MONEY) : 0;
@@ -746,6 +750,8 @@ export class TripsService {
     const place = await this.resolvePlace(locationId);
 
     const item = await this.db.transaction(async (tx) => {
+      const order =
+        requestedOrder < 0 ? await store.nextItemOrder(tx, id, day) : requestedOrder;
       const row = await store.insertItem(tx, {
         id: itemId,
         trip_id: id,

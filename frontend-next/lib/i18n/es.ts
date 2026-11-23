@@ -636,6 +636,8 @@ export const es = {
   'errors.backendUnreachable': 'No se pudo conectar con el backend local.',
   'errors.backendStatus': 'El backend local respondió con estado {status}.',
   'errors.invalidRequest': 'Petición inválida.',
+  'errors.INVALID_ARGUMENT': 'Algunos campos no son válidos. Revisa el formulario e inténtalo de nuevo.',
+  'errors.TRIPS_UNAVAILABLE': 'El servicio de viajes no está disponible. Inténtalo de nuevo en un momento.',
   'errors.generic': 'Algo salió mal. Inténtalo de nuevo.',
   'errors.TRIP_NOT_FOUND': 'Viaje no encontrado.',
   'errors.ITEM_NOT_FOUND': 'Actividad no encontrada.',

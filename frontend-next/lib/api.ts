@@ -56,12 +56,17 @@ function hasErrorKey(key: string): key is TranslationKey {
   return Object.prototype.hasOwnProperty.call(es, key);
 }
 
-// Traduce un error de API a partir de su `code` (clave `errors.<CODE>`); si no
-// hay clave conocida, cae al mensaje del servidor (o al genérico).
+// Traduce un error de API a partir de su `code` (clave `errors.<CODE>`). Los
+// mensajes del servidor nunca se muestran en la UI: si el código no tiene
+// clave, cae al mensaje genérico localizado (el producto es inglés por
+// defecto y ningún error puede filtrarse en otro idioma).
 export function localizeApiError(err: unknown, t: ApiTranslator): string {
-  if (err instanceof ApiError && err.code) {
-    const key = `errors.${err.code}`;
-    if (hasErrorKey(key)) return t(key, err.params);
+  if (err instanceof ApiError) {
+    if (err.code) {
+      const key = `errors.${err.code}`;
+      if (hasErrorKey(key)) return t(key, err.params);
+    }
+    return t('errors.generic');
   }
   if (err instanceof Error && err.message) return err.message;
   return t('errors.generic');

@@ -54,6 +54,18 @@
 - Account admin from the login screen; demo accounts are protected and deleting
   a trip owner is blocked with `USER_OWNS_TRIPS`.
 
+## Fixes
+
+- **Adding activities works again.** The web sends `order: -1` to append a
+  catalog, manual or suggested activity; the trips service now resolves that
+  marker to `MAX(order) + 1` inside the insert transaction instead of rejecting
+  it. Explicit orders remain `0..1000000`.
+- **No Spanish error text in the English UI.** `localizeApiError` no longer
+  falls back to the server message: known codes use their en/es key, unknown
+  ones use the localized generic error. `INVALID_ARGUMENT` and
+  `TRIPS_UNAVAILABLE` gained en/es keys, and the location search page uses the
+  same helper.
+
 ## Upgrade
 
 ```bash

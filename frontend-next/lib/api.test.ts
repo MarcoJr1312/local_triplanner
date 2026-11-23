@@ -3,7 +3,7 @@
 // Fetch is mocked; no browser or backend is required.
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { api } from './api';
+import { ApiError, api, localizeApiError } from './api';
 
 let calls: { url: string; body: Record<string, unknown> }[] = [];
 const originalFetch = globalThis.fetch;
@@ -122,6 +122,26 @@ describe('api auth and users', () => {
     const restored = await api.restoreSession();
     expect(restored?.username).toBe('Old Demo');
     expect(restored?.userId).toBe('u9');
+  });
+});
+
+describe('api error localization', () => {
+  const t = (key: string) => key;
+
+  test('uses the stable code instead of the server message', () => {
+    expect(
+      localizeApiError(
+        new ApiError('order: debe estar entre 0 y 1000000', { code: 'INVALID_ARGUMENT' }),
+        t,
+      ),
+    ).toBe('errors.INVALID_ARGUMENT');
+  });
+
+  test('never leaks an unmapped server message', () => {
+    expect(
+      localizeApiError(new ApiError('mensaje del servidor', { code: 'UNKNOWN_CODE' }), t),
+    ).toBe('errors.generic');
+    expect(localizeApiError(new ApiError('sin código'), t)).toBe('errors.generic');
   });
 });
 

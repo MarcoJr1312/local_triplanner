@@ -374,6 +374,20 @@ describe('items', () => {
       cost: 7,
     });
 
+    // Clients send order -1 to append at the end of the day.
+    const appended = await service.addItem('u2', id, {
+      day: '2030-01-02',
+      order: -1,
+      title: 'Appended first',
+    });
+    const appendedAgain = await service.addItem('u2', id, {
+      day: '2030-01-02',
+      order: -1,
+      title: 'Appended second',
+    });
+    expect(appended.order).toBe(3);
+    expect(appendedAgain.order).toBe(4);
+
     const trip = await service.getTrip('u1', id);
     expect(trip.spent).toBe(57);
     expect(trip.spent_by_category).toEqual(
