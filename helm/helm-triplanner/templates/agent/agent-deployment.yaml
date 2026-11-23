@@ -1,0 +1,127 @@
+{{- if .Values.agentService.enabled }}
+{{- $tokenSecret := required "agentService.internalToken.existingSecret is required" .Values.agentService.internalToken.existingSecret }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: triplanner-agent
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: triplanner-agent
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: agent
+spec:
+  replicas: {{ .Values.agentService.replicaCount | default 1 }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: triplanner-agent
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: triplanner-agent
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: agent
+        {{- with .Values.agentService.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/agent/agent-configmap.yaml") . | sha256sum }}
+        {{- with .Values.agentService.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "helm-triplanner.agentServiceAccountName" . }}
+      automountServiceAccountToken: {{ .Values.agentService.serviceAccount.automount }}
+      terminationGracePeriodSeconds: 30
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.agentService.hostAliases }}
+      hostAliases:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.agentService.podSecurityContext | nindent 8 }}
+      containers:
+        - name: agent
+          image: "{{ .Values.images.agent.name }}:{{ .Values.images.agent.tag }}"
+          imagePullPolicy: {{ .Values.images.agent.pullPolicy | default "IfNotPresent" }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.agentService.service.port }}
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: triplanner-agent-config
+          env:
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "helm-triplanner.agentPostgresSecretName" . }}
+                  key: {{ .Values.agentService.postgres.auth.databaseKey }}
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "helm-triplanner.agentPostgresSecretName" . }}
+                  key: {{ .Values.agentService.postgres.auth.usernameKey }}
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "helm-triplanner.agentPostgresSecretName" . }}
+                  key: {{ .Values.agentService.postgres.auth.passwordKey }}
+            - name: INTERNAL_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $tokenSecret }}
+                  key: {{ .Values.agentService.internalToken.key }}
+            {{- if .Values.agentService.backend.internalToken.existingSecret }}
+            - name: BACKEND_INTERNAL_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.agentService.backend.internalToken.existingSecret }}
+                  key: {{ .Values.agentService.backend.internalToken.key }}
+            {{- end }}
+            {{- if .Values.agentService.llm.existingSecret }}
+            - name: LLM_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.agentService.llm.existingSecret }}
+                  key: {{ .Values.agentService.llm.apiKeyKey }}
+            {{- end }}
+          volumeMounts:
+            - name: agent-data
+              mountPath: {{ .Values.agentService.persistence.mountPath | default "/app/.data" }}
+            - name: tmp
+              mountPath: /tmp
+          livenessProbe:
+            {{- toYaml .Values.agentService.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml .Values.agentService.readinessProbe | nindent 12 }}
+          resources:
+            {{- toYaml .Values.agentService.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.agentService.securityContext | nindent 12 }}
+      volumes:
+        - name: agent-data
+          {{- if .Values.agentService.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ .Values.agentService.persistence.existingClaim | default "triplanner-agent-data" }}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        - name: tmp
+          emptyDir: {}
+      {{- with .Values.agentService.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.agentService.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.agentService.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

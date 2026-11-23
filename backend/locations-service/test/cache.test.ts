@@ -44,6 +44,8 @@ function row(partial: Partial<LocationRow> & { id: string; name: string }): Loca
     duration_hours: null,
     parent_id: null,
     last_updated: null,
+    version: 1,
+    content_hash: '',
     created_at: null,
     expires_at: null,
     ...partial,
@@ -107,6 +109,13 @@ class FakeStore implements LocationCatalogue {
       ? this.rows.map((item) => (item.id === loc.id ? next : item))
       : [...this.rows, next];
     return next;
+  }
+
+  async delete(id: string): Promise<LocationRow | null> {
+    const existing = this.rows.find((item) => item.id === id);
+    if (!existing) return null;
+    this.rows = this.rows.filter((item) => item.id !== id);
+    return { ...existing, version: existing.version + 1 };
   }
 
   async clear(): Promise<void> {

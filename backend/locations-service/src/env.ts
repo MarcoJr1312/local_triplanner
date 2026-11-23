@@ -76,6 +76,21 @@ export const HASDATA_HL = process.env.HASDATA_HL ?? 'en';
 export const HASDATA_GL = process.env.HASDATA_GL ?? 'ca';
 export const SETTINGS_FILE = process.env.SETTINGS_FILE ?? resolveSettingsPath();
 
+// ---- LocationChanged outbox publisher ----
+export const BROKER_URL = (process.env.BROKER_URL ?? 'http://127.0.0.1:8080').replace(
+  /\/+$/,
+  '',
+);
+export const BROKER_TOPIC = process.env.BROKER_TOPIC ?? 'LocationChanged';
+export const OUTBOX_INTERVAL_MS = Math.max(
+  Number(process.env.OUTBOX_INTERVAL_MS ?? 1000),
+  100,
+);
+export const OUTBOX_BATCH_SIZE = Math.max(
+  Number(process.env.OUTBOX_BATCH_SIZE ?? 50),
+  1,
+);
+
 export function isUsingDefaultInternalToken(): boolean {
   return !process.env.INTERNAL_TOKEN;
 }

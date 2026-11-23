@@ -12,6 +12,7 @@ import os
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
+from urllib.parse import quote
 
 from dotenv import load_dotenv
 
@@ -119,7 +120,18 @@ def update_override(
 
 
 def _resolve_database_url() -> str:
-    return _env("DATABASE_URL") or "postgres://triplanner:triplanner@127.0.0.1:5432/triplanner"
+    explicit = _env("DATABASE_URL")
+    if explicit:
+        return explicit
+    host = _env("POSTGRES_HOST", "127.0.0.1")
+    port = _env("POSTGRES_PORT", "5432")
+    database = _env("POSTGRES_DB", "agent")
+    user = _env("POSTGRES_USER", "agent")
+    password = _env("POSTGRES_PASSWORD", "agent")
+    return (
+        f"postgres://{quote(user, safe='')}:{quote(password, safe='')}"
+        f"@{host}:{port}/{quote(database, safe='')}"
+    )
 
 
 @dataclass(frozen=True)
@@ -142,8 +154,17 @@ class Settings:
     llm_base_url: str
     llm_model: str
     internal_token: str
+    backend_internal_token: str
     database_url: str
     backend_url: str
+    locations_url: str
+    locations_timeout_ms: int
+    broker_url: str
+    broker_topic: str
+    broker_consumer: str
+    sync_interval_ms: int
+    match_threshold: int
+    enrich_limit: int
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -173,8 +194,20 @@ class Settings:
             llm_base_url=base_url,
             llm_model=model,
             internal_token=_env("INTERNAL_TOKEN"),
+            backend_internal_token=_env("BACKEND_INTERNAL_TOKEN") or _env("INTERNAL_TOKEN"),
             database_url=_resolve_database_url(),
             backend_url=_env("BACKEND_URL", "http://127.0.0.1:4000"),
+            locations_url=_env("LOCATIONS_URL", "http://127.0.0.1:4300").rstrip("/"),
+            locations_timeout_ms=int(_env("LOCATIONS_TIMEOUT_MS", "8000") or "8000"),
+            broker_url=_env("BROKER_URL", "http://127.0.0.1:8080").rstrip("/"),
+            broker_topic=_env("BROKER_TOPIC", "LocationChanged") or "LocationChanged",
+            broker_consumer=_env("BROKER_CONSUMER", "agent-locations") or "agent-locations",
+            sync_interval_ms=max(int(_env("SYNC_INTERVAL_MS", "300000") or "300000"), 5000),
+            match_threshold=max(
+                0,
+                min(int(_env("AGENT_MATCH_THRESHOLD", "60") or "60"), 100),
+            ),
+            enrich_limit=max(int(_env("AGENT_ENRICH_LIMIT", "20") or "20"), 1),
         )
 
 

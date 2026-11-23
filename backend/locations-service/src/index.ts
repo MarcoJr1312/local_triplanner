@@ -6,6 +6,7 @@ import { CatalogueService } from './catalogue/service.ts';
 import { HasDataClient } from './hasdata.ts';
 import { LocationsSettingsStore } from './settings.ts';
 import { createHandler, type SeedState } from './http.ts';
+import { OutboxPublisher } from './outbox.ts';
 import { seedFromFile } from './seed.ts';
 import {
   HASDATA_API_BASE,
@@ -20,6 +21,10 @@ import {
   MONGODB_URL,
   MONGO_CONNECT_ATTEMPTS,
   MONGO_CONNECT_DELAY_MS,
+  OUTBOX_BATCH_SIZE,
+  OUTBOX_INTERVAL_MS,
+  BROKER_URL,
+  BROKER_TOPIC,
   PORT,
   SEED_CATALOGUE,
   SEED_DATA_PATH,
@@ -114,6 +119,16 @@ if (SEED_CATALOGUE) {
   console.log('[locations] SEED_CATALOGUE=false; no se siembra el catalogo.');
 }
 
+const outbox = new OutboxPublisher({
+  store: catalogue,
+  brokerUrl: BROKER_URL,
+  topic: BROKER_TOPIC,
+  intervalMs: OUTBOX_INTERVAL_MS,
+  batchSize: OUTBOX_BATCH_SIZE,
+});
+outbox.start();
+console.log(`[locations] outbox -> ${BROKER_URL} topic=${BROKER_TOPIC}`);
+
 const handler = createHandler({
   catalogue: cache,
   settings,
@@ -142,6 +157,7 @@ console.log(
 
 async function shutdown(signal: string): Promise<void> {
   console.log(`[locations] ${signal}; cerrando`);
+  outbox.stop();
   server.stop();
   await cache.close();
   process.exit(0);

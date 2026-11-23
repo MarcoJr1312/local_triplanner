@@ -9,6 +9,18 @@ trips service and the users service with their own PostgreSQL databases.
 
 ```
 templates/
+  agent/
+    agent-configmap.yaml
+    agent-deployment.yaml
+    agent-networkpolicy.yaml
+    agent-postgres-networkpolicy.yaml
+    agent-postgres-secret.yaml
+    agent-postgres-service.yaml
+    agent-postgres-statefulset.yaml
+    agent-pvc.yaml
+    agent-service.yaml
+    agent-serviceaccount.yaml
+    agent-test.yaml
   broker/
     broker-configmap.yaml
     broker-deployment.yaml
@@ -172,8 +184,9 @@ kubectl create namespace triplanner
 
 Prerequisites:
 
-- A default StorageClass for the six PVCs (broker, email settings, Mongo,
-  locations settings, trips PostgreSQL, users PostgreSQL).
+- A default StorageClass for the eight PVCs (broker, email settings, Mongo,
+  locations settings, trips PostgreSQL, users PostgreSQL, agent settings, agent
+  pgvector PostgreSQL).
 - An nginx ingress controller (`ingressClassName: nginx`).
 - The `triplanner-internal` Secret with `INTERNAL_TOKEN`.
 - Images referenced by the chart (override `images.*`):
@@ -181,7 +194,8 @@ Prerequisites:
   `marcojr13/triplanner-email:0.1.1`,
   `marcojr13/triplanner-locations:0.2.1`,
   `marcojr13/triplanner-trips:1.6.0`,
-  `marcojr13/triplanner-users:1.6.0` and
+  `marcojr13/triplanner-users:1.6.0`,
+  `marcojr13/triplanner-agent:1.6.0` and
   `marcojr13/triplanner-web:1.6.0`. The `1.6.0` tags are published by the
   per-service workflows when the `v1.6.0` tag is pushed; override the tags for
   a local pre-release acceptance run.
@@ -275,6 +289,7 @@ bash scripts/port-forward.sh
 | `4300` | `triplanner-locations` | app port |
 | `4400` | `triplanner-trips` | app port |
 | `4500` | `triplanner-users` | app port |
+| `4100` | `triplanner-agent` | app port |
 | — | `triplanner-web` | served through nginx ingress at `http://triplanner.localhost`; not port-forwarded |
 | `8443` | broker `kube-rbac-proxy` | with `-Proxy` / `--proxy` |
 | `8444` | email `kube-rbac-proxy` | with `-Proxy` / `--proxy` |

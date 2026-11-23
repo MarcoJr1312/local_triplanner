@@ -89,3 +89,11 @@ needs Kubernetes API permissions in the current design.
 {{- define "helm-triplanner.usersPostgresSecretName" -}}
 {{- default "triplanner-users-postgres-credentials" .Values.usersService.postgres.auth.existingSecret }}
 {{- end }}
+
+{{- define "helm-triplanner.agentServiceAccountName" -}}
+{{- default (printf "%s-agent" (include "helm-triplanner.fullname" .)) .Values.agentService.serviceAccount.name }}
+{{- end }}
+
+{{- define "helm-triplanner.agentPostgresSecretName" -}}
+{{- default "triplanner-agent-postgres-credentials" .Values.agentService.postgres.auth.existingSecret }}
+{{- end }}

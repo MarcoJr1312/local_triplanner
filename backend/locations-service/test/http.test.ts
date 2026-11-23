@@ -32,6 +32,8 @@ function row(partial: Partial<LocationRow> & { id: string; name: string }): Loca
     duration_hours: null,
     parent_id: null,
     last_updated: null,
+    version: 1,
+    content_hash: '',
     created_at: null,
     expires_at: null,
     ...partial,
@@ -103,6 +105,14 @@ class FakeCatalogue implements LocationCatalogue {
     if (existing) this.places = this.places.map((item) => (item.id === loc.id ? next : item));
     else this.places.push(next);
     return next;
+  }
+
+  async delete(id: string): Promise<LocationRow | null> {
+    const existing = [...this.destinations, ...this.places].find((item) => item.id === id);
+    if (!existing) return null;
+    this.destinations = this.destinations.filter((item) => item.id !== id);
+    this.places = this.places.filter((item) => item.id !== id);
+    return { ...existing, version: existing.version + 1 };
   }
 
   async clear(): Promise<void> {

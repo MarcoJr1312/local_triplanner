@@ -26,4 +26,8 @@ data:
   HASDATA_TIMEOUT_MS: {{ .Values.locationsService.hasdata.timeoutMs | quote }}
   HASDATA_HL: {{ .Values.locationsService.hasdata.hl | quote }}
   HASDATA_GL: {{ .Values.locationsService.hasdata.gl | quote }}
+  BROKER_URL: {{ .Values.locationsService.broker.url | quote }}
+  BROKER_TOPIC: {{ .Values.locationsService.broker.topic | quote }}
+  OUTBOX_INTERVAL_MS: {{ .Values.locationsService.outbox.intervalMs | quote }}
+  OUTBOX_BATCH_SIZE: {{ .Values.locationsService.outbox.batchSize | quote }}
 {{- end }}

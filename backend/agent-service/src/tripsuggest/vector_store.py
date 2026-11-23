@@ -20,6 +20,7 @@ import math
 import re
 import uuid
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Any, Callable, Iterable, Sequence
 
 import numpy as np
@@ -98,6 +99,121 @@ def reset_pool() -> None:
         _pool = None
 
 
+def ensure_schema() -> None:
+    """Create the agent-owned pgvector schema idempotently."""
+    with get_pool().connection() as conn:
+        conn.execute("CREATE EXTENSION IF NOT EXISTS vector")
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS agent_embeddings (
+              id             text PRIMARY KEY,
+              kind           text NOT NULL CHECK (kind IN ('place', 'interest', 'query')),
+              destination_id text,
+              user_id        text,
+              session_id     text,
+              document       text NOT NULL,
+              metadata       jsonb NOT NULL DEFAULT '{}'::jsonb,
+              embedding      vector(384) NOT NULL,
+              source_version bigint NOT NULL DEFAULT 0,
+              deleted        boolean NOT NULL DEFAULT false,
+              updated_at     timestamptz NOT NULL DEFAULT now()
+            )
+            """
+        )
+        conn.execute(
+            "ALTER TABLE agent_embeddings ADD COLUMN IF NOT EXISTS source_version bigint NOT NULL DEFAULT 0"
+        )
+        conn.execute(
+            "ALTER TABLE agent_embeddings ADD COLUMN IF NOT EXISTS deleted boolean NOT NULL DEFAULT false"
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_agent_embeddings_destination
+              ON agent_embeddings(destination_id, kind)
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_agent_embeddings_user
+              ON agent_embeddings(user_id, kind)
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_agent_embeddings_session
+              ON agent_embeddings(session_id)
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_agent_embeddings_vector
+              ON agent_embeddings USING hnsw (embedding vector_cosine_ops)
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS agent_sync_state (
+              key        text PRIMARY KEY,
+              value      text NOT NULL,
+              updated_at timestamptz NOT NULL DEFAULT now()
+            )
+            """
+        )
+
+
+def set_sync_state(key: str, value: str) -> None:
+    with get_pool().connection() as conn:
+        conn.execute(
+            """
+            INSERT INTO agent_sync_state (key, value)
+            VALUES (%s, %s)
+            ON CONFLICT (key) DO UPDATE
+              SET value = EXCLUDED.value, updated_at = now()
+            """,
+            (key, value),
+        )
+
+
+def get_sync_state(key: str) -> str | None:
+    with get_pool().connection() as conn:
+        row = conn.execute(
+            "SELECT value FROM agent_sync_state WHERE key = %s", (key,)
+        ).fetchone()
+    return str(row[0]) if row else None
+
+
+def ping() -> None:
+    with get_pool().connection() as conn:
+        conn.execute("SELECT 1")
+
+
+def list_active_place_versions() -> dict[str, int]:
+    with get_pool().connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT id, source_version FROM agent_embeddings
+            WHERE kind = 'place' AND deleted = false
+            """
+        ).fetchall()
+    return {str(row[0]): int(row[1]) for row in rows}
+
+
+def count_places() -> int:
+    with get_pool().connection() as conn:
+        row = conn.execute(
+            "SELECT count(*) FROM agent_embeddings WHERE kind = 'place' AND deleted = false"
+        ).fetchone()
+    return int(row[0]) if row else 0
+
+
+def list_place_versions() -> dict[str, int]:
+    with get_pool().connection() as conn:
+        rows = conn.execute(
+            "SELECT id, source_version FROM agent_embeddings WHERE kind = 'place'"
+        ).fetchall()
+    return {str(row[0]): int(row[1]) for row in rows}
+
+
 def _vector_literal(values: Iterable[float]) -> str:
     return "[" + ",".join(f"{float(v):.8f}" for v in values) + "]"
 
@@ -135,6 +251,12 @@ def _document(place: dict[str, Any]) -> str:
 
     description = (place.get("description") or "").strip()
     tags = place.get("tags") or []
+    if not tags and place.get("tags_json"):
+        try:
+            parsed = json.loads(str(place.get("tags_json")))
+            tags = parsed if isinstance(parsed, list) else []
+        except ValueError:
+            tags = []
     tag_text = ", ".join(t for t in tags if isinstance(t, str) and t.strip())
     if description:
         parts.append(description)
@@ -161,6 +283,10 @@ def _metadata(place: dict[str, Any]) -> dict[str, Any]:
         "category": (place.get("category") or "").strip(),
         "rating": _float_or_zero(place.get("rating")),
         "cost": _float_or_zero(place.get("cost")),
+        "lat": place.get("lat"),
+        "lng": place.get("lng"),
+        "address": place.get("address"),
+        "description": place.get("description"),
     }
 
 
@@ -170,60 +296,159 @@ class DestinationIndex:
     content_hash: str
 
 
-def ensure_indexed(
-    destination_id: str,
-    places: list[dict[str, Any]],
-    content_hash: str,
-) -> DestinationIndex:
-    """Re-index a destination only when its content hash changed."""
-    with get_pool().connection() as conn:
-        state = conn.execute(
-            "SELECT content_hash FROM agent_index_state WHERE destination_id = %s",
-            (destination_id,),
-        ).fetchone()
-        count = conn.execute(
-            "SELECT count(*) FROM agent_embeddings WHERE destination_id = %s AND kind = 'place'",
-            (destination_id,),
-        ).fetchone()
-        current = int(count[0]) if count else 0
+def _destination_for(place: dict[str, Any], fallback: str | None = None) -> str | None:
+    value = place.get("parent_id") or place.get("destination_id") or place.get("slug") or fallback
+    return str(value) if value else None
 
-        if state and state[0] == content_hash and current > 0:
-            return DestinationIndex(destination_id, content_hash)
 
-        rows = [(str(p["id"]), _document(p), _metadata(p)) for p in places]
-        vectors = embed_texts([row[1] for row in rows])
+def _version_for(place: dict[str, Any]) -> int:
+    try:
+        return max(int(place.get("version") or 0), 0)
+    except (TypeError, ValueError):
+        return 0
 
-        with conn.transaction():
-            conn.execute(
-                "DELETE FROM agent_embeddings WHERE destination_id = %s AND kind = 'place'",
-                (destination_id,),
+
+def upsert_locations(places: Sequence[dict[str, Any]]) -> int:
+    """Upsert place documents into the agent index (idempotent by version)."""
+    rows: list[tuple[str, str | None, str, dict[str, Any], list[float], int]] = []
+    for place in places:
+        place_id = str(place.get("id") or "").strip()
+        if not place_id:
+            continue
+        destination_id = _destination_for(place)
+        rows.append(
+            (
+                place_id,
+                destination_id,
+                _document(place),
+                _metadata(place),
+                embed_texts([_document(place)])[0],
+                _version_for(place),
             )
-            for (place_id, document, metadata), vector in zip(rows, vectors):
-                conn.execute(
+        )
+    if not rows:
+        return 0
+
+    written = 0
+    with get_pool().connection() as conn:
+        with conn.transaction():
+            for place_id, destination_id, document, metadata, vector, version in rows:
+                result = conn.execute(
                     """
                     INSERT INTO agent_embeddings
-                      (id, kind, destination_id, document, metadata, embedding)
-                    VALUES (%s, 'place', %s, %s, %s::jsonb, %s::vector)
+                      (id, kind, destination_id, document, metadata, embedding,
+                       source_version, deleted)
+                    VALUES (%s, 'place', %s, %s, %s::jsonb, %s::vector, %s, false)
                     ON CONFLICT (id) DO UPDATE SET
                       destination_id = EXCLUDED.destination_id,
                       document = EXCLUDED.document,
                       metadata = EXCLUDED.metadata,
                       embedding = EXCLUDED.embedding,
+                      source_version = EXCLUDED.source_version,
+                      deleted = false,
                       updated_at = now()
+                    WHERE EXCLUDED.source_version > agent_embeddings.source_version
                     """,
-                    (place_id, destination_id, document, json.dumps(metadata), _vector_literal(vector)),
+                    (
+                        place_id,
+                        destination_id,
+                        document,
+                        json.dumps(metadata),
+                        _vector_literal(vector),
+                        version,
+                    ),
                 )
-            conn.execute(
-                """
-                INSERT INTO agent_index_state (destination_id, content_hash)
-                VALUES (%s, %s)
-                ON CONFLICT (destination_id) DO UPDATE SET
-                  content_hash = EXCLUDED.content_hash,
-                  updated_at = now()
-                """,
-                (destination_id, content_hash),
-            )
+                if result.rowcount:
+                    written += 1
+    return written
 
+
+def delete_location(location_id: str, version: int) -> None:
+    """Tombstone a location; a later higher version can resurrect it."""
+    zero = _vector_literal([0.0] * EMBEDDING_DIM)
+    with get_pool().connection() as conn:
+        conn.execute(
+            """
+            INSERT INTO agent_embeddings
+              (id, kind, destination_id, document, metadata, embedding,
+               source_version, deleted)
+            VALUES (%s, 'place', NULL, '', '{}'::jsonb, %s::vector, %s, true)
+            ON CONFLICT (id) DO UPDATE SET
+              deleted = true,
+              source_version = EXCLUDED.source_version,
+              document = '',
+              metadata = '{}'::jsonb,
+              embedding = EXCLUDED.embedding,
+              updated_at = now()
+            WHERE EXCLUDED.source_version >= agent_embeddings.source_version
+            """,
+            (location_id, zero, max(int(version), 0)),
+        )
+
+
+def _destination_place_ids(destination_id: str) -> dict[str, int]:
+    with get_pool().connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT id, source_version FROM agent_embeddings
+            WHERE kind = 'place' AND destination_id = %s
+            """,
+            (destination_id,),
+        ).fetchall()
+    return {str(row[0]): int(row[1]) for row in rows}
+
+
+def apply_snapshot(places: Sequence[dict[str, Any]]) -> dict[str, int]:
+    """Upsert a full snapshot and tombstone rows missing from it."""
+    incoming = {
+        str(place.get("id")): place
+        for place in places
+        if place.get("id") is not None
+    }
+    upserted = upsert_locations(list(incoming.values()))
+
+    existing = list_active_place_versions()
+    deleted = 0
+    for location_id, version in existing.items():
+        if location_id in incoming:
+            continue
+        delete_location(location_id, version + 1)
+        deleted += 1
+
+    set_sync_state("bootstrap_complete", "true")
+    set_sync_state("last_snapshot_at", datetime.now(timezone.utc).isoformat())
+    return {"upserted": upserted, "deleted": deleted, "total": len(incoming)}
+
+
+def ensure_indexed(
+    destination_id: str,
+    places: list[dict[str, Any]],
+    content_hash: str,
+) -> DestinationIndex:
+    """Compatibility helper for the old cache-based tests.
+
+    Production sync uses :func:`apply_snapshot` and :func:`upsert_locations`.
+    """
+    state_key = f"destination:{destination_id}"
+    current = _destination_place_ids(destination_id)
+    if get_sync_state(state_key) == content_hash and current:
+        return DestinationIndex(destination_id, content_hash)
+
+    prepared = [
+        {
+            **place,
+            "parent_id": place.get("parent_id") or destination_id,
+        }
+        for place in places
+    ]
+    upsert_locations(prepared)
+
+    incoming = {str(place.get("id")) for place in prepared if place.get("id") is not None}
+    for place_id, version in _destination_place_ids(destination_id).items():
+        if place_id not in incoming:
+            delete_location(place_id, version + 1)
+
+    set_sync_state(state_key, content_hash)
     return DestinationIndex(destination_id, content_hash)
 
 
@@ -256,7 +481,7 @@ def embed_query(
             """
             SELECT id, metadata, embedding <=> %s::vector AS distance
             FROM agent_embeddings
-            WHERE destination_id = %s AND kind = 'place'
+            WHERE destination_id = %s AND kind = 'place' AND deleted = false
             ORDER BY embedding <=> %s::vector
             LIMIT %s
             """,
@@ -370,7 +595,7 @@ def query_places_by_vector(
             """
             SELECT id, metadata, embedding <=> %s::vector AS distance
             FROM agent_embeddings
-            WHERE destination_id = %s AND kind = 'place'
+            WHERE destination_id = %s AND kind = 'place' AND deleted = false
             ORDER BY embedding <=> %s::vector
             LIMIT %s
             """,
@@ -425,18 +650,28 @@ def new_session_id() -> str:
 
 __all__ = [
     "DestinationIndex",
+    "apply_snapshot",
+    "count_places",
+    "delete_location",
     "embed_query",
     "embed_texts",
     "ensure_indexed",
+    "ensure_schema",
     "get_pool",
+    "get_sync_state",
     "get_user_interest_entries",
     "get_user_interest_terms",
     "interest_boost_places",
+    "list_place_versions",
+    "list_active_place_versions",
     "new_session_id",
+    "ping",
     "purge_session",
     "query_places_by_vector",
     "reset_pool",
     "set_embedder_for_tests",
+    "set_sync_state",
     "sync_user_interests",
+    "upsert_locations",
     "user_interest_vector",
 ]

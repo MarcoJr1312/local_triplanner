@@ -10,16 +10,18 @@ Components:
   - triplanner-locations: destinations/activities catalogue (REST, :{{ .Values.locationsService.service.port }})
   - triplanner-trips: trips, members, items and invitations (REST, :{{ .Values.tripsService.service.port }})
   - triplanner-users: accounts, password login and notifications (REST, :{{ .Values.usersService.service.port }})
+  - triplanner-agent: suggestions + pgvector index (REST, :{{ .Values.agentService.service.port }})
   - triplanner-web: Next.js UI (REST, :{{ .Values.webService.service.port }}, ingress)
   - triplanner-mongo: single-node MongoDB StatefulSet
   - triplanner-trips-postgres: single-node PostgreSQL StatefulSet
   - triplanner-users-postgres: single-node PostgreSQL StatefulSet
+  - triplanner-agent-postgres: single-node pgvector PostgreSQL StatefulSet
 
 RBAC:
   - per-service ServiceAccount
   - ClusterRole + ClusterRoleBinding for TokenReview/SAR
   - kube-rbac-proxy sidecar on HTTP 8443 (local demo only)
-  - main app ports remain 8080 (broker) / 4200 (email) / {{ .Values.locationsService.service.port }} (locations) / {{ .Values.tripsService.service.port }} (trips) / {{ .Values.usersService.service.port }} (users) / {{ .Values.webService.service.port }} (web)
+  - main app ports remain 8080 (broker) / 4200 (email) / {{ .Values.locationsService.service.port }} (locations) / {{ .Values.tripsService.service.port }} (trips) / {{ .Values.usersService.service.port }} (users) / {{ .Values.agentService.service.port }} (agent) / {{ .Values.webService.service.port }} (web)
   - web is exposed through nginx ingress; no kube-rbac-proxy sidecar
   - port-forward 8443; do not expose it outside the cluster
 
@@ -29,10 +31,12 @@ RBAC:
    kubectl -n {{ .Release.Namespace }} rollout status deployment/triplanner-locations
    kubectl -n {{ .Release.Namespace }} rollout status deployment/triplanner-trips
    kubectl -n {{ .Release.Namespace }} rollout status deployment/triplanner-users
+   kubectl -n {{ .Release.Namespace }} rollout status deployment/triplanner-agent
    kubectl -n {{ .Release.Namespace }} rollout status deployment/triplanner-web
    kubectl -n {{ .Release.Namespace }} rollout status statefulset/triplanner-mongo
    kubectl -n {{ .Release.Namespace }} rollout status statefulset/triplanner-trips-postgres
    kubectl -n {{ .Release.Namespace }} rollout status statefulset/triplanner-users-postgres
+   kubectl -n {{ .Release.Namespace }} rollout status statefulset/triplanner-agent-postgres
 
 2. Check the probes:
    kubectl -n {{ .Release.Namespace }} port-forward svc/triplanner-email 4200:{{ .Values.emailService.service.port }}
@@ -59,7 +63,12 @@ RBAC:
    curl http://localhost:{{ .Values.usersService.service.port }}/health
    curl http://localhost:{{ .Values.usersService.service.port }}/ready
 
-7. Open the web app:
+7. Check the agent:
+   kubectl -n {{ .Release.Namespace }} port-forward svc/triplanner-agent {{ .Values.agentService.service.port }}:{{ .Values.agentService.service.port }}
+   curl http://localhost:{{ .Values.agentService.service.port }}/health
+   curl http://localhost:{{ .Values.agentService.service.port }}/ready
+
+8. Open the web app:
    http://{{ .Values.webService.ingress.host }}
    # Requires an nginx ingress controller and the API/agent host ports published
    # for the transitional web-only slice.

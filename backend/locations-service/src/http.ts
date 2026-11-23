@@ -242,6 +242,13 @@ export function createHandler(deps: HttpDeps): (req: Request) => Promise<Respons
       return json(200, { item });
     }
 
+    if (segments.length === 2 && segments[0] === 'locations' && req.method === 'DELETE') {
+      const id = decodeURIComponent(segments[1] ?? '');
+      if (!id) return fail(400, 'INVALID_ARGUMENT', 'location id required');
+      const item = await catalogue.delete(id);
+      return item ? json(200, { item }) : fail(404, 'NOT_FOUND');
+    }
+
     if (segments.length === 1 && segments[0] === 'seed' && req.method === 'POST') {
       if (!seedState.enabled || !deps.seed) {
         return fail(403, 'SEED_DISABLED');

@@ -29,6 +29,8 @@ export interface LocationRow {
   duration_hours: number | null;
   parent_id: string | null;
   last_updated: string | null;
+  version: number;
+  content_hash: string;
   created_at?: string | null;
   expires_at?: string | Date | null;
 }
@@ -60,6 +62,8 @@ export interface UpsertLocationInput {
   duration_hours?: number | null;
   parent_id?: string | null;
   last_updated?: string | null;
+  version?: number;
+  content_hash?: string;
   expires_at?: string | Date | null;
 }
 
@@ -81,6 +85,7 @@ export interface LocationCatalogue {
   /** Number of place rows (destinations excluded). */
   countPlaces(): Promise<number>;
   upsert(loc: UpsertLocationInput): Promise<LocationRow>;
+  delete(id: string): Promise<LocationRow | null>;
   clear(): Promise<void>;
   close(): Promise<void>;
 }
@@ -159,6 +164,8 @@ export const LOCATION_FIELDS = [
   'duration_hours',
   'parent_id',
   'last_updated',
+  'version',
+  'content_hash',
   'created_at',
   'expires_at',
 ] as const;

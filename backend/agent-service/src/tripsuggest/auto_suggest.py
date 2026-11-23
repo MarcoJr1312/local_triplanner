@@ -11,12 +11,7 @@ from typing import Any
 
 from tripsuggest.backend import BackendClient
 from tripsuggest.interests import score_from_distance
-from tripsuggest.vector_store import (
-    DestinationIndex,
-    ensure_indexed,
-    query_places_by_vector,
-    user_interest_vector,
-)
+from tripsuggest.vector_store import query_places_by_vector, user_interest_vector
 
 _Q_DOC_BUFFER = 10
 
@@ -38,7 +33,7 @@ def _item(doc_id: str, metadata: dict[str, Any], distance: Any) -> dict[str, Any
 
 def build_auto_suggest(
     user_id: str,
-    destination: DestinationIndex,
+    destination_id: str,
     offset: int,
     limit: int,
     vector: Any | None = None,
@@ -50,7 +45,7 @@ def build_auto_suggest(
         raise NoInterestsError(user_id)
 
     # One extra row decides ``hasMore`` without a second round-trip.
-    results = query_places_by_vector(destination.destination_id, vector, offset + limit + 1 + _Q_DOC_BUFFER)
+    results = query_places_by_vector(destination_id, vector, offset + limit + 1 + _Q_DOC_BUFFER)
     items = [_item(row["id"], row["metadata"], row["distance"]) for row in results]
     page = items[offset : offset + limit]
     return {
@@ -80,10 +75,4 @@ def auto_suggest(
     if not destination_id:
         return {"items": [], "hasMore": False, "offset": offset}
 
-    cache = client.get_places_cache(trip_id, resolved_user_id, user_email)
-    destination = ensure_indexed(
-        destination_id,
-        cache.get("places") or [],
-        cache.get("contentHash") or "",
-    )
-    return build_auto_suggest(resolved_user_id, destination, offset, limit, vector)
+    return build_auto_suggest(resolved_user_id, destination_id, offset, limit, vector)

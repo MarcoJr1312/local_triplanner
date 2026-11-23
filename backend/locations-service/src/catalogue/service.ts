@@ -179,6 +179,10 @@ export class CatalogueService implements LocationCatalogue {
     return this.store.upsert(loc);
   }
 
+  async delete(id: string): Promise<LocationRow | null> {
+    return this.store.delete(id);
+  }
+
   async clear(): Promise<void> {
     await this.store.clear();
   }

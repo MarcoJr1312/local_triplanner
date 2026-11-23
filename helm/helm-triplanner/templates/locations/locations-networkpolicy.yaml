@@ -21,6 +21,10 @@ spec:
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: triplanner-api
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: triplanner-agent
+              app.kubernetes.io/instance: {{ .Release.Name }}
       ports:
         - port: {{ .Values.locationsService.service.port }}
           protocol: TCP
@@ -40,6 +44,15 @@ spec:
     # Optional HasData BYOK provider.
     - ports:
         - port: 443
+          protocol: TCP
+    # LocationChanged outbox publisher.
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: triplanner-kafka
+              app.kubernetes.io/instance: {{ .Release.Name }}
+      ports:
+        - port: {{ .Values.broker.service.port }}
           protocol: TCP
     - ports:
         - port: 53

@@ -38,6 +38,10 @@ images:
     name: marcojr13/triplanner-users
     tag: "1.6.0"
     pullPolicy: IfNotPresent
+  agent:
+    name: marcojr13/triplanner-agent
+    tag: "1.6.0"
+    pullPolicy: IfNotPresent
   web:
     name: marcojr13/triplanner-web
     tag: "1.6.0"
@@ -354,6 +358,12 @@ locationsService:
     timeoutMs: 8000
     hl: en
     gl: ca
+  broker:
+    url: http://triplanner-kafka:8080
+    topic: LocationChanged
+  outbox:
+    intervalMs: 1000
+    batchSize: 50
   internalToken:
     existingSecret: triplanner-internal
     key: INTERNAL_TOKEN
@@ -718,9 +728,144 @@ usersService:
   tolerations: []
   affinity: {}
 
-# Web frontend. Next.js standalone behind nginx ingress. The API and agent are
-# still external in this slice; point them at host-published ports for the
-# transitional Helm demo.
+# Agent service. Owns the pgvector index and consumes LocationChanged.
+agentService:
+  enabled: true
+  replicaCount: 1
+  service:
+    type: ClusterIP
+    port: 4100
+
+  postgres:
+    enabled: true
+    image:
+      repository: pgvector/pgvector
+      tag: "pg17"
+      pullPolicy: IfNotPresent
+    auth:
+      enabled: true
+      # DEMO ONLY. Render into triplanner-agent-postgres-credentials.
+      username: agent
+      password: agent-demo
+      database: agent
+      existingSecret: ""
+      usernameKey: POSTGRES_USER
+      passwordKey: POSTGRES_PASSWORD
+      databaseKey: POSTGRES_DB
+    service:
+      port: 5432
+    persistence:
+      enabled: true
+      size: 2Gi
+      storageClass: ""
+    podSecurityContext:
+      runAsNonRoot: true
+      runAsUser: 999
+      runAsGroup: 999
+      fsGroup: 999
+      fsGroupChangePolicy: OnRootMismatch
+      seccompProfile:
+        type: RuntimeDefault
+    securityContext:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities:
+        drop: [ "ALL" ]
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+
+  backend:
+    url: http://host.docker.internal:4000
+    # The Compose API can use a different internal token than this chart.
+    # Create this Secret with INTERNAL_TOKEN in the release namespace.
+    internalToken:
+      existingSecret: ""
+      key: INTERNAL_TOKEN
+  locations:
+    url: http://triplanner-locations:4300
+    timeoutMs: 8000
+  broker:
+    url: http://triplanner-kafka:8080
+    topic: LocationChanged
+    consumer: agent-locations
+  sync:
+    intervalMs: 300000
+    matchThreshold: 60
+    enrichLimit: 20
+
+  internalToken:
+    existingSecret: triplanner-internal
+    key: INTERNAL_TOKEN
+
+  llm:
+    provider: none
+    model: ""
+    baseUrl: ""
+    # Optional seed for LLM_API_KEY; the app-entered key lives on the PVC.
+    existingSecret: ""
+    apiKeyKey: LLM_API_KEY
+
+  persistence:
+    enabled: true
+    size: 64Mi
+    mountPath: /app/.data
+    existingClaim: ""
+
+  serviceAccount:
+    create: true
+    name: ""
+    automount: false
+    annotations: {}
+
+  hostAliases: []
+  podAnnotations: {}
+  podLabels: {}
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 10001
+    runAsGroup: 10001
+    fsGroup: 10001
+    fsGroupChangePolicy: OnRootMismatch
+    seccompProfile:
+      type: RuntimeDefault
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop: [ "ALL" ]
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: http
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    failureThreshold: 3
+  readinessProbe:
+    httpGet:
+      path: /ready
+      port: http
+    initialDelaySeconds: 10
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 12
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# Web frontend. Next.js standalone behind nginx ingress. The API is still
+# external in this slice; the agent runs in this chart.
 webService:
   enabled: true
   replicaCount: 1
@@ -731,7 +876,7 @@ webService:
     url: http://host.docker.internal:4000/graphql
     origin: http://host.docker.internal:4000
   agent:
-    url: http://host.docker.internal:4100
+    url: http://triplanner-agent:4100
   ingress:
     enabled: true
     className: nginx
