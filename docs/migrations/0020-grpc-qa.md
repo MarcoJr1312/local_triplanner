@@ -117,6 +117,9 @@ from the API selector.
 | Item | Status |
 |---|---|
 | Runtime proto loading | `@grpc/proto-loader` is used instead of committed generated stubs; `buf` drift checks are deferred. The `.proto` files are committed and copied into every image. |
+| Error details | Stable domain codes travel in the `x-error-code` metadata. `google.rpc.ErrorInfo`/`google.rpc.Status` details are not emitted in this slice. |
+| Deadlines | Calls use the existing per-service timeout envs (users 3 s, trips 5 s, locations 2 s) for reads and writes; there are no separate read/write deadlines. |
+| Request ids | `x-request-id` propagation is not implemented; no consumer reads it in this slice. |
 | Locations write path | gRPC is read-only; `upsert`/`delete`/`clear`/`seed` remain HTTP-only (the API never calls them at runtime). |
 | API location | The API is still a Compose workload in the Helm transition; the Helm gRPC ports are future-facing until the API joins the chart. |
 | Defaults | Compose still defaults to `http`; Gate 2 decides whether to flip defaults and remove internal HTTP business routes. |
