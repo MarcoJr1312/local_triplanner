@@ -65,6 +65,7 @@ def search_with_enrichment(
     if not extra:
         return results
 
+    logger.info("locations enrichment q=%r extra=%d", query_text[:80], len(extra))
     try:
         upsert_locations(extra)
     except Exception:

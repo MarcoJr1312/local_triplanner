@@ -315,6 +315,9 @@ def upsert_locations(places: Sequence[dict[str, Any]]) -> int:
         place_id = str(place.get("id") or "").strip()
         if not place_id:
             continue
+        # Destinations are not places in the agent index.
+        if not place.get("category") and place.get("slug"):
+            continue
         destination_id = _destination_for(place)
         rows.append(
             (

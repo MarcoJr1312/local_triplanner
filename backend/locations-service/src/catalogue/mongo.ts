@@ -287,7 +287,6 @@ export class MongoLocationCatalogue implements LocationCatalogue {
   async listPlaces(): Promise<LocationRow[]> {
     const docs = await this.collection
       .find({ category: { $exists: true, $ne: null } })
-      .limit(500)
       .toArray();
     return docs.map(toRow).filter((row): row is LocationRow => row !== null);
   }
