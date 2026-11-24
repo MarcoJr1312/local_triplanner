@@ -18,6 +18,27 @@ The `api` values at the end of `values.yaml` are informational until the API
 moves into the chart; they list the HTTP and gRPC service URLs and the expected
 `*_TRANSPORT=grpc` settings.
 
+## NetworkPolicy
+
+The optional policies are **CiliumNetworkPolicy** resources (`cilium.io/v2`),
+enabled with `networkPolicy.enabled=true`. Every egress policy allows DNS only
+to kube-dns (`k8s:k8s-app: kube-dns`) and uses `toFQDNs` for external services:
+
+- email: the Resend endpoint host (default `api.resend.com`);
+- locations: the HasData endpoint host (default `api.hasdata.com`);
+- agent: OpenAI, Anthropic and DeepSeek, plus any custom `llm.baseUrl` host.
+
+Add custom hosts through `networkPolicy.email.extraFQDNs`,
+`networkPolicy.locations.extraFQDNs` and `networkPolicy.agent.extraFQDNs`.
+Kubelet probes are allowed from `networkPolicy.probeCIDRs`; the local kind values
+set the node/cilium_host addresses.
+
+Cilium's DNS proxy (`toFQDNs`) needs a kernel with the iptables `xt_socket`
+extension, or a working `bpf.tproxy` path. Docker Desktop's WSL2 kind kernel
+does not provide `xt_socket`, so `deploy/kind/triplanner-values.yaml` keeps
+`networkPolicy.enabled=false` locally. Enable it on a Cilium cluster with the
+required kernel support.
+
 ## Layout
 
 ```

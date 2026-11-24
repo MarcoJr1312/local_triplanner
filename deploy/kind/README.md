@@ -78,6 +78,11 @@ curl.exe -H "Host: triplanner.localhost" http://127.0.0.1:9080/api/ready
   gateway where the Compose API is published. Disable
   `webService.backendProxy` when the API joins the chart.
 - **Port 9080:** avoids the broker port-forward on 8080.
+- **NetworkPolicy:** the chart's policies are CiliumNetworkPolicy resources.
+  Docker Desktop's WSL2 kind kernel lacks `xt_socket`, which Cilium's DNS proxy
+  needs for `toFQDNs`; the local values therefore keep `networkPolicy.enabled`
+  false. Enable it on a kernel-compatible Cilium cluster and set
+  `networkPolicy.probeCIDRs` to the node/cilium_host addresses.
 - **Current cluster untouched:** ingress-nginx on `docker-desktop` remains for
   the old Helm release; the new chart does not use it.
 

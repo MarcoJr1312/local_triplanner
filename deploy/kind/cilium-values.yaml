@@ -7,6 +7,11 @@ k8sServicePort: 6443
 ipam:
   mode: kubernetes
 
+# The Docker Desktop kind kernel lacks the iptables socket --transparent
+# extension. Use Cilium's eBPF TPROXY so DNS/FQDN handling does not depend on it.
+bpf:
+  tproxy: true
+
 gatewayAPI:
   enabled: true
   # Expose Envoy directly on the node. kind maps node port 8080 to Windows.

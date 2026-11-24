@@ -962,6 +962,27 @@ webService:
 
 networkPolicy:
   enabled: false
+  # Kubelet probe source. Cilium sees these as the node/cilium_host IP, not
+  # the "host" entity on this kind cluster. Set to the node and cilium_host /32
+  # (the kind values do this).
+  probeCIDRs: []
+  # Cilium DNS proxy target. Every egress policy allows kube-dns; toFQDNs
+  # rules rely on this rule for resolution.
+  dns:
+    namespace: kube-system
+    label: kube-dns
+  # Additional external hosts beyond the chart-derived Resend/HasData hosts.
+  email:
+    extraFQDNs: []
+  locations:
+    extraFQDNs: []
+  agent:
+    extraFQDNs:
+      - api.openai.com
+      - api.anthropic.com
+      - api.deepseek.com
+    # Ollama is usually host-local. Add the gateway CIDR(s) when used.
+    ollamaCIDRs: []
 
 # Informational: the API deployment must receive these values when it lands.
 api:

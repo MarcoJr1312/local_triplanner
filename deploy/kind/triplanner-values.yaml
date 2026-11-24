@@ -25,6 +25,24 @@ images:
 
 # The API is still Compose. A host-network socat proxy reaches the Docker
 # Desktop gateway; the web and agent use the proxy ClusterIP.
+networkPolicy:
+  # Docker Desktop's WSL2 kind kernel lacks xt_socket, so Cilium's DNS proxy
+  # (required by toFQDNs) and the probe path are not usable here. Enable this on
+  # a Cilium cluster with a compatible kernel; see deploy/kind/README.md.
+  enabled: false
+  probeCIDRs:
+    - 10.244.0.73/32
+    - 172.19.0.7/32
+  email:
+    extraFQDNs: []
+  locations:
+    extraFQDNs: []
+  agent:
+    extraFQDNs:
+      - api.openai.com
+      - api.anthropic.com
+      - api.deepseek.com
+    ollamaCIDRs: []
 webService:
   backend:
     url: http://triplanner-host-proxy:4000/graphql

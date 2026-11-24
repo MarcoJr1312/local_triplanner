@@ -1,6 +1,6 @@
 {{- if and .Values.mongo.enabled .Values.networkPolicy.enabled }}
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
 metadata:
   name: triplanner-mongo
   namespace: {{ .Release.Namespace }}
@@ -9,25 +9,71 @@ metadata:
     app.kubernetes.io/instance: {{ .Release.Name }}
     app.kubernetes.io/component: mongo
 spec:
-  podSelector:
+  endpointSelector:
     matchLabels:
-      app.kubernetes.io/name: triplanner-mongo
-      app.kubernetes.io/instance: {{ .Release.Name }}
-  policyTypes:
-    - Ingress
-    - Egress
+      k8s:io.kubernetes.pod.namespace: {{ .Release.Namespace }}
+      k8s:app.kubernetes.io/name: triplanner-mongo
+      k8s:app.kubernetes.io/instance: {{ .Release.Name }}
   ingress:
-    - from:
-        - podSelector:
-            matchLabels:
-              app.kubernetes.io/name: triplanner-locations
-      ports:
-        - port: {{ .Values.mongo.service.port }}
-          protocol: TCP
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: {{ .Release.Namespace }}
+            k8s:app.kubernetes.io/name: triplanner-locations
+            k8s:app.kubernetes.io/instance: {{ .Release.Name }}
+      toPorts:
+        - ports:
+            - port: "{{ .Values.mongo.service.port }}"
+              protocol: TCP
+    - fromEntities:
+        - host
+      toPorts:
+        - ports:
+            - port: "{{ .Values.mongo.service.port }}"
+              protocol: TCP
+    {{ with .Values.networkPolicy.probeCIDRs }}
+    - fromCIDR:
+        {{ range . }}
+        - {{ . | quote }}
+        {{ end }}
+      toPorts:
+        - ports:
+            - port: "3000"
+              protocol: TCP
+            - port: "4100"
+              protocol: TCP
+            - port: "4200"
+              protocol: TCP
+            - port: "4300"
+              protocol: TCP
+            - port: "4400"
+              protocol: TCP
+            - port: "4500"
+              protocol: TCP
+            - port: "50051"
+              protocol: TCP
+            - port: "50052"
+              protocol: TCP
+            - port: "50053"
+              protocol: TCP
+            - port: "5432"
+              protocol: TCP
+            - port: "8080"
+              protocol: TCP
+            - port: "8443"
+              protocol: TCP
+            - port: "27017"
+              protocol: TCP
+    {{ end }}
   egress:
-    - ports:
-        - port: 53
-          protocol: UDP
-        - port: 53
-          protocol: TCP
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: {{ .Values.networkPolicy.dns.namespace }}
+            k8s:k8s-app: {{ .Values.networkPolicy.dns.label }}
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: ANY
+          rules:
+            dns:
+              - matchPattern: "*"
 {{- end }}
