@@ -101,9 +101,9 @@ the client.
 │   ├── graphql/            base schema
 │   └── .env.example        backend configuration template
 ├── deploy/
-│   ├── docker-compose.yml             web + api + locations + agent + Postgres + MongoDB
+│   ├── docker-compose.yml             source-build stack
 │   ├── docker-compose.hub.yml         published images
-│   └── docker-compose.local-cluster.yml  local app + cluster broker/email/locations
+│   └── docker-compose.frontend-helm.yml  API host port for the Helm web
 └── AGENTS.md               working agreement for AI agents
 ```
 
@@ -163,8 +163,8 @@ bash scripts/port-forward.sh --proxy
 ```
 
 The Helm web is at `http://triplanner.localhost:9080` through the Cilium
-Gateway. The API and agent are still external in this slice; publish their ports
-with `deploy/docker-compose.frontend-helm.yml` as described in the chart README.
+Gateway. The API is still external in this slice; publish its host port with
+`deploy/docker-compose.frontend-helm.yml` as described in the chart README.
 
 ### What to try
 

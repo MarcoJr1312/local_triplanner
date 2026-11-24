@@ -264,9 +264,9 @@ The chart deploys `triplanner-web` on ClusterIP `:3000`, a Cilium `Gateway`
 with an HTTP listener on `:9080`, and an `HTTPRoute` for
 `http://triplanner.localhost:9080`. Cilium runs the Gateway in host-network
 mode so the local kind cluster can map port 9080 to Windows without a
-LoadBalancer. The API is still external in this slice, so the web pod reaches it
-through `host.docker.internal`. Publish those ports on the host during the
-transition:
+LoadBalancer. The API is still external in this slice, so the web pod reaches it through
+`host.docker.internal`. Publish its port on the host during the transition
+(the agent is already in this chart):
 
 ```bash
 docker compose \

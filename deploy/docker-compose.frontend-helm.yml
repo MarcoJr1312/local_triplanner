@@ -1,10 +1,11 @@
-# Transitional overlay for the Helm-deployed web frontend.
+# Transitional overlay for the Cilium/Helm web frontend.
 #
-# The web pod reaches the still-Compose API/agent through
-# host.docker.internal. That only works when the ports are published on the
-# host; this overlay does that explicitly. Do not use it as the default demo
-# stack (only `web` should be published there). Remove it when the API and agent
-# move into Helm.
+# The web pod reaches the still-Compose API through `host.docker.internal`
+# (and, on the Cilium kind cluster, through the triplanner-host-proxy). Only the
+# API port needs publishing; the agent is already a Helm workload.
+#
+# Do not use this overlay as the default demo stack; the default Compose demo
+# publishes only the web. Remove it when the API moves into Helm.
 #
 # Usage:
 #   docker compose \
@@ -15,6 +16,3 @@ services:
   api:
     ports:
       - "0.0.0.0:4000:4000"
-  agent:
-    ports:
-      - "0.0.0.0:4100:4100"

@@ -2,7 +2,7 @@
 # Deploys the Triplanner chart to the isolated Cilium kind cluster.
 # Prerequisites: the cluster from setup-cilium.sh, local images built with
 #   docker compose -f deploy/docker-compose.yml build
-# and the Compose API/agent published:
+# and the Compose API published (the Compose agent runs internally):
 #   docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.frontend-helm.yml up -d api agent
 
 set -euo pipefail

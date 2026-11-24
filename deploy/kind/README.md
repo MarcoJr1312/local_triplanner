@@ -27,7 +27,8 @@ for `http://triplanner.localhost:9080`.
   docker compose -f deploy/docker-compose.yml build
   ```
 
-- The Compose API and agent published on the host:
+- The Compose API published on the host (the Compose agent starts internally
+   for the API's suggestion calls):
 
   ```powershell
   docker compose `
