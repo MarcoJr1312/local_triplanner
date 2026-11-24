@@ -1,0 +1,26 @@
+{{- if and .Values.webService.enabled .Values.webService.gateway.enabled }}
+{{- $gateway := .Values.webService.gateway }}
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: triplanner-web
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: triplanner-web
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: web
+  {{- with $gateway.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  gatewayClassName: {{ $gateway.className | default "cilium" }}
+  listeners:
+    - name: http
+      protocol: HTTP
+      port: {{ $gateway.port | default 8080 }}
+      hostname: {{ $gateway.host | quote }}
+      allowedRoutes:
+        namespaces:
+          from: Same
+{{- end }}

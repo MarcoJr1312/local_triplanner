@@ -11,7 +11,7 @@ Components:
   - triplanner-trips: trips, members, items and invitations (REST, :{{ .Values.tripsService.service.port }})
   - triplanner-users: accounts, password login and notifications (REST, :{{ .Values.usersService.service.port }})
   - triplanner-agent: suggestions + pgvector index (REST, :{{ .Values.agentService.service.port }})
-  - triplanner-web: Next.js UI (REST, :{{ .Values.webService.service.port }}, ingress)
+  - triplanner-web: Next.js UI (REST, :{{ .Values.webService.service.port }}, Cilium Gateway)
   - triplanner-mongo: single-node MongoDB StatefulSet
   - triplanner-trips-postgres: single-node PostgreSQL StatefulSet
   - triplanner-users-postgres: single-node PostgreSQL StatefulSet
@@ -22,7 +22,7 @@ RBAC:
   - ClusterRole + ClusterRoleBinding for TokenReview/SAR
   - kube-rbac-proxy sidecar on HTTP 8443 (local demo only)
   - main app ports remain 8080 (broker) / 4200 (email) / {{ .Values.locationsService.service.port }} (locations) / {{ .Values.tripsService.service.port }} (trips) / {{ .Values.usersService.service.port }} (users) / {{ .Values.agentService.service.port }} (agent) / {{ .Values.webService.service.port }} (web)
-  - web is exposed through nginx ingress; no kube-rbac-proxy sidecar
+  - web is exposed through a Cilium Gateway + HTTPRoute; no kube-rbac-proxy sidecar
   - port-forward 8443; do not expose it outside the cluster
 
 1. Check the rollouts:
@@ -69,10 +69,10 @@ RBAC:
    curl http://localhost:{{ .Values.agentService.service.port }}/ready
 
 8. Open the web app:
-   http://{{ .Values.webService.ingress.host }}
-   # Requires an nginx ingress controller and the API/agent host ports published
+   http://{{ .Values.webService.gateway.host }}:{{ .Values.webService.gateway.port }}
+   # Requires the Cilium GatewayClass and the API/agent host ports published
    # for the transitional web-only slice.
-   curl -H "Host: {{ .Values.webService.ingress.host }}" http://127.0.0.1/api/health
+   curl -H "Host: {{ .Values.webService.gateway.host }}" http://127.0.0.1:{{ .Values.webService.gateway.port }}/api/health
    # /api/ready stays 200 during an API outage and reports {"backend":"down"}.
 
 8. BYOK:

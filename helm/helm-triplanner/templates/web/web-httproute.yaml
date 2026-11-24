@@ -1,0 +1,30 @@
+{{- if and .Values.webService.enabled .Values.webService.gateway.enabled }}
+{{- $gateway := .Values.webService.gateway }}
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: triplanner-web
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: triplanner-web
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: web
+  {{- with $gateway.httpRouteAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  parentRefs:
+    - name: triplanner-web
+      sectionName: http
+  hostnames:
+    - {{ $gateway.host | quote }}
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: {{ $gateway.path | default "/" }}
+      backendRefs:
+        - name: triplanner-web
+          port: {{ .Values.webService.service.port }}
+{{- end }}

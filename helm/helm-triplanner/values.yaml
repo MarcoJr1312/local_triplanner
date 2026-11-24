@@ -867,8 +867,8 @@ agentService:
   tolerations: []
   affinity: {}
 
-# Web frontend. Next.js standalone behind nginx ingress. The API is still
-# external in this slice; the agent runs in this chart.
+# Web frontend. Next.js standalone behind a Cilium Gateway and HTTPRoute. The
+# API is still external in this slice; the agent runs in this chart.
 webService:
   enabled: true
   replicaCount: 1
@@ -880,19 +880,33 @@ webService:
     origin: http://host.docker.internal:4000
   agent:
     url: http://triplanner-agent:4100
-  ingress:
+  gateway:
     enabled: true
-    className: nginx
+    className: cilium
     host: triplanner.localhost
+    # Cilium Gateway host-network listener; kind maps 9080 to the host.
+    port: 9080
     path: /
-    annotations:
-      nginx.ingress.kubernetes.io/proxy-buffering: "off"
-      nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
-      nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
-      nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
-      nginx.ingress.kubernetes.io/proxy-body-size: "20m"
-      nginx.ingress.kubernetes.io/ssl-redirect: "false"
-    tls: []
+    annotations: {}
+    httpRouteAnnotations: {}
+  # Transitional TCP proxy for a Compose API that is reachable only from the
+  # node network. In-cluster callers use the ClusterIP, so they never need
+  # hostNetwork themselves.
+  backendProxy:
+    enabled: false
+    image:
+      repository: alpine/socat
+      tag: "1.8.0.0"
+      pullPolicy: IfNotPresent
+    targetHost: 172.19.0.1
+    port: 4000
+    resources:
+      requests:
+        cpu: 10m
+        memory: 16Mi
+      limits:
+        cpu: 100m
+        memory: 64Mi
   # Optional extra /etc/hosts entries if host.docker.internal does not resolve
   # from the pod, e.g. [{ip: "192.168.65.254", hostnames: ["host.docker.internal"]}]
   hostAliases: []

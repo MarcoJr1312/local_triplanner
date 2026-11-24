@@ -177,10 +177,14 @@ auth and Dockerfiles.
   the platform agent tables and vector extension are decommissioned. Evidence:
   `docs/migrations/0017-agent-service.md` and `0018-agent-qa.md` (Gate 2
   approved). Release `v1.7.0`.
-- Helm chart 0.12.0: every application workload reads non-secret environment
-  from `triplanner-<service>-config` via `envFrom.configMapRef`; secrets stay as
-  `secretKeyRef` entries. A `checksum/config` annotation rolls the pod when a
-  value changes. The chart includes the agent and its pgvector PostgreSQL.
+- Helm chart 0.13.0: the web is exposed by a **Cilium Gateway + HTTPRoute**
+  instead of ingress-nginx. The isolated `triplanner-cilium` kind cluster is
+  created by `deploy/kind/setup-cilium.*`; `deploy/kind/deploy-demo.*` loads the
+  local images and installs the chart. Cilium runs the Gateway in host-network
+  mode on port 9080; a host-network `socat` proxy bridges the still-Compose
+  API/agent into the cluster. The existing `docker-desktop` cluster and its
+  ingress-nginx release are untouched. URL:
+  `http://triplanner.localhost:9080`.
 - M15 done (`feature/grpc-api`): native gRPC between the API facade and the
   users/trips/locations services, with `x-internal-token`/`x-actor-id`
   metadata, `grpc.health.v1.Health`, stable `x-error-code` mapping and

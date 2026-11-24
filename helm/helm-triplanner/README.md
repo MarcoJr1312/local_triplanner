@@ -1,9 +1,9 @@
 # helm-triplanner
 
-Helm chart for the Triplanner demo services: the Next.js web app behind nginx
-ingress, a Go HTTP broker, the email consumer with BYOK settings, the
-locations/activities catalogue with its single-node MongoDB StatefulSet, the
-trips service and the users service with their own PostgreSQL databases.
+Helm chart for the Triplanner demo services: the Next.js web app behind a Cilium
+Gateway + HTTPRoute, a Go HTTP broker, the email consumer with BYOK settings,
+the locations/activities catalogue with its single-node MongoDB StatefulSet,
+the trips service and the users service with their own PostgreSQL databases.
 
 ## Internal gRPC
 
@@ -12,7 +12,7 @@ The users, trips and locations Services expose a ClusterIP-only gRPC port
 `triplanner-users:50051`, `triplanner-trips:50052`,
 `triplanner-locations:50053`. Callers send `x-internal-token` metadata; the
 standard `grpc.health.v1.Health` service answers `SERVING`. HTTP `/health` and
-`/ready` remain the Kubernetes probes, and no Ingress exposes gRPC.
+`/ready` remain the Kubernetes probes, and no Gateway listener exposes gRPC.
 
 The `api` values at the end of `values.yaml` are informational until the API
 moves into the chart; they list the HTTP and gRPC service URLs and the expected
@@ -93,7 +93,9 @@ templates/
   web/
     web-configmap.yaml
     web-deployment.yaml
-    web-ingress.yaml
+    web-gateway.yaml
+    web-host-proxy.yaml
+    web-httproute.yaml
     web-networkpolicy.yaml
     web-service.yaml
     web-serviceaccount.yaml
@@ -200,7 +202,8 @@ Prerequisites:
 - A default StorageClass for the eight PVCs (broker, email settings, Mongo,
   locations settings, trips PostgreSQL, users PostgreSQL, agent settings, agent
   pgvector PostgreSQL).
-- An nginx ingress controller (`ingressClassName: nginx`).
+- A Cilium cluster with the Gateway API enabled and a `cilium` GatewayClass
+  (see [`deploy/kind`](../../deploy/kind) for the local kind setup).
 - The `triplanner-internal` Secret with `INTERNAL_TOKEN`.
 - Images referenced by the chart (override `images.*`):
   `marcojr13/triplanner-kafka:0.1.0`,
@@ -214,14 +217,17 @@ Prerequisites:
   a local pre-release acceptance run.
 
 ```bash
+# Full local Cilium kind flow (cluster, images, secret, proxy values)
+deploy/kind/setup-cilium.sh   # Windows: deploy/kind/setup-cilium.ps1
+deploy/kind/deploy-demo.sh    # Windows: deploy/kind/deploy-demo.ps1
+```
+
+For an existing Cilium cluster with published images:
+
+```bash
 kubectl create namespace triplanner
 kubectl -n triplanner create secret generic triplanner-internal \
   --from-literal=INTERNAL_TOKEN="$(openssl rand -hex 32)"
-
-# nginx ingress (once per cluster)
-helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
-helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx \
-  --namespace ingress-nginx --create-namespace
 
 helm install triplanner ./helm/helm-triplanner \
   --namespace triplanner \
@@ -231,12 +237,15 @@ helm install triplanner ./helm/helm-triplanner \
 The email service starts with `provider: sink`; the recruiter adds a Resend key
 in **Profile → Email delivery**. No Resend Secret is required.
 
-### Web and ingress
+### Web and Gateway
 
-The chart deploys `triplanner-web` on ClusterIP `:3000` and an nginx Ingress at
-`http://triplanner.localhost` by default. The API and agent are still external
-in this slice, so the web pod reaches them through `host.docker.internal`.
-Publish those ports on the host during the transition:
+The chart deploys `triplanner-web` on ClusterIP `:3000`, a Cilium `Gateway`
+with an HTTP listener on `:9080`, and an `HTTPRoute` for
+`http://triplanner.localhost:9080`. Cilium runs the Gateway in host-network
+mode so the local kind cluster can map port 9080 to Windows without a
+LoadBalancer. The API is still external in this slice, so the web pod reaches it
+through `host.docker.internal`. Publish those ports on the host during the
+transition:
 
 ```bash
 docker compose \
@@ -253,19 +262,27 @@ webService:
     url: http://host.docker.internal:4000/graphql
     origin: http://host.docker.internal:4000
   agent:
-    url: http://host.docker.internal:4100
-  ingress:
+    url: http://triplanner-agent:4100
+  gateway:
+    className: cilium
     host: triplanner.localhost
+    port: 9080
 ```
 
-The Ingress disables proxy buffering and uses long read/send timeouts for SSE,
-and a 20 MB body limit for GraphQL attachments. If `host.docker.internal` does
-not resolve from the pod, set `webService.hostAliases` to the Docker Desktop
-gateway IP.
+The Cilium kind cluster cannot reach the Docker Desktop host directly from a
+pod network. `deploy/kind/triplanner-values.yaml` therefore enables
+`webService.backendProxy`: a host-network `socat` pod and a ClusterIP that
+forward `triplanner-host-proxy:4000` to the kind network gateway. The web and
+agent use that service instead of `host.docker.internal`. Disable the proxy when
+the API joins the chart.
+
+If `host.docker.internal` does not resolve from a non-kind installation, set
+`webService.hostAliases` to the Docker Desktop gateway IP. The Gateway is
+HTTP-only in this slice; TLS and a LoadBalancer IP are future work.
 
 `/api/ready` gates on configuration only and reports API reachability in its
 body (`backend: ok|down`), so an API outage leaves the web pod Ready and the
-ingress serving the app's own error state instead of an nginx 503 page. The
+Gateway serving the app's own error state instead of a Gateway 503 page. The
 liveness probe only checks the Next process.
 
 The API’s `APP_URL` remains the Compose web URL, so email invite links still
@@ -277,12 +294,13 @@ notifications work through the Helm web.
 ```bash
 helm test triplanner -n triplanner
 kubectl -n triplanner get pods
+kubectl -n triplanner get gateway,httproute
 
-# Web through ingress
-curl -H "Host: triplanner.localhost" http://127.0.0.1/api/health
-curl -H "Host: triplanner.localhost" http://127.0.0.1/api/ready
-curl -H "Host: triplanner.localhost" -o /dev/null -w '%{http_code}\n' http://127.0.0.1/login
-# Then open http://triplanner.localhost
+# Web through the Cilium Gateway
+curl -H "Host: triplanner.localhost" http://127.0.0.1:9080/api/health
+curl -H "Host: triplanner.localhost" http://127.0.0.1:9080/api/ready
+curl -H "Host: triplanner.localhost" -o /dev/null -w '%{http_code}\n' http://127.0.0.1:9080/login
+# Then open http://triplanner.localhost:9080
 ```
 
 Or forward every service with one command:
@@ -303,7 +321,7 @@ bash scripts/port-forward.sh
 | `4400` | `triplanner-trips` | app port |
 | `4500` | `triplanner-users` | app port |
 | `4100` | `triplanner-agent` | app port |
-| — | `triplanner-web` | served through nginx ingress at `http://triplanner.localhost`; not port-forwarded |
+| — | `triplanner-web` | served through the Cilium Gateway at `http://triplanner.localhost:9080`; not port-forwarded |
 | `8443` | broker `kube-rbac-proxy` | with `-Proxy` / `--proxy` |
 | `8444` | email `kube-rbac-proxy` | with `-Proxy` / `--proxy` |
 | `8445` | locations `kube-rbac-proxy` | with `-Proxy` / `--proxy` |

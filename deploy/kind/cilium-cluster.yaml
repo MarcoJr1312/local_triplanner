@@ -1,0 +1,18 @@
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: triplanner-cilium
+networking:
+  # Cilium is the only CNI. kindnet is not installed.
+  disableDefaultCNI: true
+  # Cilium replaces kube-proxy; required by Cilium Gateway API.
+  kubeProxyMode: none
+nodes:
+  - role: control-plane
+    # Docker Desktop currently runs cgroup v1; 1.34 is the known-working image.
+    image: kindest/node:v1.34.0
+    extraPortMappings:
+      # Cilium Gateway host-network listener (see cilium-values.yaml) -> Windows.
+      # 9080 avoids the broker port-forward on 8080.
+      - containerPort: 9080
+        hostPort: 9080
+        protocol: TCP

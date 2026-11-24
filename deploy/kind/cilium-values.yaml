@@ -1,0 +1,17 @@
+# Cilium values for the local Triplanner Gateway API cluster.
+# k8sServiceHost is supplied by setup-cilium.ps1 / setup-cilium.sh because the
+# kind node IP is assigned when the cluster is created.
+
+kubeProxyReplacement: true
+k8sServicePort: 6443
+ipam:
+  mode: kubernetes
+
+gatewayAPI:
+  enabled: true
+  # Expose Envoy directly on the node. kind maps node port 8080 to Windows.
+  hostNetwork:
+    enabled: true
+
+operator:
+  replicas: 1
