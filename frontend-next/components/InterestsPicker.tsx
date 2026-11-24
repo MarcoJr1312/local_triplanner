@@ -6,26 +6,45 @@ import { toast } from 'sonner';
 import { localizeApiError } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 
-// Los chips son términos de búsqueda (keywords) que viajan al índice del
-// agente, por eso NO se traducen: el mismo texto en es/en.
+// Search keywords shared by the English and Spanish UI. The catalogue and the
+// agent index are English, so the default chips are English; legacy Spanish
+// terms are canonicalized on load.
 export const PREDEFINED_INTERESTS = [
-  'Carros',
+  'Cars',
   'Jazz',
-  'Naturaleza',
-  'Playa',
-  'Compras',
-  'Videojuegos',
-  'Comida',
-  'Café',
-  'Museos',
-  'Arte',
-  'Deportes',
-  'Senderismo',
-  'Vida nocturna',
-  'Música en vivo',
-  'Fotografía',
-  'Historia',
+  'Nature',
+  'Beach',
+  'Shopping',
+  'Video games',
+  'Food',
+  'Coffee',
+  'Museums',
+  'Art',
+  'Sports',
+  'Hiking',
+  'Nightlife',
+  'Live music',
+  'Photography',
+  'History',
 ] as const;
+
+const LEGACY_SPANISH_INTERESTS: Record<string, string> = {
+  carros: 'cars',
+  naturaleza: 'nature',
+  playa: 'beach',
+  compras: 'shopping',
+  videojuegos: 'video games',
+  comida: 'food',
+  café: 'coffee',
+  museos: 'museums',
+  arte: 'art',
+  deportes: 'sports',
+  senderismo: 'hiking',
+  'vida nocturna': 'nightlife',
+  'música en vivo': 'live music',
+  fotografía: 'photography',
+  historia: 'history',
+};
 
 const MAX_INTERESTS = 20;
 
@@ -33,10 +52,15 @@ function normalize(term: string): string {
   return term.trim().toLowerCase();
 }
 
+function canonical(term: string): string {
+  const value = normalize(term);
+  return LEGACY_SPANISH_INTERESTS[value] ?? value;
+}
+
 function dedupe(terms: readonly string[]): string[] {
   const out: string[] = [];
   for (const raw of terms) {
-    const term = normalize(raw);
+    const term = canonical(raw);
     if (!term || out.includes(term)) continue;
     out.push(term);
     if (out.length === MAX_INTERESTS) break;
@@ -45,7 +69,9 @@ function dedupe(terms: readonly string[]): string[] {
 }
 
 function labelFor(term: string): string {
-  return PREDEFINED_INTERESTS.find((chip) => normalize(chip) === term) ?? term;
+  return (
+    PREDEFINED_INTERESTS.find((chip) => normalize(chip) === canonical(term)) ?? term
+  );
 }
 
 interface InterestsPickerProps {
