@@ -79,6 +79,19 @@ curl.exe -H "Host: triplanner.localhost" http://127.0.0.1:9080/api/ready
 - **Current cluster untouched:** ingress-nginx on `docker-desktop` remains for
   the old Helm release; the new chart does not use it.
 
+## Old Docker Desktop URL
+
+The pre-Cilium Helm release on the `docker-desktop` cluster still owns host
+port 80. Send it to the Cilium web instead of serving the stale Compose API:
+
+```powershell
+kubectl --context docker-desktop -n triplanner annotate ingress triplanner-web \
+  "nginx.ingress.kubernetes.io/permanent-redirect=http://triplanner.localhost:9080" \
+  --overwrite
+```
+
+The old release remains a fallback; retire it when it is no longer needed.
+
 ## Cleanup
 
 ```powershell

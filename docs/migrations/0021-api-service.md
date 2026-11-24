@@ -69,3 +69,7 @@ This slice moves the API into the chart so the Helm demo is self-contained.
 - The `trips` demo title was updated to `Weekend in Toronto` through the Helm
   API after the new trips database seeded from the older local image. Source
   seeds already carry the English title.
+- The old `docker-desktop` ingress still owns host port 80 and pointed at the
+  removed host API. It now 301-redirects to `http://triplanner.localhost:9080`;
+  see `deploy/kind/README.md`. Use `:9080` directly; the old release is only a
+  fallback.
