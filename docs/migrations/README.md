@@ -41,6 +41,7 @@ Migrations:
 - [`0019-grpc-api.md`](./0019-grpc-api.md) — gRPC for the API facade (users,
   trips, locations)
 - [`0020-grpc-qa.md`](./0020-grpc-qa.md) — gRPC API QA evidence and Gate 2
+- [`0021-api-service.md`](./0021-api-service.md) — API facade as a Helm workload
 
 ## Branching (local only)
 

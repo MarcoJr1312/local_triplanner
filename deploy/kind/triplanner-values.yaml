@@ -1,30 +1,31 @@
 # Values for the isolated Cilium kind cluster. Images are loaded from the local
-# Docker daemon by deploy/kind/setup-cilium.ps1 / setup-cilium.sh.
+# Docker daemon by deploy/kind/deploy-demo.ps1 / deploy-demo.sh.
 images:
   broker:
     name: triplanner-local/kafka
-    tag: kind-0.13.0
+    tag: kind-0.14.0
   email:
     name: triplanner-local/email
-    tag: kind-0.13.0
+    tag: kind-0.14.0
   locations:
     name: triplanner-local/locations
-    tag: kind-0.13.0
+    tag: kind-0.14.0
   trips:
     name: triplanner-local/trips
-    tag: kind-0.13.0
+    tag: kind-0.14.0
   users:
     name: triplanner-local/users
-    tag: kind-0.13.0
+    tag: kind-0.14.0
   agent:
     name: triplanner-local/agent
-    tag: kind-0.13.0
+    tag: kind-0.14.0
+  api:
+    name: triplanner-local/api
+    tag: kind-0.14.0
   web:
     name: triplanner-local/web
-    tag: kind-0.13.0
+    tag: kind-0.14.0
 
-# The API is still Compose. A host-network socat proxy reaches the Docker
-# Desktop gateway; the web and agent use the proxy ClusterIP.
 networkPolicy:
   # Docker Desktop's WSL2 kind kernel lacks xt_socket, so Cilium's DNS proxy
   # (required by toFQDNs) and the probe path are not usable here. Enable this on
@@ -43,13 +44,3 @@ networkPolicy:
       - api.anthropic.com
       - api.deepseek.com
     ollamaCIDRs: []
-webService:
-  backend:
-    url: http://triplanner-host-proxy:4000/graphql
-    origin: http://triplanner-host-proxy:4000
-  backendProxy:
-    enabled: true
-    targetHost: 172.19.0.1
-agentService:
-  backend:
-    url: http://triplanner-host-proxy:4000

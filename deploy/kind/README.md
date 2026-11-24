@@ -11,8 +11,7 @@ cluster or its ingress-nginx installation.
 - Gateway API `v1.6.3` CRDs.
 - Cilium `1.20.5` with kube-proxy replacement and Gateway API enabled.
 - Cilium Gateway host-network mode on port `9080` (kind maps it to Windows).
-- A host-network `socat` proxy for the still-Compose API/agent, because Cilium
-  pods cannot reach the Docker Desktop host directly.
+- The API facade with its platform PostgreSQL and uploads PVC, all in-cluster.
 
 The chart creates a `Gateway` (`gatewayClassName: cilium`) and an `HTTPRoute`
 for `http://triplanner.localhost:9080`.
@@ -27,15 +26,7 @@ for `http://triplanner.localhost:9080`.
   docker compose -f deploy/docker-compose.yml build
   ```
 
-- The Compose API published on the host (the Compose agent starts internally
-   for the API's suggestion calls):
-
-  ```powershell
-  docker compose `
-    -f deploy/docker-compose.yml `
-    -f deploy/docker-compose.frontend-helm.yml `
-    up -d api agent
-  ```
+The Cilium demo is self-contained; the Compose API/agent are not needed for it.
 
 ## Setup
 
@@ -74,10 +65,11 @@ curl.exe -H "Host: triplanner.localhost" http://127.0.0.1:9080/api/ready
   cgroup v2.
 - **No LoadBalancer:** the Gateway uses Cilium host-network mode on port 9080;
   kind maps it to Windows. There is no TLS and no external IP.
-- **Transitional API proxy:** the web and agent call
-  `http://triplanner-host-proxy:4000`; the proxy forwards to the kind network
-  gateway where the Compose API is published. Disable
-  `webService.backendProxy` when the API joins the chart.
+- **In-cluster API:** the chart deploys `triplanner-api`, its platform
+  PostgreSQL, and the uploads PVC. The web and agent use
+  `http://triplanner-api:4000`; no Compose API or host proxy is needed.
+- **Compose demo is separate:** `deploy/docker-compose.yml` still runs its own
+  API/agent/Postgres for the recruiter Compose quickstart.
 - **Port 9080:** avoids the broker port-forward on 8080.
 - **NetworkPolicy:** the chart's policies are CiliumNetworkPolicy resources.
   Docker Desktop's WSL2 kind kernel lacks `xt_socket`, which Cilium's DNS proxy

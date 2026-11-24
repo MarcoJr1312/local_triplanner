@@ -1,15 +1,14 @@
 # Deploys the Triplanner chart to the isolated Cilium kind cluster.
-# Prerequisites: the cluster from setup-cilium.ps1, local images built with
+# Prerequisites: the cluster from setup-cilium.ps1 and the local images built
+# with:
 #   docker compose -f deploy/docker-compose.yml build
-# and the Compose API published (the Compose agent runs internally):
-#   docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.frontend-helm.yml up -d api agent
 
 $ErrorActionPreference = 'Stop'
 
 $Cluster = 'triplanner-cilium'
 $Release = 'triplanner'
 $Namespace = 'triplanner'
-$ImageTag = 'kind-0.13.0'
+$ImageTag = 'kind-0.14.0'
 
 function Require-Image([string]$Name) {
   docker image inspect $Name *> $null
@@ -23,6 +22,7 @@ $images = @(
   @{ source = 'local_triplanner-trips:latest'; target = "triplanner-local/trips:$ImageTag" },
   @{ source = 'local_triplanner-users:latest'; target = "triplanner-local/users:$ImageTag" },
   @{ source = 'local_triplanner-agent:latest'; target = "triplanner-local/agent:$ImageTag" },
+  @{ source = 'local_triplanner-api:latest'; target = "triplanner-local/api:$ImageTag" },
   @{ source = 'local_triplanner-web:latest'; target = "triplanner-local/web:$ImageTag" }
 )
 
@@ -48,16 +48,11 @@ if (-not $existing) {
   kubectl -n $Namespace create secret generic triplanner-internal --from-literal=INTERNAL_TOKEN=$token | Out-Null
 }
 
-# The kind node reaches the Docker Desktop host through this gateway.
-$gateway = (docker exec "$Cluster-control-plane" sh -c "ip route | awk '/default/ {print `$3}'").Trim()
-if (-not $gateway) { throw 'Could not determine the kind network gateway.' }
-
 $chart = (Resolve-Path (Join-Path $PSScriptRoot '..\..\helm\helm-triplanner')).Path
 helm upgrade --install $Release $chart `
   --kube-context "kind-$Cluster" `
   --namespace $Namespace `
   --values (Join-Path $PSScriptRoot 'triplanner-values.yaml') `
-  --set "webService.backendProxy.targetHost=$gateway" `
   --wait `
   --timeout 15m
 if ($LASTEXITCODE -ne 0) { throw 'Helm deployment failed.' }

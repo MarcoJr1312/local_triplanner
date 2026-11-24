@@ -1,9 +1,10 @@
 # helm-triplanner
 
 Helm chart for the Triplanner demo services: the Next.js web app behind a Cilium
-Gateway + HTTPRoute, a Go HTTP broker, the email consumer with BYOK settings,
-the locations/activities catalogue with its single-node MongoDB StatefulSet,
-the trips service and the users service with their own PostgreSQL databases.
+Gateway + HTTPRoute, the GraphQL API facade with its platform PostgreSQL and
+uploads, a Go HTTP broker, the email consumer with BYOK settings, the
+locations/activities catalogue with its single-node MongoDB StatefulSet, the
+trips service and the users service with their own PostgreSQL databases.
 
 ## Internal gRPC
 
@@ -14,9 +15,9 @@ The users, trips and locations Services expose a ClusterIP-only gRPC port
 standard `grpc.health.v1.Health` service answers `SERVING`. HTTP `/health` and
 `/ready` remain the Kubernetes probes, and no Gateway listener exposes gRPC.
 
-The `api` values at the end of `values.yaml` are informational until the API
-moves into the chart; they list the HTTP and gRPC service URLs and the expected
-`*_TRANSPORT=grpc` settings.
+The GraphQL facade (`triplanner-api`) calls users, trips and locations over the
+ClusterIP gRPC endpoints; agent and email remain HTTP. The API owns the platform
+PostgreSQL (attachments, chats, interests) and the uploads PVC.
 
 ## NetworkPolicy
 
@@ -43,6 +44,19 @@ required kernel support.
 
 ```
 templates/
+  api/
+    api-attachments-secret.yaml
+    api-configmap.yaml
+    api-deployment.yaml
+    api-networkpolicy.yaml
+    api-postgres-networkpolicy.yaml
+    api-postgres-secret.yaml
+    api-postgres-service.yaml
+    api-postgres-statefulset.yaml
+    api-pvc.yaml
+    api-service.yaml
+    api-serviceaccount.yaml
+    api-test.yaml
   agent/
     agent-configmap.yaml
     agent-deployment.yaml
@@ -115,7 +129,6 @@ templates/
     web-configmap.yaml
     web-deployment.yaml
     web-gateway.yaml
-    web-host-proxy.yaml
     web-httproute.yaml
     web-networkpolicy.yaml
     web-service.yaml
@@ -232,7 +245,8 @@ Prerequisites:
   `marcojr13/triplanner-locations:1.7.0`,
   `marcojr13/triplanner-trips:1.7.0`,
   `marcojr13/triplanner-users:1.7.0`,
-  `marcojr13/triplanner-agent:1.7.0` and
+  `marcojr13/triplanner-agent:1.7.0`,
+  `marcojr13/triplanner-api:1.7.0` and
   `marcojr13/triplanner-web:1.7.0`. The `1.7.0` tags are published by the
   per-service workflows when the `v1.7.0` tag is pushed; override the tags for
   a local pre-release acceptance run.
@@ -258,57 +272,50 @@ helm install triplanner ./helm/helm-triplanner \
 The email service starts with `provider: sink`; the recruiter adds a Resend key
 in **Profile → Email delivery**. No Resend Secret is required.
 
-### Web and Gateway
+### Web, API and Gateway
 
 The chart deploys `triplanner-web` on ClusterIP `:3000`, a Cilium `Gateway`
-with an HTTP listener on `:9080`, and an `HTTPRoute` for
-`http://triplanner.localhost:9080`. Cilium runs the Gateway in host-network
-mode so the local kind cluster can map port 9080 to Windows without a
-LoadBalancer. The API is still external in this slice, so the web pod reaches it through
-`host.docker.internal`. Publish its port on the host during the transition
-(the agent is already in this chart):
+with an HTTP listener on `:9080`, an `HTTPRoute` for
+`http://triplanner.localhost:9080`, and the `triplanner-api` GraphQL facade on
+ClusterIP `:4000`. Cilium runs the Gateway in host-network mode so the local
+kind cluster can map port 9080 to Windows without a LoadBalancer.
 
-```bash
-docker compose \
-  -f deploy/docker-compose.yml \
-  -f deploy/docker-compose.frontend-helm.yml \
-  up -d api agent
-```
+The web's backend is `http://triplanner-api:4000/graphql`; the agent's backend
+is `http://triplanner-api:4000`. The API owns its platform PostgreSQL
+(`triplanner-api-postgres`) and the uploads PVC (`triplanner-api-uploads`); an
+init container waits for PostgreSQL, runs the schema migration and copies the
+seed images into the uploads volume.
 
 Values:
 
 ```yaml
 webService:
   backend:
-    url: http://host.docker.internal:4000/graphql
-    origin: http://host.docker.internal:4000
+    url: http://triplanner-api:4000/graphql
+    origin: http://triplanner-api:4000
   agent:
     url: http://triplanner-agent:4100
   gateway:
     className: cilium
     host: triplanner.localhost
     port: 9080
+apiService:
+  backend:
+    agentUrl: http://triplanner-agent:4100
+    locationsGrpcUrl: triplanner-locations:50053
+    tripsGrpcUrl: triplanner-trips:50052
+    usersGrpcUrl: triplanner-users:50051
 ```
 
-The Cilium kind cluster cannot reach the Docker Desktop host directly from a
-pod network. `deploy/kind/triplanner-values.yaml` therefore enables
-`webService.backendProxy`: a host-network `socat` pod and a ClusterIP that
-forward `triplanner-host-proxy:4000` to the kind network gateway. The web and
-agent use that service instead of `host.docker.internal`. Disable the proxy when
-the API joins the chart.
-
-If `host.docker.internal` does not resolve from a non-kind installation, set
-`webService.hostAliases` to the Docker Desktop gateway IP. The Gateway is
-HTTP-only in this slice; TLS and a LoadBalancer IP are future work.
+The API's `APP_URL` defaults to the Gateway URL, so invite links target
+`http://triplanner.localhost:9080`. No `host.docker.internal` proxy is used.
+The Gateway is HTTP-only in this slice; TLS and a LoadBalancer IP are future
+work.
 
 `/api/ready` gates on configuration only and reports API reachability in its
 body (`backend: ok|down`), so an API outage leaves the web pod Ready and the
 Gateway serving the app's own error state instead of a Gateway 503 page. The
 liveness probe only checks the Next process.
-
-The API’s `APP_URL` remains the Compose web URL, so email invite links still
-target `http://localhost:3000` until the API migrates. Username invites and
-notifications work through the Helm web.
 
 ## Verify
 
@@ -352,9 +359,9 @@ bash scripts/port-forward.sh
 | `5433` | trips PostgreSQL | with `-Postgres` / `--postgres`; avoids Compose on 5432 |
 | `5434` | users PostgreSQL | with `-Postgres` / `--postgres`; avoids Compose on 5432 |
 
-App ports bind `0.0.0.0` by default so Compose containers can use
-`host.docker.internal`; do not run this on an untrusted network. Proxy and Mongo
-ports bind `127.0.0.1` only. Stop with `... -Stop` / `--stop`.
+App ports bind `0.0.0.0` by default so host clients can reach the
+kube-rbac-proxy sidecars; do not run this on an untrusted network. Proxy and
+Mongo ports bind `127.0.0.1` only. Stop with `... -Stop` / `--stop`.
 
 If your shell resolves a different `kubectl` (WSL, Git Bash), set `KUBECTL`
 to the Docker Desktop binary, for example:

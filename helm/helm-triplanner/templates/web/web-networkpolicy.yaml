@@ -76,15 +76,14 @@ spec:
               protocol: TCP
     {{ end }}
   egress:
-    # The Compose API through triplanner-host-proxy.
-    - toEntities:
-        - host
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: {{ .Release.Namespace }}
+            k8s:app.kubernetes.io/name: triplanner-api
+            k8s:app.kubernetes.io/instance: {{ .Release.Name }}
       toPorts:
         - ports:
-            - port: "{{ .Values.webService.backendProxy.port | default 4000 }}"
-              protocol: TCP
-            # Fallback when the agent is configured at host.docker.internal.
-            - port: "{{ .Values.agentService.service.port }}"
+            - port: "{{ .Values.apiService.service.port }}"
               protocol: TCP
     - toEndpoints:
         - matchLabels:

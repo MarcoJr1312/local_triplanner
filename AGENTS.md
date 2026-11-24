@@ -150,7 +150,7 @@ auth and Dockerfiles.
   reachability as `backend: ok|down`), SSE-safe ingress annotations, a
   non-root/read-only pod, an optional NetworkPolicy and the
   `deploy/docker-compose.frontend-helm.yml` transition overlay that publishes
-  the still-Compose API/agent. Evidence:
+  the still-Compose API/agent (removed in M18). Evidence:
   `docs/migrations/0011-frontend-service.md` and `0012-frontend-qa.md`
   (Gate 2 approved). The web image and M10.14 ship in `v1.6.0`.
 - M12 (private favorites): `favorite_locations` lives in the users service
@@ -177,14 +177,13 @@ auth and Dockerfiles.
   the platform agent tables and vector extension are decommissioned. Evidence:
   `docs/migrations/0017-agent-service.md` and `0018-agent-qa.md` (Gate 2
   approved). Release `v1.7.0`.
-- Helm chart 0.13.0: the web is exposed by a **Cilium Gateway + HTTPRoute**
-  instead of ingress-nginx. The isolated `triplanner-cilium` kind cluster is
-  created by `deploy/kind/setup-cilium.*`; `deploy/kind/deploy-demo.*` loads the
-  local images and installs the chart. Cilium runs the Gateway in host-network
-  mode on port 9080; a host-network `socat` proxy bridges the still-Compose
-  API/agent into the cluster. The existing `docker-desktop` cluster and its
-  ingress-nginx release are untouched. URL:
-  `http://triplanner.localhost:9080`.
+- Helm chart 0.14.0: the GraphQL API facade, its platform PostgreSQL
+  (`triplanner-api-postgres`), uploads PVC and migrations/seed init containers
+  are Helm workloads. The web and agent use `http://triplanner-api:4000`; the
+  transitional host proxy and `deploy/docker-compose.frontend-helm.yml` overlay
+  are gone. The web is exposed by a **Cilium Gateway + HTTPRoute** on the
+  isolated `triplanner-cilium` kind cluster; the Compose stack remains the
+  recruiter quickstart. Existing `docker-desktop` ingress-nginx is untouched.
 - M15 done (`feature/grpc-api`): native gRPC between the API facade and the
   users/trips/locations services, with `x-internal-token`/`x-actor-id`
   metadata, `grpc.health.v1.Health`, stable `x-error-code` mapping and

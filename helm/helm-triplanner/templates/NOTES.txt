@@ -11,17 +11,19 @@ Components:
   - triplanner-trips: trips, members, items and invitations (REST, :{{ .Values.tripsService.service.port }})
   - triplanner-users: accounts, password login and notifications (REST, :{{ .Values.usersService.service.port }})
   - triplanner-agent: suggestions + pgvector index (REST, :{{ .Values.agentService.service.port }})
+  - triplanner-api: GraphQL facade + platform Postgres + uploads (REST, :{{ .Values.apiService.service.port }})
   - triplanner-web: Next.js UI (REST, :{{ .Values.webService.service.port }}, Cilium Gateway)
   - triplanner-mongo: single-node MongoDB StatefulSet
   - triplanner-trips-postgres: single-node PostgreSQL StatefulSet
   - triplanner-users-postgres: single-node PostgreSQL StatefulSet
   - triplanner-agent-postgres: single-node pgvector PostgreSQL StatefulSet
+  - triplanner-api-postgres: single-node platform PostgreSQL StatefulSet
 
 RBAC:
   - per-service ServiceAccount
   - ClusterRole + ClusterRoleBinding for TokenReview/SAR
   - kube-rbac-proxy sidecar on HTTP 8443 (local demo only)
-  - main app ports remain 8080 (broker) / 4200 (email) / {{ .Values.locationsService.service.port }} (locations) / {{ .Values.tripsService.service.port }} (trips) / {{ .Values.usersService.service.port }} (users) / {{ .Values.agentService.service.port }} (agent) / {{ .Values.webService.service.port }} (web)
+  - main app ports remain 8080 (broker) / 4200 (email) / {{ .Values.locationsService.service.port }} (locations) / {{ .Values.tripsService.service.port }} (trips) / {{ .Values.usersService.service.port }} (users) / {{ .Values.agentService.service.port }} (agent) / {{ .Values.apiService.service.port }} (api) / {{ .Values.webService.service.port }} (web)
   - web is exposed through a Cilium Gateway + HTTPRoute; no kube-rbac-proxy sidecar
   - port-forward 8443; do not expose it outside the cluster
 
@@ -32,11 +34,13 @@ RBAC:
    kubectl -n {{ .Release.Namespace }} rollout status deployment/triplanner-trips
    kubectl -n {{ .Release.Namespace }} rollout status deployment/triplanner-users
    kubectl -n {{ .Release.Namespace }} rollout status deployment/triplanner-agent
+   kubectl -n {{ .Release.Namespace }} rollout status deployment/triplanner-api
    kubectl -n {{ .Release.Namespace }} rollout status deployment/triplanner-web
    kubectl -n {{ .Release.Namespace }} rollout status statefulset/triplanner-mongo
    kubectl -n {{ .Release.Namespace }} rollout status statefulset/triplanner-trips-postgres
    kubectl -n {{ .Release.Namespace }} rollout status statefulset/triplanner-users-postgres
    kubectl -n {{ .Release.Namespace }} rollout status statefulset/triplanner-agent-postgres
+   kubectl -n {{ .Release.Namespace }} rollout status statefulset/triplanner-api-postgres
 
 2. Check the probes:
    kubectl -n {{ .Release.Namespace }} port-forward svc/triplanner-email 4200:{{ .Values.emailService.service.port }}
@@ -103,6 +107,12 @@ Required Secret:
    use existingSecret with Vault/External Secrets in production)
    {{- else if .Values.usersService.postgres.auth.enabled }}
    {{ include "helm-triplanner.usersPostgresSecretName" . }} (existing Secret)
+   {{- end }}
+   {{- if and .Values.apiService.postgres.auth.enabled (not .Values.apiService.postgres.auth.existingSecret) }}
+   {{ include "helm-triplanner.apiPostgresSecretName" . }} (demo API Postgres credentials;
+   use existingSecret with Vault/External Secrets in production)
+   {{- else if .Values.apiService.postgres.auth.enabled }}
+   {{ include "helm-triplanner.apiPostgresSecretName" . }} (existing Secret)
    {{- end }}
 
 Broker topic:

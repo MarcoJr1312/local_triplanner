@@ -42,6 +42,10 @@ images:
     name: marcojr13/triplanner-agent
     tag: "1.7.0"
     pullPolicy: IfNotPresent
+  api:
+    name: marcojr13/triplanner-api
+    tag: "1.7.0"
+    pullPolicy: IfNotPresent
   web:
     name: marcojr13/triplanner-web
     tag: "1.7.0"
@@ -783,7 +787,7 @@ agentService:
         memory: 512Mi
 
   backend:
-    url: http://host.docker.internal:4000
+    url: http://triplanner-api:4000
     # The Compose API can use a different internal token than this chart.
     # Create this Secret with INTERNAL_TOKEN in the release namespace.
     internalToken:
@@ -867,8 +871,131 @@ agentService:
   tolerations: []
   affinity: {}
 
+# GraphQL API facade. Owns the public schema, demo auth, uploads, attachments,
+# chats, interests and the internal agent routes. All domain services are
+# in-cluster; the API talks to them over gRPC/HTTP.
+apiService:
+  enabled: true
+  replicaCount: 1
+  service:
+    type: ClusterIP
+    port: 4000
+  postgres:
+    enabled: true
+    image:
+      repository: postgres
+      tag: "17"
+      pullPolicy: IfNotPresent
+    auth:
+      enabled: true
+      # DEMO ONLY. Rendered into triplanner-api-postgres-credentials.
+      username: triplanner
+      password: triplanner-demo
+      database: triplanner
+      existingSecret: ""
+      usernameKey: POSTGRES_USER
+      passwordKey: POSTGRES_PASSWORD
+      databaseKey: POSTGRES_DB
+      databaseUrlKey: DATABASE_URL
+    service:
+      port: 5432
+    persistence:
+      enabled: true
+      size: 2Gi
+      storageClass: ""
+    podSecurityContext:
+      runAsNonRoot: true
+      runAsUser: 999
+      runAsGroup: 999
+      fsGroup: 999
+      fsGroupChangePolicy: OnRootMismatch
+      seccompProfile:
+        type: RuntimeDefault
+    securityContext:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities:
+        drop: [ "ALL" ]
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+  uploads:
+    mountPath: /app/uploads
+    persistence:
+      enabled: true
+      size: 1Gi
+      storageClass: ""
+      existingClaim: ""
+  attachments:
+    # HMAC secret for short-lived attachment URLs.
+    existingSecret: ""
+    key: ATTACHMENT_TOKEN_SECRET
+    tokenSecret: dev-attachment-secret
+  appUrl: ""
+  reminderSweepMs: 30000
+  backend:
+    agentUrl: http://triplanner-agent:4100
+    emailServiceUrl: http://triplanner-email:4200
+    locationsUrl: http://triplanner-locations:4300
+    locationsGrpcUrl: triplanner-locations:50053
+    tripsUrl: http://triplanner-trips:4400
+    tripsGrpcUrl: triplanner-trips:50052
+    usersUrl: http://triplanner-users:4500
+    usersGrpcUrl: triplanner-users:50051
+  internalToken:
+    existingSecret: triplanner-internal
+    key: INTERNAL_TOKEN
+  serviceAccount:
+    create: true
+    name: ""
+    automount: false
+    annotations: {}
+  podAnnotations: {}
+  podLabels: {}
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 100
+    runAsGroup: 101
+    fsGroup: 101
+    fsGroupChangePolicy: OnRootMismatch
+    seccompProfile:
+      type: RuntimeDefault
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop: [ "ALL" ]
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 750m
+      memory: 768Mi
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: http
+    initialDelaySeconds: 15
+    periodSeconds: 10
+    failureThreshold: 6
+  readinessProbe:
+    httpGet:
+      path: /health
+      port: http
+    initialDelaySeconds: 5
+    periodSeconds: 5
+    failureThreshold: 6
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
 # Web frontend. Next.js standalone behind a Cilium Gateway and HTTPRoute. The
-# API is still external in this slice; the agent runs in this chart.
+# API and agent are in-cluster.
 webService:
   enabled: true
   replicaCount: 1
@@ -876,8 +1003,8 @@ webService:
     type: ClusterIP
     port: 3000
   backend:
-    url: http://host.docker.internal:4000/graphql
-    origin: http://host.docker.internal:4000
+    url: http://triplanner-api:4000/graphql
+    origin: http://triplanner-api:4000
   agent:
     url: http://triplanner-agent:4100
   gateway:
@@ -889,26 +1016,7 @@ webService:
     path: /
     annotations: {}
     httpRouteAnnotations: {}
-  # Transitional TCP proxy for a Compose API that is reachable only from the
-  # node network. In-cluster callers use the ClusterIP, so they never need
-  # hostNetwork themselves.
-  backendProxy:
-    enabled: false
-    image:
-      repository: alpine/socat
-      tag: "1.8.0.0"
-      pullPolicy: IfNotPresent
-    targetHost: 172.19.0.1
-    port: 4000
-    resources:
-      requests:
-        cpu: 10m
-        memory: 16Mi
-      limits:
-        cpu: 100m
-        memory: 64Mi
-  # Optional extra /etc/hosts entries if host.docker.internal does not resolve
-  # from the pod, e.g. [{ip: "192.168.65.254", hostnames: ["host.docker.internal"]}]
+  # Optional extra /etc/hosts entries for custom backends.
   hostAliases: []
   # When the optional NetworkPolicy is enabled, add the node/kubelet CIDR here
   # so liveness/readiness probes are not blocked, e.g. ["172.19.0.0/16"].
@@ -983,24 +1091,3 @@ networkPolicy:
       - api.deepseek.com
     # Ollama is usually host-local. Add the gateway CIDR(s) when used.
     ollamaCIDRs: []
-
-# Informational: the API deployment must receive these values when it lands.
-api:
-  broker:
-    url: http://triplanner-kafka:8080
-    topic: TripInvitation
-  email:
-    serviceUrl: http://triplanner-email:4200
-  locations:
-    serviceUrl: http://triplanner-locations:4300
-    grpcUrl: triplanner-locations:50053
-  trips:
-    serviceUrl: http://triplanner-trips:4400
-    grpcUrl: triplanner-trips:50052
-  users:
-    serviceUrl: http://triplanner-users:4500
-    grpcUrl: triplanner-users:50051
-  transports:
-    users: grpc
-    trips: grpc
-    locations: grpc

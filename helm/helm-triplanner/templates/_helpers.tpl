@@ -97,3 +97,19 @@ needs Kubernetes API permissions in the current design.
 {{- define "helm-triplanner.agentPostgresSecretName" -}}
 {{- default "triplanner-agent-postgres-credentials" .Values.agentService.postgres.auth.existingSecret }}
 {{- end }}
+
+{{- define "helm-triplanner.apiServiceAccountName" -}}
+{{- default (printf "%s-api" (include "helm-triplanner.fullname" .)) .Values.apiService.serviceAccount.name }}
+{{- end }}
+
+{{- define "helm-triplanner.apiPostgresSecretName" -}}
+{{- default "triplanner-api-postgres-credentials" .Values.apiService.postgres.auth.existingSecret }}
+{{- end }}
+
+{{- define "helm-triplanner.apiUploadsClaimName" -}}
+{{- default "triplanner-api-uploads" .Values.apiService.uploads.persistence.existingClaim }}
+{{- end }}
+
+{{- define "helm-triplanner.apiAttachmentSecretName" -}}
+{{- default "triplanner-api-attachments" .Values.apiService.attachments.existingSecret }}
+{{- end }}

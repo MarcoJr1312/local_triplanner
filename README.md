@@ -102,8 +102,7 @@ the client.
 │   └── .env.example        backend configuration template
 ├── deploy/
 │   ├── docker-compose.yml             source-build stack
-│   ├── docker-compose.hub.yml         published images
-│   └── docker-compose.frontend-helm.yml  API host port for the Helm web
+│   └── docker-compose.hub.yml         published images
 └── AGENTS.md               working agreement for AI agents
 ```
 
@@ -163,8 +162,9 @@ bash scripts/port-forward.sh --proxy
 ```
 
 The Helm web is at `http://triplanner.localhost:9080` through the Cilium
-Gateway. The API is still external in this slice; publish its host port with
-`deploy/docker-compose.frontend-helm.yml` as described in the chart README.
+Gateway. The chart is self-contained: web, API facade, users, trips, locations,
+agent, broker, email and their databases all run in the cluster. The Compose
+stack remains a separate recruiter quickstart.
 
 ### What to try
 

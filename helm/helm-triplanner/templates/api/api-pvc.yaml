@@ -1,0 +1,20 @@
+{{- if and .Values.apiService.enabled .Values.apiService.uploads.persistence.enabled (not .Values.apiService.uploads.persistence.existingClaim) }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "helm-triplanner.apiUploadsClaimName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: triplanner-api
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: api
+spec:
+  accessModes:
+    - ReadWriteOnce
+  {{- with .Values.apiService.uploads.persistence.storageClass }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.apiService.uploads.persistence.size }}
+{{- end }}

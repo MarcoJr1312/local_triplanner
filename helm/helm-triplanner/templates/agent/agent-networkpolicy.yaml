@@ -24,6 +24,10 @@ spec:
             k8s:io.kubernetes.pod.namespace: {{ .Release.Namespace }}
             k8s:app.kubernetes.io/name: triplanner-web
             k8s:app.kubernetes.io/instance: {{ .Release.Name }}
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: {{ .Release.Namespace }}
+            k8s:app.kubernetes.io/name: triplanner-api
+            k8s:app.kubernetes.io/instance: {{ .Release.Name }}
       toPorts:
         - ports:
             - port: "{{ .Values.agentService.service.port }}"
@@ -105,12 +109,15 @@ spec:
         - ports:
             - port: "{{ .Values.broker.service.port }}"
               protocol: TCP
-    # The Compose API through triplanner-host-proxy.
-    - toEntities:
-        - host
+    # The in-cluster GraphQL API.
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: {{ .Release.Namespace }}
+            k8s:app.kubernetes.io/name: triplanner-api
+            k8s:app.kubernetes.io/instance: {{ .Release.Name }}
       toPorts:
         - ports:
-            - port: "{{ .Values.webService.backendProxy.port | default 4000 }}"
+            - port: "{{ .Values.apiService.service.port }}"
               protocol: TCP
     {{- if $llmHost }}
     - toFQDNs:
