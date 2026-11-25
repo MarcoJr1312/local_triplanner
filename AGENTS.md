@@ -187,7 +187,8 @@ auth and Dockerfiles.
 - M19 metrics: every runtime exposes `GET /metrics` on its existing HTTP port
   (ClusterIP-only, no database calls). Chart 0.15.0 adds disabled-by-default
   ServiceMonitors, Cilium monitoring ingress rules and a Gateway redirect for
-  the web `/metrics` path. The monitoring stack is not deployed yet. Evidence:
+  the web `/metrics` path. Gate 2 approved locally; the monitoring stack,
+  image publication and release tag are deferred to M20. Evidence:
   `docs/migrations/0022-metrics.md`; local images `kind-0.15.1`.
 - M15 done (`feature/grpc-api`): native gRPC between the API facade and the
   users/trips/locations services, with `x-internal-token`/`x-actor-id`

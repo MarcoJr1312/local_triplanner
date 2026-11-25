@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **Implemented locally (2026-11-25) — Gate 2 pending** |
+| Status | **Accepted locally — Gate 2 approved (2026-11-25); release deferred** |
 | Cycle | Kubernetes Manifest Delivery |
 | Slice | M19 — Metrics endpoints and scrape contract |
 | Chart | `helm-triplanner` 0.15.0 |
@@ -440,5 +440,7 @@ The public Gateway returns `302` instead of metrics.
 3. **Full observability slice**: option 1 plus domain counters, a Compose
    Prometheus/Grafana stack and dashboards now.
 
-Option 1 was selected. Gate 2 remains pending; no Hub image publication or
-release tag until QA evidence is accepted.
+Option 1 was selected. Gate 2 was approved on 2026-11-25. The slice is accepted
+locally; image publication and release tagging are deferred until M20, when
+`kube-prometheus-stack` is deployed and the ServiceMonitors are enabled and
+verified.
