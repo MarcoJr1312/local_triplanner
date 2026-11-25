@@ -42,6 +42,7 @@ SERVICES = [
         "service": "users",
         "job": "triplanner-users",
         "description": "Accounts, login, favorites and notifications.",
+        "grpc": True,
     },
     {
         "key": "trips",
@@ -49,6 +50,7 @@ SERVICES = [
         "service": "trips",
         "job": "triplanner-trips",
         "description": "Trips, members, itinerary items, invitations and reminders.",
+        "grpc": True,
     },
     {
         "key": "locations",
@@ -56,6 +58,7 @@ SERVICES = [
         "service": "locations",
         "job": "triplanner-locations",
         "description": "Toronto catalogue, search and HasData BYOK cache.",
+        "grpc": True,
     },
     {
         "key": "agent",
@@ -76,7 +79,7 @@ SERVICES = [
         "title": "Broker",
         "service": "broker",
         "job": "triplanner-kafka",
-        "description": "HTTP topic/offset/ack broker for TripInvitation and LocationChanged.",
+        "description": "HTTP topic/offset/ack broker. Fetch is a long-poll (up to 20 s), so latency p95 includes deliberate wait time.",
     },
     {
         "key": "web",
@@ -552,12 +555,40 @@ def error_ratio_expr(selector: str, by: str = "") -> str:
     return "(" + ratio + ") or vector(0)"
 
 
+def grpc_p95_expr(service: str, by_method: bool = False) -> str:
+    selector = f'service="{service}"'
+    by = "le, method" if by_method else "le"
+    return (
+        "histogram_quantile(0.95, sum by ("
+        + by
+        + ") (rate(triplanner_grpc_request_duration_seconds_bucket{"
+        + selector
+        + "}["
+        + RATE
+        + "])))"
+    )
+
+
+def grpc_error_ratio_expr(service: str) -> str:
+    """Non-OK gRPC ratio with a zero fallback for healthy services."""
+    errors = rate_expr(
+        "triplanner_grpc_requests_total", f'service="{service}",status!="OK"'
+    )
+    total = rate_expr("triplanner_grpc_requests_total", f'service="{service}"')
+    return "(" + errors + " / clamp_min(" + total + ", 0.001)) or vector(0)"
+
+
 def service_dashboard(svc: dict[str, str]) -> dict[str, Any]:
     layout = Layout()
     panels: list[dict[str, Any]] = []
     service = svc["service"]
     job = svc["job"]
     service_route = f'service="{service}",route=~"$route"'
+    latency_note = (
+        " Includes deliberate long-poll wait on /v1/topics/{topic}/messages."
+        if svc["key"] == "broker"
+        else ""
+    )
 
     def add(panel: dict[str, Any]) -> None:
         panels.append(panel)
@@ -618,7 +649,7 @@ def service_dashboard(svc: dict[str, str]) -> dict[str, Any]:
             y,
             5,
             4,
-            description="p95 request duration; orange above 500 ms, red above 1 s.",
+            description="p95 request duration; orange above 500 ms, red above 1 s." + latency_note,
             thresholds=latency_thresholds(),
         )
     )
@@ -664,12 +695,93 @@ def service_dashboard(svc: dict[str, str]) -> dict[str, Any]:
             "s",
             12,
             y,
-            description="p95 latency per route template.",
+            description="p95 latency per route template." + latency_note,
             legend_mode="table",
             tooltip="multi",
         )
     )
     layout.y += 8
+
+    if svc.get("grpc"):
+        add(row(layout.id(), "gRPC", layout.y))
+        layout.y += 1
+        y = layout.y
+        add(
+            stat(
+                layout.id(),
+                "gRPC req/s",
+                rate_expr("triplanner_grpc_requests_total", f'service="{service}"'),
+                "reqps",
+                0,
+                y,
+                8,
+                4,
+                description="gRPC calls per second from the API facade.",
+            )
+        )
+        add(
+            stat(
+                layout.id(),
+                "gRPC p95",
+                grpc_p95_expr(service),
+                "s",
+                8,
+                y,
+                8,
+                4,
+                description="p95 gRPC call duration.",
+                thresholds=latency_thresholds(),
+            )
+        )
+        add(
+            stat(
+                layout.id(),
+                "gRPC error ratio",
+                grpc_error_ratio_expr(service),
+                "percentunit",
+                16,
+                y,
+                8,
+                4,
+                description="Share of gRPC calls not returning OK; orange above 1%, red above 5%.",
+                thresholds=error_thresholds(),
+            )
+        )
+        layout.y += 4
+        y = layout.y
+        add(
+            timeseries(
+                layout.id(),
+                "gRPC calls by method",
+                rate_expr(
+                    "triplanner_grpc_requests_total", f'service="{service}"', "method"
+                ),
+                "{{method}}",
+                "reqps",
+                0,
+                y,
+                description="gRPC call rate per proto method.",
+                legend_mode="table",
+                tooltip="multi",
+            )
+        )
+        add(
+            timeseries(
+                layout.id(),
+                "gRPC calls by status",
+                rate_expr(
+                    "triplanner_grpc_requests_total", f'service="{service}"', "status"
+                ),
+                LEGEND_STATUS,
+                "reqps",
+                12,
+                y,
+                description="gRPC call rate by status code name.",
+                legend_mode="table",
+                tooltip="multi",
+            )
+        )
+        layout.y += 8
 
     add(row(layout.id(), "Health", layout.y))
     layout.y += 1
@@ -947,6 +1059,47 @@ def overview_dashboard() -> dict[str, Any]:
             thresholds_style="line",
             min_value=0,
             max_value=1,
+            legend_mode="list",
+            tooltip="multi",
+        )
+    )
+    layout.y += 10
+
+    add(row(layout.id(), "gRPC", layout.y))
+    layout.y += 1
+    y = layout.y
+    add(
+        timeseries(
+            layout.id(),
+            "gRPC calls by service",
+            rate_expr("triplanner_grpc_requests_total", service_selector, "service"),
+            LEGEND_SERVICE,
+            "reqps",
+            0,
+            y,
+            12,
+            10,
+            description="gRPC call rate for the selected services; only users, trips and locations expose it.",
+            legend_mode="list",
+            tooltip="multi",
+        )
+    )
+    add(
+        timeseries(
+            layout.id(),
+            "gRPC p95 by service",
+            "histogram_quantile(0.95, sum by (le, service) (rate(triplanner_grpc_request_duration_seconds_bucket{"
+            + service_selector
+            + "}["
+            + RATE
+            + "])))",
+            LEGEND_SERVICE,
+            "s",
+            12,
+            y,
+            12,
+            10,
+            description="p95 gRPC call duration per selected service.",
             legend_mode="list",
             tooltip="multi",
         )

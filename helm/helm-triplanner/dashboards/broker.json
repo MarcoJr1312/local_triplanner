@@ -2,7 +2,7 @@
   "annotations": {
     "list": []
   },
-  "description": "HTTP topic/offset/ack broker for TripInvitation and LocationChanged.",
+  "description": "HTTP topic/offset/ack broker. Fetch is a long-poll (up to 20 s), so latency p95 includes deliberate wait time.",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
@@ -242,7 +242,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "p95 request duration; orange above 500 ms, red above 1 s.",
+      "description": "p95 request duration; orange above 500 ms, red above 1 s. Includes deliberate long-poll wait on /v1/topics/{topic}/messages.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -472,7 +472,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "p95 latency per route template.",
+      "description": "p95 latency per route template. Includes deliberate long-poll wait on /v1/topics/{topic}/messages.",
       "fieldConfig": {
         "defaults": {
           "color": {
