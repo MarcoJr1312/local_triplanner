@@ -226,7 +226,8 @@ auth and Dockerfiles.
   the overview adds gRPC panels. Chart 0.19.0, images `kind-0.19.0`, revision
   22, targets 8/8. A 1,371-call load recorded 1,068 users, 748 trips and 376
   locations gRPC calls with 0 errors; the broker long-poll p95 note is in the
-  dashboard descriptions. Evidence:
+  dashboard descriptions. Gate 2 approved locally; image publication and
+  release tagging deferred. Evidence:
   `docs/migrations/0028-grpc-metrics.md`.
 - M15 done (`feature/grpc-api`): native gRPC between the API facade and the
   users/trips/locations services, with `x-internal-token`/`x-actor-id`

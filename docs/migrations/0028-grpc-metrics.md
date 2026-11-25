@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **Implemented and verified locally (2026-11-25); merge/release gate pending** |
+| Status | **Gate 2 approved locally (2026-11-25); release deferred** |
 | Cycle | Kubernetes Manifest Delivery |
 | Slice | M25 — close the M24 gRPC coverage finding |
 | Chart | `helm-triplanner` 0.19.0 |
@@ -163,3 +163,10 @@ the services are rolled forward again. No schema or data change is involved.
 - Optional domain counters remain candidates (email deliveries, broker
   published/acked, agent LLM calls).
 - PostgreSQL/MongoDB exporters and alert rules remain open observability work.
+
+## 9. Gate 2 decision
+
+**Approved locally on 2026-11-25: accept M25 and hold the release.**
+The gRPC metrics, dashboard panels and broker long-poll note are accepted on
+the local kind stack. Image publication, `git push` and release tagging remain
+deferred until a separate release decision.

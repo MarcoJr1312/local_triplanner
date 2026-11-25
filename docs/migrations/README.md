@@ -55,7 +55,8 @@ Migrations:
 - [`0027-prometheus-data-load.md`](./0027-prometheus-data-load.md) — QA traffic
   load and the gRPC metrics coverage finding
 - [`0028-grpc-metrics.md`](./0028-grpc-metrics.md) — gRPC server metrics for
-  users, trips and locations; dashboards and load evidence
+  users, trips and locations; dashboards and load evidence; Gate 2 approved
+  locally
 
 ## Branching (local only)
 
