@@ -214,6 +214,12 @@ auth and Dockerfiles.
   thresholds, links, transformations and a route-health bar gauge. Nine
   dashboards live; metrics 8/8, Helm tests 7/7, targets 8/8. Evidence:
   `docs/migrations/0026-dashboard-redesign.md`.
+- M24 Prometheus data-load QA (2026-11-25): `scripts/qa-load-traffic.ps1`
+  drove 1,346 GraphQL calls and 26 agent calls with 0 errors, populated the
+  Web/API/Agent/Broker dashboards and generated invitations. Users/Trips/
+  Locations show probe-only traffic because the API uses gRPC; track gRPC
+  metrics as the follow-up. Evidence:
+  `docs/migrations/0027-prometheus-data-load.md`.
 - M15 done (`feature/grpc-api`): native gRPC between the API facade and the
   users/trips/locations services, with `x-internal-token`/`x-actor-id`
   metadata, `grpc.health.v1.Health`, stable `x-error-code` mapping and

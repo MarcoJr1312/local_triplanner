@@ -52,6 +52,8 @@ Migrations:
   budget input and long-range day strip fixes
 - [`0026-dashboard-redesign.md`](./0026-dashboard-redesign.md) — vendored
   Grafana skills and the dashboard redesign
+- [`0027-prometheus-data-load.md`](./0027-prometheus-data-load.md) — QA traffic
+  load and the gRPC metrics coverage finding
 
 ## Branching (local only)
 
