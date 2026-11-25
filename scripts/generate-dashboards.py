@@ -79,7 +79,7 @@ SERVICES = [
         "title": "Broker",
         "service": "broker",
         "job": "triplanner-kafka",
-        "description": "HTTP topic/offset/ack broker. Fetch is a long-poll (up to 20 s), so latency p95 includes deliberate wait time.",
+        "description": "HTTP topic/offset/ack broker. Fetch is a long-poll (up to 20 s), so latency p50/p95 includes deliberate wait time.",
     },
     {
         "key": "web",
@@ -210,12 +210,13 @@ def target(
     *,
     instant: bool = False,
     fmt: str | None = None,
+    ref_id: str = "A",
 ) -> dict[str, Any]:
     value: dict[str, Any] = {
         "editorMode": "code",
         "expr": expr,
         "range": not instant,
-        "refId": "A",
+        "refId": ref_id,
     }
     if instant:
         value["instant"] = True
@@ -353,7 +354,14 @@ def stat(
     mappings: list[dict[str, Any]] | None = None,
     thresholds: dict[str, Any] | None = None,
     graph_mode: str = "area",
+    legend: str | None = None,
+    extra: list[tuple[str, str]] | None = None,
 ) -> dict[str, Any]:
+    targets = [target(expr, legend, instant=True)]
+    for index, (extra_expr, extra_legend) in enumerate(extra or []):
+        targets.append(
+            target(extra_expr, extra_legend, instant=True, ref_id=chr(66 + index))
+        )
     return {
         "datasource": DATASOURCE,
         "description": description,
@@ -368,7 +376,7 @@ def stat(
             "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": False},
             "textMode": "auto",
         },
-        "targets": [target(expr, instant=True)],
+        "targets": targets,
         "title": title,
         "type": "stat",
     }
@@ -393,7 +401,11 @@ def timeseries(
     thresholds_style: str = "off",
     min_value: float | None = None,
     max_value: float | None = None,
+    extra: list[tuple[str, str]] | None = None,
 ) -> dict[str, Any]:
+    targets = [target(expr, legend)]
+    for index, (extra_expr, extra_legend) in enumerate(extra or []):
+        targets.append(target(extra_expr, extra_legend, ref_id=chr(66 + index)))
     return {
         "datasource": DATASOURCE,
         "description": description,
@@ -416,7 +428,7 @@ def timeseries(
             },
             "tooltip": {"mode": tooltip, "sort": "desc"},
         },
-        "targets": [target(expr, legend)],
+        "targets": targets,
         "title": title,
         "type": "timeseries",
     }
@@ -531,17 +543,24 @@ def rate_expr(metric: str, selector: str, by: str = "") -> str:
     return "sum" + agg + "(rate(" + metric + "{" + selector + "}[" + RATE + "]))"
 
 
-def p95_expr(service: str, by_route: bool = False) -> str:
+def quantile_expr(
+    metric: str,
+    selector: str,
+    quantile: float,
+    by: str = "",
+) -> str:
+    agg = f" by ({by})" if by else ""
+    return (
+        f"histogram_quantile({quantile}, sum{agg}(rate("
+        f"{metric}_bucket{{{selector}}}[{RATE}])))"
+    )
+
+
+def latency_expr(service: str, quantile: float, by_route: bool = False) -> str:
     selector = f'service="{service}",route=~"$route"'
     by = "le, route" if by_route else "le"
-    return (
-        "histogram_quantile(0.95, sum by ("
-        + by
-        + ") (rate(triplanner_http_request_duration_seconds_bucket{"
-        + selector
-        + "}["
-        + RATE
-        + "])))"
+    return quantile_expr(
+        "triplanner_http_request_duration_seconds", selector, quantile, by
     )
 
 
@@ -555,17 +574,13 @@ def error_ratio_expr(selector: str, by: str = "") -> str:
     return "(" + ratio + ") or vector(0)"
 
 
-def grpc_p95_expr(service: str, by_method: bool = False) -> str:
-    selector = f'service="{service}"'
+def grpc_latency_expr(service: str, quantile: float, by_method: bool = False) -> str:
     by = "le, method" if by_method else "le"
-    return (
-        "histogram_quantile(0.95, sum by ("
-        + by
-        + ") (rate(triplanner_grpc_request_duration_seconds_bucket{"
-        + selector
-        + "}["
-        + RATE
-        + "])))"
+    return quantile_expr(
+        "triplanner_grpc_request_duration_seconds",
+        f'service="{service}"',
+        quantile,
+        by,
     )
 
 
@@ -585,7 +600,7 @@ def service_dashboard(svc: dict[str, str]) -> dict[str, Any]:
     job = svc["job"]
     service_route = f'service="{service}",route=~"$route"'
     latency_note = (
-        " Includes deliberate long-poll wait on /v1/topics/{topic}/messages."
+        " p50/p95 include deliberate long-poll wait on /v1/topics/{topic}/messages."
         if svc["key"] == "broker"
         else ""
     )
@@ -633,7 +648,7 @@ def service_dashboard(svc: dict[str, str]) -> dict[str, Any]:
             "percentunit",
             9,
             y,
-            5,
+            4,
             4,
             description="Share of requests returning 5xx; orange above 1%, red above 5%.",
             thresholds=error_thresholds(),
@@ -642,15 +657,18 @@ def service_dashboard(svc: dict[str, str]) -> dict[str, Any]:
     add(
         stat(
             layout.id(),
-            "p95 latency",
-            p95_expr(service),
+            "Latency p50 / p95",
+            latency_expr(service, 0.50),
             "s",
-            14,
+            13,
             y,
-            5,
+            7,
             4,
-            description="p95 request duration; orange above 500 ms, red above 1 s." + latency_note,
+            description="p50 baseline and p95 tail request duration; p95 turns orange above 500 ms and red above 1 s."
+            + latency_note,
             thresholds=latency_thresholds(),
+            legend="p50",
+            extra=[(latency_expr(service, 0.95), "p95")],
         )
     )
     add(
@@ -659,9 +677,9 @@ def service_dashboard(svc: dict[str, str]) -> dict[str, Any]:
             "In flight",
             f'sum(triplanner_http_requests_in_flight{{service="{service}"}})',
             "short",
-            19,
+            20,
             y,
-            5,
+            4,
             4,
             description="Requests currently being served.",
             graph_mode="none",
@@ -689,15 +707,17 @@ def service_dashboard(svc: dict[str, str]) -> dict[str, Any]:
     add(
         timeseries(
             layout.id(),
-            "p95 by route",
-            p95_expr(service, by_route=True),
-            LEGEND_ROUTE,
+            "Latency by route (p50 / p95)",
+            latency_expr(service, 0.50, by_route=True),
+            "p50 {{route}}",
             "s",
             12,
             y,
-            description="p95 latency per route template." + latency_note,
+            description="p50 baseline and p95 tail latency per route template."
+            + latency_note,
             legend_mode="table",
             tooltip="multi",
+            extra=[(latency_expr(service, 0.95, by_route=True), "p95 {{route}}")],
         )
     )
     layout.y += 8
@@ -722,15 +742,17 @@ def service_dashboard(svc: dict[str, str]) -> dict[str, Any]:
         add(
             stat(
                 layout.id(),
-                "gRPC p95",
-                grpc_p95_expr(service),
+                "gRPC p50 / p95",
+                grpc_latency_expr(service, 0.50),
                 "s",
                 8,
                 y,
                 8,
                 4,
-                description="p95 gRPC call duration.",
+                description="p50 baseline and p95 tail gRPC call duration.",
                 thresholds=latency_thresholds(),
+                legend="p50",
+                extra=[(grpc_latency_expr(service, 0.95), "p95")],
             )
         )
         add(
@@ -1087,21 +1109,33 @@ def overview_dashboard() -> dict[str, Any]:
     add(
         timeseries(
             layout.id(),
-            "gRPC p95 by service",
-            "histogram_quantile(0.95, sum by (le, service) (rate(triplanner_grpc_request_duration_seconds_bucket{"
-            + service_selector
-            + "}["
-            + RATE
-            + "])))",
-            LEGEND_SERVICE,
+            "gRPC latency by service (p50 / p95)",
+            quantile_expr(
+                "triplanner_grpc_request_duration_seconds",
+                service_selector,
+                0.50,
+                "le, service",
+            ),
+            f"p50 {LEGEND_SERVICE}",
             "s",
             12,
             y,
             12,
             10,
-            description="p95 gRPC call duration per selected service.",
+            description="p50 baseline and p95 tail gRPC call duration per selected service.",
             legend_mode="list",
             tooltip="multi",
+            extra=[
+                (
+                    quantile_expr(
+                        "triplanner_grpc_request_duration_seconds",
+                        service_selector,
+                        0.95,
+                        "le, service",
+                    ),
+                    f"p95 {LEGEND_SERVICE}",
+                )
+            ],
         )
     )
     layout.y += 10
@@ -1128,21 +1162,33 @@ def overview_dashboard() -> dict[str, Any]:
     add(
         timeseries(
             layout.id(),
-            "p95 latency by service",
-            "histogram_quantile(0.95, sum by (le, service) (rate(triplanner_http_request_duration_seconds_bucket{"
-            + service_selector
-            + "}["
-            + RATE
-            + "])))",
-            LEGEND_SERVICE,
+            "Latency by service (p50 / p95)",
+            quantile_expr(
+                "triplanner_http_request_duration_seconds",
+                service_selector,
+                0.50,
+                "le, service",
+            ),
+            f"p50 {LEGEND_SERVICE}",
             "s",
             12,
             y,
             12,
             10,
-            description="p95 request duration per selected service.",
+            description="p50 baseline and p95 tail request duration per selected service.",
             legend_mode="list",
             tooltip="multi",
+            extra=[
+                (
+                    quantile_expr(
+                        "triplanner_http_request_duration_seconds",
+                        service_selector,
+                        0.95,
+                        "le, service",
+                    ),
+                    f"p95 {LEGEND_SERVICE}",
+                )
+            ],
         )
     )
 

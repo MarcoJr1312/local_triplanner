@@ -206,7 +206,7 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 5,
+        "w": 4,
         "x": 9,
         "y": 1
       },
@@ -242,7 +242,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "p95 request duration; orange above 500 ms, red above 1 s.",
+      "description": "p50 baseline and p95 tail request duration; p95 turns orange above 500 ms and red above 1 s.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -273,8 +273,8 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 5,
-        "x": 14,
+        "w": 7,
+        "x": 13,
         "y": 1
       },
       "id": 5,
@@ -295,13 +295,22 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(triplanner_http_request_duration_seconds_bucket{service=\"locations\",route=~\"$route\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.5, sum by (le)(rate(triplanner_http_request_duration_seconds_bucket{service=\"locations\",route=~\"$route\"}[$__rate_interval])))",
           "range": false,
           "refId": "A",
-          "instant": true
+          "instant": true,
+          "legendFormat": "p50"
+        },
+        {
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.95, sum by (le)(rate(triplanner_http_request_duration_seconds_bucket{service=\"locations\",route=~\"$route\"}[$__rate_interval])))",
+          "range": false,
+          "refId": "B",
+          "instant": true,
+          "legendFormat": "p95"
         }
       ],
-      "title": "p95 latency",
+      "title": "Latency p50 / p95",
       "type": "stat"
     },
     {
@@ -332,8 +341,8 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 5,
-        "x": 19,
+        "w": 4,
+        "x": 20,
         "y": 1
       },
       "id": 6,
@@ -472,7 +481,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "p95 latency per route template.",
+      "description": "p50 baseline and p95 tail latency per route template.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -549,13 +558,20 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum by (le, route) (rate(triplanner_http_request_duration_seconds_bucket{service=\"locations\",route=~\"$route\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.5, sum by (le, route)(rate(triplanner_http_request_duration_seconds_bucket{service=\"locations\",route=~\"$route\"}[$__rate_interval])))",
           "range": true,
           "refId": "A",
-          "legendFormat": "{{route}}"
+          "legendFormat": "p50 {{route}}"
+        },
+        {
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.95, sum by (le, route)(rate(triplanner_http_request_duration_seconds_bucket{service=\"locations\",route=~\"$route\"}[$__rate_interval])))",
+          "range": true,
+          "refId": "B",
+          "legendFormat": "p95 {{route}}"
         }
       ],
-      "title": "p95 by route",
+      "title": "Latency by route (p50 / p95)",
       "type": "timeseries"
     },
     {
@@ -635,7 +651,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "p95 gRPC call duration.",
+      "description": "p50 baseline and p95 tail gRPC call duration.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -688,13 +704,22 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(triplanner_grpc_request_duration_seconds_bucket{service=\"locations\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.5, sum by (le)(rate(triplanner_grpc_request_duration_seconds_bucket{service=\"locations\"}[$__rate_interval])))",
           "range": false,
           "refId": "A",
-          "instant": true
+          "instant": true,
+          "legendFormat": "p50"
+        },
+        {
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.95, sum by (le)(rate(triplanner_grpc_request_duration_seconds_bucket{service=\"locations\"}[$__rate_interval])))",
+          "range": false,
+          "refId": "B",
+          "instant": true,
+          "legendFormat": "p95"
         }
       ],
-      "title": "gRPC p95",
+      "title": "gRPC p50 / p95",
       "type": "stat"
     },
     {

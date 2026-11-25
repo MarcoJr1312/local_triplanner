@@ -580,7 +580,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "p95 gRPC call duration per selected service.",
+      "description": "p50 baseline and p95 tail gRPC call duration per selected service.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -657,13 +657,20 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum by (le, service) (rate(triplanner_grpc_request_duration_seconds_bucket{service=~\"$service\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.5, sum by (le, service)(rate(triplanner_grpc_request_duration_seconds_bucket{service=~\"$service\"}[$__rate_interval])))",
           "range": true,
           "refId": "A",
-          "legendFormat": "{{service}}"
+          "legendFormat": "p50 {{service}}"
+        },
+        {
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.95, sum by (le, service)(rate(triplanner_grpc_request_duration_seconds_bucket{service=~\"$service\"}[$__rate_interval])))",
+          "range": true,
+          "refId": "B",
+          "legendFormat": "p95 {{service}}"
         }
       ],
-      "title": "gRPC p95 by service",
+      "title": "gRPC latency by service (p50 / p95)",
       "type": "timeseries"
     },
     {
@@ -775,7 +782,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "p95 request duration per selected service.",
+      "description": "p50 baseline and p95 tail request duration per selected service.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -852,13 +859,20 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum by (le, service) (rate(triplanner_http_request_duration_seconds_bucket{service=~\"$service\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.5, sum by (le, service)(rate(triplanner_http_request_duration_seconds_bucket{service=~\"$service\"}[$__rate_interval])))",
           "range": true,
           "refId": "A",
-          "legendFormat": "{{service}}"
+          "legendFormat": "p50 {{service}}"
+        },
+        {
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.95, sum by (le, service)(rate(triplanner_http_request_duration_seconds_bucket{service=~\"$service\"}[$__rate_interval])))",
+          "range": true,
+          "refId": "B",
+          "legendFormat": "p95 {{service}}"
         }
       ],
-      "title": "p95 latency by service",
+      "title": "Latency by service (p50 / p95)",
       "type": "timeseries"
     }
   ],
