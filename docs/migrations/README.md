@@ -50,6 +50,8 @@ Migrations:
   API; Gate 2 approved
 - [`0025-trip-form-fixes.md`](./0025-trip-form-fixes.md) — trip date range,
   budget input and long-range day strip fixes
+- [`0026-dashboard-redesign.md`](./0026-dashboard-redesign.md) — vendored
+  Grafana skills and the dashboard redesign
 
 ## Branching (local only)
 

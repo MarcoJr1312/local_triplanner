@@ -207,6 +207,13 @@ auth and Dockerfiles.
   input no longer forces a leading zero, and long-range day tabs scroll instead
   of wrapping into the action row. Evidence:
   `docs/migrations/0025-trip-form-fixes.md`.
+- M23 dashboard redesign (2026-11-25): vendored Grafana `dashboarding` and
+  `promql` skills under `.opencode/skills`, wired into the SRE agent and the
+  Orkai Kubernetes Manifest Delivery workflow. Chart 0.18.0 dashboards use
+  schema 41, datasource/service/route variables, `$__rate_interval`, units,
+  thresholds, links, transformations and a route-health bar gauge. Nine
+  dashboards live; metrics 8/8, Helm tests 7/7, targets 8/8. Evidence:
+  `docs/migrations/0026-dashboard-redesign.md`.
 - M15 done (`feature/grpc-api`): native gRPC between the API facade and the
   users/trips/locations services, with `x-internal-token`/`x-actor-id`
   metadata, `grpc.health.v1.Health`, stable `x-error-code` mapping and
@@ -263,6 +270,11 @@ cd backend/agent-service && uv run python tests/test_m2.py
 - Run tests and typecheck before claiming a slice is done. Report command output
   as evidence.
 - Update the Orkai task/milestone status when work moves.
+- Grafana dashboard work loads the vendored `grafana-dashboarding` and
+  `grafana-promql` skills under `.opencode/skills/`. Dashboards use
+  `schemaVersion: 41`, a `${datasource}` variable, the 24-column grid,
+  `$__rate_interval`, correct units, thresholds, descriptions, links and
+  transformations. The SRE workflow includes the dashboard-design step.
 - Do not invent owners, dates or acceptance evidence; use `TBD`.
 
 ## Delivery cycles (human-in-the-loop)
