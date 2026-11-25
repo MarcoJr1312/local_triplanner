@@ -35,6 +35,14 @@ spec:
         - ports:
             - port: "{{ .Values.apiService.service.port }}"
               protocol: TCP
+    {{- if .Values.apiService.rbacProxy.enabled }}
+    - fromEntities:
+        - host
+      toPorts:
+        - ports:
+            - port: "{{ .Values.apiService.rbacProxy.port }}"
+              protocol: TCP
+    {{- end }}
     - fromEndpoints:
         - matchLabels:
             k8s:io.kubernetes.pod.namespace: {{ .Release.Namespace }}
@@ -115,6 +123,14 @@ spec:
         - ports:
             - port: "{{ .Values.emailService.service.port }}"
               protocol: TCP
+    {{- if .Values.apiService.rbacProxy.enabled }}
+    - toEntities:
+        - kube-apiserver
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+    {{- end }}
     - toEndpoints:
         - matchLabels:
             k8s:io.kubernetes.pod.namespace: {{ .Values.networkPolicy.dns.namespace }}

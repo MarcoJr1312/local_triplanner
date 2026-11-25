@@ -829,6 +829,41 @@ agentService:
     automount: false
     annotations: {}
 
+  # Must stay ClusterRole while rbacProxy.enabled: TokenReview and
+  # SubjectAccessReview are cluster-scoped and the chart adds those rules.
+  rbac:
+    create: true
+    kind: ClusterRole
+    rules: []
+  # Local demo: HTTP 8443 for kubectl port-forward only. Never expose it.
+  rbacProxy:
+    enabled: true
+    image:
+      repository: quay.io/brancz/kube-rbac-proxy
+      tag: v0.23.1
+      pullPolicy: IfNotPresent
+    port: 8443
+    config:
+      apiVersion: v1
+      resource: services
+      subresource: proxy
+      name: triplanner-agent
+    resources:
+      requests:
+        cpu: 10m
+        memory: 32Mi
+      limits:
+        cpu: 100m
+        memory: 64Mi
+    securityContext:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      runAsNonRoot: true
+      runAsUser: 65532
+      runAsGroup: 65532
+      capabilities:
+        drop: [ "ALL" ]
+
   hostAliases: []
   podAnnotations: {}
   podLabels: {}
@@ -954,6 +989,40 @@ apiService:
     name: ""
     automount: false
     annotations: {}
+  # Must stay ClusterRole while rbacProxy.enabled: TokenReview and
+  # SubjectAccessReview are cluster-scoped and the chart adds those rules.
+  rbac:
+    create: true
+    kind: ClusterRole
+    rules: []
+  # Local demo: HTTP 8443 for kubectl port-forward only. Never expose it.
+  rbacProxy:
+    enabled: true
+    image:
+      repository: quay.io/brancz/kube-rbac-proxy
+      tag: v0.23.1
+      pullPolicy: IfNotPresent
+    port: 8443
+    config:
+      apiVersion: v1
+      resource: services
+      subresource: proxy
+      name: triplanner-api
+    resources:
+      requests:
+        cpu: 10m
+        memory: 32Mi
+      limits:
+        cpu: 100m
+        memory: 64Mi
+    securityContext:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      runAsNonRoot: true
+      runAsUser: 65532
+      runAsGroup: 65532
+      capabilities:
+        drop: [ "ALL" ]
   podAnnotations: {}
   podLabels: {}
   podSecurityContext:

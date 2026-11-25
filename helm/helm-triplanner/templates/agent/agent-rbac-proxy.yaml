@@ -1,0 +1,21 @@
+{{- if and .Values.agentService.enabled .Values.agentService.rbacProxy.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: triplanner-agent-rbac-proxy
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: triplanner-agent
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: agent
+data:
+  config-file.yaml: |
+    authorization:
+      resourceAttributes:
+        namespace: {{ .Release.Namespace }}
+        apiVersion: {{ .Values.agentService.rbacProxy.config.apiVersion }}
+        resource: {{ .Values.agentService.rbacProxy.config.resource }}
+        subresource: {{ .Values.agentService.rbacProxy.config.subresource }}
+        name: {{ .Values.agentService.rbacProxy.config.name }}
+        verb: get
+{{- end }}

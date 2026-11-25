@@ -31,7 +31,7 @@ spec:
         {{- end }}
     spec:
       serviceAccountName: {{ include "helm-triplanner.agentServiceAccountName" . }}
-      automountServiceAccountToken: {{ .Values.agentService.serviceAccount.automount }}
+      automountServiceAccountToken: {{ if .Values.agentService.rbacProxy.enabled }}true{{ else }}{{ .Values.agentService.serviceAccount.automount }}{{ end }}
       terminationGracePeriodSeconds: 30
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
@@ -102,6 +102,41 @@ spec:
             {{- toYaml .Values.agentService.resources | nindent 12 }}
           securityContext:
             {{- toYaml .Values.agentService.securityContext | nindent 12 }}
+        {{- if .Values.agentService.rbacProxy.enabled }}
+        - name: kube-rbac-proxy
+          image: "{{ .Values.agentService.rbacProxy.image.repository }}:{{ .Values.agentService.rbacProxy.image.tag }}"
+          imagePullPolicy: {{ .Values.agentService.rbacProxy.image.pullPolicy | default "IfNotPresent" }}
+          args:
+            - --insecure-listen-address=0.0.0.0:{{ .Values.agentService.rbacProxy.port }}
+            - --upstream=http://127.0.0.1:{{ .Values.agentService.service.port }}/
+            - --config-file=/etc/kube-rbac-proxy/config-file.yaml
+          ports:
+            - name: rbac-proxy
+              containerPort: {{ .Values.agentService.rbacProxy.port }}
+              protocol: TCP
+          volumeMounts:
+            - name: rbac-proxy-config
+              mountPath: /etc/kube-rbac-proxy
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+          livenessProbe:
+            tcpSocket:
+              port: rbac-proxy
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            tcpSocket:
+              port: rbac-proxy
+            initialDelaySeconds: 3
+            periodSeconds: 5
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.agentService.rbacProxy.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.agentService.rbacProxy.securityContext | nindent 12 }}
+        {{- end }}
       volumes:
         - name: agent-data
           {{- if .Values.agentService.persistence.enabled }}
@@ -112,6 +147,11 @@ spec:
           {{- end }}
         - name: tmp
           emptyDir: {}
+        {{- if .Values.agentService.rbacProxy.enabled }}
+        - name: rbac-proxy-config
+          configMap:
+            name: triplanner-agent-rbac-proxy
+        {{- end }}
       {{- with .Values.agentService.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

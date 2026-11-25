@@ -30,7 +30,7 @@ spec:
         {{- end }}
     spec:
       serviceAccountName: {{ include "helm-triplanner.apiServiceAccountName" . }}
-      automountServiceAccountToken: {{ .Values.apiService.serviceAccount.automount }}
+      automountServiceAccountToken: {{ if .Values.apiService.rbacProxy.enabled }}true{{ else }}{{ .Values.apiService.serviceAccount.automount }}{{ end }}
       terminationGracePeriodSeconds: 30
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
@@ -126,12 +126,52 @@ spec:
             {{- toYaml .Values.apiService.resources | nindent 12 }}
           securityContext:
             {{- toYaml .Values.apiService.securityContext | nindent 12 }}
+        {{- if .Values.apiService.rbacProxy.enabled }}
+        - name: kube-rbac-proxy
+          image: "{{ .Values.apiService.rbacProxy.image.repository }}:{{ .Values.apiService.rbacProxy.image.tag }}"
+          imagePullPolicy: {{ .Values.apiService.rbacProxy.image.pullPolicy | default "IfNotPresent" }}
+          args:
+            - --insecure-listen-address=0.0.0.0:{{ .Values.apiService.rbacProxy.port }}
+            - --upstream=http://127.0.0.1:{{ .Values.apiService.service.port }}/
+            - --config-file=/etc/kube-rbac-proxy/config-file.yaml
+          ports:
+            - name: rbac-proxy
+              containerPort: {{ .Values.apiService.rbacProxy.port }}
+              protocol: TCP
+          volumeMounts:
+            - name: rbac-proxy-config
+              mountPath: /etc/kube-rbac-proxy
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+          livenessProbe:
+            tcpSocket:
+              port: rbac-proxy
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            tcpSocket:
+              port: rbac-proxy
+            initialDelaySeconds: 3
+            periodSeconds: 5
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.apiService.rbacProxy.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.apiService.rbacProxy.securityContext | nindent 12 }}
+        {{- end }}
       volumes:
         - name: uploads
           persistentVolumeClaim:
             claimName: {{ include "helm-triplanner.apiUploadsClaimName" . }}
         - name: tmp
           emptyDir: {}
+        {{- if .Values.apiService.rbacProxy.enabled }}
+        - name: rbac-proxy-config
+          configMap:
+            name: triplanner-api-rbac-proxy
+        {{- end }}
       {{- with .Values.apiService.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

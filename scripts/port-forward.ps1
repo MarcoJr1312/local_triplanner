@@ -8,7 +8,8 @@
   services. App ports bind on -BindAddress (default 0.0.0.0) so Docker Compose
   containers can reach them through host.docker.internal.
   Proxy ports bind on 127.0.0.1 only and use distinct local ports
-  (8443/8444/8445/8446/8447) because each sidecar listens on 8443 inside its pod.
+  (8443/8444/8445/8446/8447/8448/8449) because each sidecar listens on 8443
+  inside its pod.
 
   Re-running the script stops the forwards it started previously and skips
   ports that are already in use (use -Strict to fail instead).
@@ -20,7 +21,8 @@
   Address for the app ports. Default: 0.0.0.0.
 
 .PARAMETER Proxy
-  Also forward the kube-rbac-proxy ports on 127.0.0.1:8443/8444/8445/8446/8447.
+  Also forward the kube-rbac-proxy ports on
+  127.0.0.1:8443/8444/8445/8446/8447/8448/8449.
 
 .PARAMETER Mongo
   Also forward MongoDB on 127.0.0.1:27018. The chart runs Mongo as a
@@ -137,6 +139,8 @@ $targets = @(
   [pscustomobject]@{ Name = 'locations'; Target = 'svc/triplanner-locations'; LocalPort = 4300; RemotePort = 4300; Bind = $BindAddress; Health = 'http://localhost:4300/health' }
   [pscustomobject]@{ Name = 'trips'; Target = 'svc/triplanner-trips'; LocalPort = 4400; RemotePort = 4400; Bind = $BindAddress; Health = 'http://localhost:4400/health' }
   [pscustomobject]@{ Name = 'users'; Target = 'svc/triplanner-users'; LocalPort = 4500; RemotePort = 4500; Bind = $BindAddress; Health = 'http://localhost:4500/health' }
+  [pscustomobject]@{ Name = 'agent'; Target = 'svc/triplanner-agent'; LocalPort = 4100; RemotePort = 4100; Bind = $BindAddress; Health = 'http://localhost:4100/health' }
+  [pscustomobject]@{ Name = 'api'; Target = 'svc/triplanner-api'; LocalPort = 4000; RemotePort = 4000; Bind = $BindAddress; Health = 'http://localhost:4000/health' }
 )
 
 if ($Proxy) {
@@ -146,6 +150,8 @@ if ($Proxy) {
     [pscustomobject]@{ Name = 'locations-proxy'; Target = 'svc/triplanner-locations'; LocalPort = 8445; RemotePort = 8443; Bind = '127.0.0.1'; Health = $null }
     [pscustomobject]@{ Name = 'trips-proxy'; Target = 'svc/triplanner-trips'; LocalPort = 8446; RemotePort = 8443; Bind = '127.0.0.1'; Health = $null }
     [pscustomobject]@{ Name = 'users-proxy'; Target = 'svc/triplanner-users'; LocalPort = 8447; RemotePort = 8443; Bind = '127.0.0.1'; Health = $null }
+    [pscustomobject]@{ Name = 'agent-proxy'; Target = 'svc/triplanner-agent'; LocalPort = 8448; RemotePort = 8443; Bind = '127.0.0.1'; Health = $null }
+    [pscustomobject]@{ Name = 'api-proxy'; Target = 'svc/triplanner-api'; LocalPort = 8449; RemotePort = 8443; Bind = '127.0.0.1'; Health = $null }
   )
 }
 
@@ -230,6 +236,8 @@ try {
     Write-Host ""
     Write-Host "RBAC proxies are 127.0.0.1 only. Example:" -ForegroundColor DarkGray
     Write-Host "  curl.exe -i http://localhost:8446/ready    # trips: 401 without a token" -ForegroundColor DarkGray
+    Write-Host "  curl.exe -i http://localhost:8448/health   # agent: 401 without a token" -ForegroundColor DarkGray
+    Write-Host "  curl.exe -i http://localhost:8449/health   # api:   401 without a token" -ForegroundColor DarkGray
   }
   Write-Host ""
   Write-Host "Press Ctrl+C to stop. If the forwards survive, run: scripts/port-forward.ps1 -Stop" -ForegroundColor DarkGray

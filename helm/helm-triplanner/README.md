@@ -270,15 +270,21 @@ credential-free URL or move it to a Secret before using it in a shared cluster.
 
 ## RBAC and kube-rbac-proxy
 
-Each workload has its own ServiceAccount:
+Each internal workload has its own ServiceAccount and a `kube-rbac-proxy`
+sidecar on 8443:
 
 - `triplanner-helm-triplanner-broker`
 - `triplanner-helm-triplanner-email`
 - `triplanner-helm-triplanner-locations`
 - `triplanner-helm-triplanner-trips`
 - `triplanner-helm-triplanner-users`
-- `triplanner-helm-triplanner-web` (no Kubernetes API access; no
-  kube-rbac-proxy sidecar)
+- `triplanner-helm-triplanner-agent`
+- `triplanner-helm-triplanner-api`
+- `triplanner-helm-triplanner-web` (public Cilium Gateway entry; no Kubernetes
+  API access and no kube-rbac-proxy sidecar)
+
+This is the chart standard: every internal service runs the sidecar; the web is
+the only exception because it is the public entry point.
 
 The main app containers do not use the Kubernetes API. The
 `kube-rbac-proxy` sidecar does: it needs `create` on
@@ -310,13 +316,18 @@ curl -i http://localhost:8443/ready
 
 kubectl -n triplanner port-forward svc/triplanner-users 8443:8443
 curl -i http://localhost:8443/ready
+
+kubectl -n triplanner port-forward svc/triplanner-agent 8448:8443
+curl -i http://localhost:8448/health
+
+kubectl -n triplanner port-forward svc/triplanner-api 8449:8443
+curl -i http://localhost:8449/health
 ```
 
 A client token must be allowed to `get` `services/proxy` for the service name in
 the proxy ConfigMap. The proxy returns 403 for an authenticated but unauthorized
-token, and proxies the upstream on success. The main broker/email/locations HTTP
-ports (8080/4200/4300) remain available to the app; 8443 is the RBAC-protected
-path.
+token, and proxies the upstream on success. The main app HTTP ports remain
+available to the app; 8443 is the RBAC-protected path.
 
 ClusterRoles and ClusterRoleBindings are cluster-scoped and therefore do not
 have `metadata.namespace`; every namespaced object still uses
@@ -452,12 +463,15 @@ bash scripts/port-forward.sh
 | `4400` | `triplanner-trips` | app port |
 | `4500` | `triplanner-users` | app port |
 | `4100` | `triplanner-agent` | app port |
+| `4000` | `triplanner-api` | app port |
 | — | `triplanner-web` | served through the Cilium Gateway at `http://triplanner.localhost:9080`; not port-forwarded |
 | `8443` | broker `kube-rbac-proxy` | with `-Proxy` / `--proxy` |
 | `8444` | email `kube-rbac-proxy` | with `-Proxy` / `--proxy` |
 | `8445` | locations `kube-rbac-proxy` | with `-Proxy` / `--proxy` |
 | `8446` | trips `kube-rbac-proxy` | with `-Proxy` / `--proxy` |
 | `8447` | users `kube-rbac-proxy` | with `-Proxy` / `--proxy` |
+| `8448` | agent `kube-rbac-proxy` | with `-Proxy` / `--proxy` |
+| `8449` | api `kube-rbac-proxy` | with `-Proxy` / `--proxy` |
 | `27018` | MongoDB | with `-Mongo` / `--mongo`; avoids Compose on 27017 |
 | `5433` | trips PostgreSQL | with `-Postgres` / `--postgres`; avoids Compose on 5432 |
 | `5434` | users PostgreSQL | with `-Postgres` / `--postgres`; avoids Compose on 5432 |

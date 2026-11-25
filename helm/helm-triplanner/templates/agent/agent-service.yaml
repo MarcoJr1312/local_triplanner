@@ -17,4 +17,9 @@ spec:
     - name: http
       port: {{ .Values.agentService.service.port }}
       targetPort: http
+    {{- if .Values.agentService.rbacProxy.enabled }}
+    - name: rbac-proxy
+      port: {{ .Values.agentService.rbacProxy.port }}
+      targetPort: rbac-proxy
+    {{- end }}
 {{- end }}

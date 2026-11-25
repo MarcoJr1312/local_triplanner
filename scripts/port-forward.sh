@@ -3,7 +3,8 @@
 #
 # App ports bind on 0.0.0.0 by default so Docker Compose containers can reach
 # them through host.docker.internal. Proxy ports bind on 127.0.0.1 only and use
-# distinct local ports because every sidecar listens on 8443 inside its pod.
+# distinct local ports (8443/8444/8445/8446/8447/8448/8449) because every sidecar
+# listens on 8443 inside its pod.
 #
 # Usage:
 #   bash scripts/port-forward.sh
@@ -27,7 +28,7 @@ Port-forward the Triplanner Helm services.
 Options:
   -n, --namespace NAME   Kubernetes namespace (default: triplanner)
       --bind ADDRESS     Bind address for app ports (default: 0.0.0.0)
-      --proxy            Also forward the RBAC proxies (127.0.0.1:8443/8444/8445/8446/8447)
+      --proxy            Also forward the RBAC proxies (127.0.0.1:8443-8449)
       --mongo            Also forward MongoDB (127.0.0.1:27018)
       --postgres         Also forward the trips PostgreSQL (127.0.0.1:5433)
       --strict           Fail when a local port is already in use
@@ -88,6 +89,8 @@ targets=(
   "locations|svc/triplanner-locations|4300|4300|$BIND_ADDRESS|http://localhost:4300/health"
   "trips|svc/triplanner-trips|4400|4400|$BIND_ADDRESS|http://localhost:4400/health"
   "users|svc/triplanner-users|4500|4500|$BIND_ADDRESS|http://localhost:4500/health"
+  "agent|svc/triplanner-agent|4100|4100|$BIND_ADDRESS|http://localhost:4100/health"
+  "api|svc/triplanner-api|4000|4000|$BIND_ADDRESS|http://localhost:4000/health"
 )
 
 if ((PROXY)); then
@@ -97,6 +100,8 @@ if ((PROXY)); then
     "locations-proxy|svc/triplanner-locations|8445|8443|127.0.0.1|"
     "trips-proxy|svc/triplanner-trips|8446|8443|127.0.0.1|"
     "users-proxy|svc/triplanner-users|8447|8443|127.0.0.1|"
+    "agent-proxy|svc/triplanner-agent|8448|8443|127.0.0.1|"
+    "api-proxy|svc/triplanner-api|8449|8443|127.0.0.1|"
   )
 fi
 
@@ -171,6 +176,8 @@ if ((PROXY)); then
   echo ""
   echo "RBAC proxies are 127.0.0.1 only. Example:"
   echo "  curl -i http://localhost:8447/ready    # users: 401 without a token"
+  echo "  curl -i http://localhost:8448/health   # agent: 401 without a token"
+  echo "  curl -i http://localhost:8449/health   # api:   401 without a token"
 fi
 echo ""
 echo "Press Ctrl+C to stop. If the forwards survive, run: bash scripts/port-forward.sh --stop"
