@@ -177,8 +177,18 @@ the web Service directly.
 powershell -ExecutionPolicy Bypass -File scripts/metrics-smoke.ps1 -Target all
 ```
 
-ServiceMonitors are disabled by default until `kube-prometheus-stack` is
-installed. See the [chart README](helm/helm-triplanner/README.md#metrics).
+ServiceMonitors are disabled by default in the chart. The local
+`prometheus` release in `kind-triplanner-cilium/monitoring` enables them and
+scrapes all 8 runtimes. Grafana provisions 9 dashboards: one per service plus a
+Triplanner overview. Grafana and Prometheus stay ClusterIP-only:
+
+```powershell
+kubectl -n monitoring port-forward svc/prometheus-grafana 3001:80
+# http://localhost:3001
+```
+
+See the [chart README](helm/helm-triplanner/README.md#metrics) and the
+[Cilium kind guide](deploy/kind/README.md#monitoring).
 
 ### What to try
 

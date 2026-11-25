@@ -190,6 +190,14 @@ auth and Dockerfiles.
   the web `/metrics` path. Gate 2 approved locally; the monitoring stack,
   image publication and release tag are deferred to M20. Evidence:
   `docs/migrations/0022-metrics.md`; local images `kind-0.15.1`.
+- M20 monitoring: kube-prometheus-stack release `prometheus` runs in
+  `kind-triplanner-cilium/monitoring` (moved from `docker-desktop`, where
+  ServiceMonitors could not reach the live services). Chart 0.16.0 enables 8
+  ServiceMonitors (`release: prometheus`, `honorLabels: true`) and 9 Grafana
+  dashboard ConfigMaps (`grafana_dashboard=1`): 8 per-service dashboards plus
+  an overview. Prometheus targets are 8/8 `UP`; Grafana provisions all 9.
+  Gate 2 pending; no image or release publication. Evidence:
+  `docs/migrations/0023-monitoring.md`.
 - M15 done (`feature/grpc-api`): native gRPC between the API facade and the
   users/trips/locations services, with `x-internal-token`/`x-actor-id`
   metadata, `grpc.health.v1.Health`, stable `x-error-code` mapping and

@@ -44,6 +44,8 @@ Migrations:
 - [`0021-api-service.md`](./0021-api-service.md) — API facade as a Helm workload
 - [`0022-metrics.md`](./0022-metrics.md) — `/metrics` contract, scrape wiring;
   implemented locally, Gate 2 pending
+- [`0023-monitoring.md`](./0023-monitoring.md) — ServiceMonitors and Grafana
+  dashboards; implemented locally, Gate 2 pending
 
 ## Branching (local only)
 
