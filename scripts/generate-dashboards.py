@@ -229,36 +229,40 @@ def timeseries_field(
     thresholds: dict[str, Any] | None = None,
     color_mode: str = "palette-classic",
     thresholds_style: str = "off",
+    min_value: float | None = None,
+    max_value: float | None = None,
 ) -> dict[str, Any]:
-    return {
-        "defaults": {
-            "color": {"mode": color_mode},
-            "custom": {
-                "axisCenteredZero": False,
-                "axisColorMode": "text",
-                "axisLabel": "",
-                "axisPlacement": "auto",
-                "barAlignment": 0,
-                "drawStyle": "line",
-                "fillOpacity": 8,
-                "gradientMode": "none",
-                "hideFrom": {"legend": False, "tooltip": False, "viz": False},
-                "lineInterpolation": "linear",
-                "lineWidth": 1,
-                "pointSize": 5,
-                "scaleDistribution": {"type": "linear"},
-                "showPoints": "never",
-                "spanNulls": False,
-                "stacking": {"group": "A", "mode": "none"},
-                "thresholdsStyle": {"mode": thresholds_style},
-            },
-            "mappings": [],
-            "thresholds": thresholds or default_thresholds(),
-            "unit": unit,
-            "noValue": "No data",
+    defaults: dict[str, Any] = {
+        "color": {"mode": color_mode},
+        "custom": {
+            "axisCenteredZero": False,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 8,
+            "gradientMode": "none",
+            "hideFrom": {"legend": False, "tooltip": False, "viz": False},
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {"type": "linear"},
+            "showPoints": "never",
+            "spanNulls": False,
+            "stacking": {"group": "A", "mode": "none"},
+            "thresholdsStyle": {"mode": thresholds_style},
         },
-        "overrides": [],
+        "mappings": [],
+        "thresholds": thresholds or default_thresholds(),
+        "unit": unit,
+        "noValue": "No data",
     }
+    if min_value is not None:
+        defaults["min"] = min_value
+    if max_value is not None:
+        defaults["max"] = max_value
+    return {"defaults": defaults, "overrides": []}
 
 
 def stat_field(
@@ -384,6 +388,8 @@ def timeseries(
     thresholds: dict[str, Any] | None = None,
     color_mode: str = "palette-classic",
     thresholds_style: str = "off",
+    min_value: float | None = None,
+    max_value: float | None = None,
 ) -> dict[str, Any]:
     return {
         "datasource": DATASOURCE,
@@ -393,6 +399,8 @@ def timeseries(
             thresholds=thresholds,
             color_mode=color_mode,
             thresholds_style=thresholds_style,
+            min_value=min_value,
+            max_value=max_value,
         ),
         "gridPos": {"h": h, "w": w, "x": x, "y": y},
         "id": panel_id,
@@ -937,6 +945,8 @@ def overview_dashboard() -> dict[str, Any]:
             thresholds=error_thresholds(),
             color_mode="thresholds",
             thresholds_style="line",
+            min_value=0,
+            max_value=1,
             legend_mode="list",
             tooltip="multi",
         )
