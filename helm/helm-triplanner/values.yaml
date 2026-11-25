@@ -1074,10 +1074,16 @@ metrics:
   serviceMonitor:
     # Requires the Prometheus Operator CRDs from kube-prometheus-stack.
     # Keep false until the stack is installed, then enable it and set the
-    # labels the operator selects (for example release: kube-prometheus-stack).
+    # labels the operator selects (for example release: prometheus).
     enabled: false
     interval: 30s
     scrapeTimeout: 10s
+    labels: {}
+  dashboards:
+    # Grafana sidecar dashboards: ConfigMaps labeled grafana_dashboard=1.
+    # The kube-prometheus-stack sidecar watches all namespaces by default.
+    enabled: true
+    folder: Triplanner
     labels: {}
 
 networkPolicy:

@@ -26,6 +26,18 @@ images:
     name: triplanner-local/web
     tag: kind-0.15.1
 
+# The kube-prometheus-stack release `prometheus` selects ServiceMonitors from
+# all namespaces with `release: prometheus`. Dashboards are picked up by the
+# Grafana sidecar (`grafana_dashboard=1`, all namespaces).
+metrics:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+    labels:
+      release: prometheus
+  dashboards:
+    enabled: true
+
 networkPolicy:
   # Docker Desktop's WSL2 kind kernel lacks xt_socket, so Cilium's DNS proxy
   # (required by toFQDNs) and the probe path are not usable here. Enable this on

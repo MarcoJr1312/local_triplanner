@@ -82,10 +82,13 @@ RBAC:
      kubectl -n {{ .Release.Namespace }} exec deploy/triplanner-api -- \
        curl -fsS http://localhost:{{ .Values.apiService.service.port }}/metrics
    The web /metrics path redirects to / at the Gateway; Prometheus scrapes the
-   Service directly. ServiceMonitors are disabled until kube-prometheus-stack:
+   Service directly. ServiceMonitors are disabled by default. With a
+   kube-prometheus-stack release named `prometheus`:
      helm upgrade triplanner ./helm/helm-triplanner -n {{ .Release.Namespace }} \
        --set metrics.serviceMonitor.enabled=true \
-       --set metrics.serviceMonitor.labels.release=kube-prometheus-stack
+       --set metrics.serviceMonitor.labels.release=prometheus
+   The chart ships 9 Grafana dashboards as ConfigMaps labeled
+   grafana_dashboard=1 (8 services + overview).
 
 10. BYOK:
    The email service starts with provider={{ .Values.emailService.provider }}.

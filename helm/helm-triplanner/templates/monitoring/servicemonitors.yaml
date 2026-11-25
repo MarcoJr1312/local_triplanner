@@ -36,6 +36,7 @@ spec:
       path: {{ $root.Values.metrics.path | quote }}
       interval: {{ $root.Values.metrics.serviceMonitor.interval }}
       scrapeTimeout: {{ $root.Values.metrics.serviceMonitor.scrapeTimeout }}
+      honorLabels: true
 {{- end }}
 {{- end }}
 {{- end }}
