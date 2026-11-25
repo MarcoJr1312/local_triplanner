@@ -41,6 +41,7 @@ from tripsuggest.vector_store import (
     sync_user_interests,
 )
 from tripsuggest.interests import normalize_terms
+from tripsuggest.metrics import install_metrics
 from tripsuggest.plan import parse_plan_block
 from tripsuggest.settings import get_settings, update_override
 
@@ -63,6 +64,7 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="Tripsuggest agent service", version="0.4.0", lifespan=lifespan)
+install_metrics(app)
 
 AGENT_TIMEOUT_S = 90
 

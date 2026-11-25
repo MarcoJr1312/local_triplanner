@@ -1,5 +1,7 @@
 import { backendOrigin, missingRuntimeConfig } from '@/lib/server-config';
+import { withHttpMetrics } from '@/lib/metrics';
 
+export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const API_TIMEOUT_MS = 2_000;
@@ -8,7 +10,7 @@ const API_TIMEOUT_MS = 2_000;
 // the body but never fails the probe: an API outage must not pull the only web
 // pod out of the Service and replace the whole UI with an nginx 503 page. The
 // app already shows its own degraded state when the API is down.
-export async function GET(): Promise<Response> {
+async function ready(_request: Request): Promise<Response> {
   const missing = missingRuntimeConfig();
   if (missing.length > 0) {
     return Response.json(
@@ -34,3 +36,5 @@ export async function GET(): Promise<Response> {
     return Response.json({ status: 'ready', backend: 'down' });
   }
 }
+
+export const GET = withHttpMetrics('/api/ready', ready);

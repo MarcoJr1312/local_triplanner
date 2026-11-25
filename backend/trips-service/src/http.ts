@@ -5,6 +5,7 @@
 import type { TripsService } from './domain/service.ts';
 import { verifyInternalToken } from './env.ts';
 import { AppError, toErrorResponse } from './errors.ts';
+import { renderMetrics, withHttpMetrics } from './metrics.ts';
 
 export const MAX_BODY_BYTES = 1_048_576;
 
@@ -307,11 +308,18 @@ export function createHandler(deps: HttpDeps): (req: Request) => Promise<Respons
       json(200, await service().deleteTrip(ctx.actor, ctx.params.id ?? ''))),
   ];
 
-  return async function handle(req: Request): Promise<Response> {
+  return withHttpMetrics(async function handle(req: Request): Promise<Response> {
     try {
       const url = new URL(req.url);
       const method = req.method.toUpperCase();
 
+      if (method === 'GET' && url.pathname === '/metrics') {
+        const { body, contentType } = await renderMetrics();
+        return new Response(body, {
+          status: 200,
+          headers: { 'content-type': contentType, 'cache-control': 'no-store' },
+        });
+      }
       if (method === 'GET' && url.pathname === '/health') {
         return json(200, { status: 'ok' });
       }
@@ -350,5 +358,5 @@ export function createHandler(deps: HttpDeps): (req: Request) => Promise<Respons
       }
       return json(status, body);
     }
-  };
+  });
 }

@@ -27,13 +27,15 @@ func New(st *store.Store, logger *slog.Logger) http.Handler {
 		logger = slog.Default()
 	}
 	server := &Server{store: st, logger: logger}
+	metrics := newMetrics()
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", server.health)
 	mux.HandleFunc("GET /ready", server.ready)
 	mux.HandleFunc("POST /v1/topics/{topic}/messages", server.publish)
 	mux.HandleFunc("GET /v1/topics/{topic}/messages", server.fetch)
 	mux.HandleFunc("POST /v1/topics/{topic}/ack", server.ack)
-	return mux
+	mux.Handle("GET /metrics", metrics.handler())
+	return metrics.middleware(mux)
 }
 
 type errorBody struct {

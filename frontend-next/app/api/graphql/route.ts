@@ -1,15 +1,17 @@
 import type { NextRequest } from 'next/server';
 import { backendGraphqlUrl } from '@/lib/server-config';
+import { withHttpMetrics } from '@/lib/metrics';
 
 // Proxy seguro de GraphQL. El navegador SOLO habla con esta ruta; aqui se
 // reenvia al backend local resolviendo el x-user-id del lado del servidor.
 // No hay claves de servicios externos: el backend resuelve el catalogo local.
 
+export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const DEMO_USER_ID = '11111111-1111-4111-8111-111111111111';
 
-export async function POST(request: NextRequest) {
+async function postHandler(request: NextRequest) {
   const backend = backendGraphqlUrl();
 
   let body: string;
@@ -62,3 +64,5 @@ export async function POST(request: NextRequest) {
     headers: { 'Content-Type': contentType },
   });
 }
+
+export const POST = withHttpMetrics('/api/graphql', postHandler);

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"triplanner/backend/kafka/internal/store"
@@ -110,5 +111,63 @@ func TestRejectsInvalidTopic(t *testing.T) {
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", response.StatusCode)
+	}
+}
+
+func TestMetrics(t *testing.T) {
+	server := newServer(t)
+
+	response, err := http.Get(server.URL + "/health")
+	if err != nil {
+		t.Fatalf("health: %v", err)
+	}
+	io.Copy(io.Discard, response.Body)
+	response.Body.Close()
+
+	response = postJSON(t, server.URL+"/v1/topics/TripInvitation/messages", []byte(`{"value":{"ok":true}}`))
+	io.Copy(io.Discard, response.Body)
+	response.Body.Close()
+
+	response, err = http.Get(server.URL + "/nope")
+	if err != nil {
+		t.Fatalf("not found: %v", err)
+	}
+	io.Copy(io.Discard, response.Body)
+	response.Body.Close()
+
+	response, err = http.Get(server.URL + "/metrics")
+	if err != nil {
+		t.Fatalf("metrics: %v", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("metrics status: %d", response.StatusCode)
+	}
+	if contentType := response.Header.Get("Content-Type"); !strings.Contains(contentType, "text/plain") {
+		t.Fatalf("unexpected content type: %s", contentType)
+	}
+
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		t.Fatalf("read metrics: %v", err)
+	}
+	text := string(body)
+	for _, want := range []string{
+		"triplanner_build_info",
+		"triplanner_http_requests_total",
+		"triplanner_http_request_duration_seconds",
+		"triplanner_http_requests_in_flight",
+		`service="broker"`,
+		`route="/health"`,
+		`route="/v1/topics/{topic}/messages"`,
+		`route="other"`,
+		"go_goroutines",
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("metrics missing %q:\n%s", want, text)
+		}
+	}
+	if strings.Contains(text, `route="/metrics"`) {
+		t.Fatalf("metrics endpoint counted its own scrape:\n%s", text)
 	}
 }

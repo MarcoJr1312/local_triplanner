@@ -13,5 +13,8 @@
     "test": "bun test",
     "typecheck": "tsc --noEmit"
   },
-  "type": "module"
+  "type": "module",
+  "dependencies": {
+    "prom-client": "^15.1.3"
+  }
 }

@@ -31,6 +31,7 @@ import { serveUploads } from './uploads.ts';
 import { createTripsStore } from './trips/index.ts';
 import { createUsersStore } from './users/index.ts';
 import { startReminderScheduler } from './reminders.ts';
+import { instrumentNodeRequest, renderMetrics } from './metrics.ts';
 
 const databaseUrl = await resolveDatabaseUrl();
 const db = await PgDb.connect(databaseUrl);
@@ -88,6 +89,23 @@ const yoga = createYoga({
 });
 
 const server = createServer((req, res) => {
+  instrumentNodeRequest(req, res);
+  const url = new URL(req.url ?? '/', 'http://localhost');
+  if (req.method === 'GET' && url.pathname === '/metrics') {
+    void renderMetrics()
+      .then(({ body, contentType }) => {
+        res.writeHead(200, {
+          'Content-Type': contentType,
+          'Cache-Control': 'no-store',
+        });
+        res.end(body);
+      })
+      .catch((err) => {
+        console.error('[metrics] error:', err instanceof Error ? err.message : err);
+        if (!res.headersSent) res.writeHead(500).end('Internal error');
+      });
+    return;
+  }
   if (req.method === 'GET' && req.url === '/health') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ status: 'ok' }));

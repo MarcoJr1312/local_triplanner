@@ -6,6 +6,7 @@ import { timingSafeEqual } from 'node:crypto';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { Logger } from './logger.ts';
 import { EmailSettingsValidationError, type EmailSettingsStore } from './settings.ts';
+import { instrumentNodeRequest, renderMetrics } from './metrics.ts';
 
 export interface HealthState {
   ready: boolean;
@@ -98,6 +99,24 @@ export function startHttpServer({
   const route = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     const url = new URL(req.url ?? '/', 'http://localhost');
 
+    if (req.method === 'GET' && url.pathname === '/metrics') {
+      try {
+        const { body, contentType } = await renderMetrics();
+        res.writeHead(200, {
+          'Content-Type': contentType,
+          'Cache-Control': 'no-store',
+          'Content-Length': Buffer.byteLength(body),
+        });
+        res.end(body);
+      } catch (error) {
+        logger.error('metrics.render_failed', {
+          reason: error instanceof Error ? error.message : 'unknown error',
+        });
+        json(res, 500, { error: { code: 'METRICS_ERROR', message: 'metrics unavailable' } });
+      }
+      return;
+    }
+
     if (req.method === 'GET' && url.pathname === '/health') {
       json(res, 200, {
         status: 'ok',
@@ -182,6 +201,7 @@ export function startHttpServer({
   };
 
   const server: Server = createServer((req, res) => {
+    instrumentNodeRequest(req, res);
     void route(req, res).catch((error: unknown) => {
       logger.error('http.request_failed', {
         reason: error instanceof Error ? error.message : 'unknown error',

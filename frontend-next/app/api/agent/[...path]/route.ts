@@ -1,9 +1,11 @@
 import type { NextRequest } from 'next/server';
 import { agentOrigin } from '@/lib/server-config';
+import { withHttpMetrics } from '@/lib/metrics';
 
 // Proxy for the agent service. Runtime env keeps the same Next image working
 // in Compose, Helm and host development.
 
+export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 async function proxy(
@@ -47,16 +49,19 @@ async function proxy(
   });
 }
 
-export async function GET(
+async function getHandler(
   request: NextRequest,
   ctx: { params: Promise<{ path: string[] }> },
 ): Promise<Response> {
   return proxy(request, ctx, 'GET');
 }
 
-export async function POST(
+async function postHandler(
   request: NextRequest,
   ctx: { params: Promise<{ path: string[] }> },
 ): Promise<Response> {
   return proxy(request, ctx, 'POST');
 }
+
+export const GET = withHttpMetrics('/api/agent/*', getHandler);
+export const POST = withHttpMetrics('/api/agent/*', postHandler);

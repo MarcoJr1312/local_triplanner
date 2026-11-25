@@ -12,6 +12,7 @@ import {
   LocationsSettingsValidationError,
   type LocationsSettingsProvider,
 } from './settings.ts';
+import { renderMetrics, withHttpMetrics } from './metrics.ts';
 
 export interface SeedState {
   enabled: boolean;
@@ -72,6 +73,14 @@ export function createHandler(deps: HttpDeps): (req: Request) => Promise<Respons
   async function route(req: Request): Promise<Response> {
     const url = new URL(req.url);
     const path = url.pathname.replace(/\/+$/, '') || '/';
+
+    if (path === '/metrics' && req.method === 'GET') {
+      const { body, contentType } = await renderMetrics();
+      return new Response(body, {
+        status: 200,
+        headers: { 'content-type': contentType, 'cache-control': 'no-store' },
+      });
+    }
 
     if (path === '/health' && req.method === 'GET') {
       return json(200, { status: 'ok' });
@@ -269,7 +278,7 @@ export function createHandler(deps: HttpDeps): (req: Request) => Promise<Respons
     return fail(404, 'NOT_FOUND');
   }
 
-  return async function handle(req: Request): Promise<Response> {
+  return withHttpMetrics(async function handle(req: Request): Promise<Response> {
     try {
       return await route(req);
     } catch (error) {
@@ -277,5 +286,5 @@ export function createHandler(deps: HttpDeps): (req: Request) => Promise<Respons
       console.error('[locations] request failed:', message);
       return fail(503, 'UNAVAILABLE');
     }
-  };
+  });
 }
