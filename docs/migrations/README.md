@@ -42,6 +42,8 @@ Migrations:
   trips, locations)
 - [`0020-grpc-qa.md`](./0020-grpc-qa.md) — gRPC API QA evidence and Gate 2
 - [`0021-api-service.md`](./0021-api-service.md) — API facade as a Helm workload
+- [`0022-metrics.md`](./0022-metrics.md) — `/metrics` contract, scrape wiring and
+  Gate 1 (proposed)
 
 ## Branching (local only)
 
