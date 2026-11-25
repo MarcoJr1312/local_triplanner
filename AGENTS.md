@@ -229,6 +229,13 @@ auth and Dockerfiles.
   dashboard descriptions. Gate 2 approved locally; image publication and
   release tagging deferred. Evidence:
   `docs/migrations/0028-grpc-metrics.md`.
+- M26 p50 latency baselines (2026-11-25): every p95 panel now shows p50 as
+  well: service latency stat and by-route chart, gRPC latency stat, and the
+  overview HTTP/gRPC latency charts. Chart 0.20.0, revision 24, images
+  unchanged at `kind-0.19.0`. A 60-second load (462 calls, 0 errors) produced
+  users gRPC p50 7.02 ms / p95 239 ms and trips 5.02 / 9.54 ms. Artifact:
+  `helm/helm-triplanner/dashboards/*.json`. Evidence:
+  `docs/migrations/0029-p50-latency-baselines.md`.
 - M15 done (`feature/grpc-api`): native gRPC between the API facade and the
   users/trips/locations services, with `x-internal-token`/`x-actor-id`
   metadata, `grpc.health.v1.Health`, stable `x-error-code` mapping and

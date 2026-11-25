@@ -64,6 +64,9 @@ Locations dashboards:
 
 The Overview dashboard adds `gRPC calls by service` and `gRPC p95 by service`.
 
+A later refinement adds p50 to every latency panel; see
+[`0029-p50-latency-baselines.md`](./0029-p50-latency-baselines.md).
+
 The Broker p95 descriptions now state that
 `/v1/topics/{topic}/messages` is a deliberate long-poll (up to 20 s), closing
 the third M24 P3 finding. All dashboards remain schema 41 with the
