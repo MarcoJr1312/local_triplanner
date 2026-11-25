@@ -9,6 +9,7 @@ metadata:
     app.kubernetes.io/instance: {{ .Release.Name }}
     app.kubernetes.io/component: web
 data:
+  SERVICE_VERSION: {{ .Chart.AppVersion | quote }}
   NODE_ENV: "production"
   PORT: {{ .Values.webService.service.port | quote }}
   HOSTNAME: "0.0.0.0"

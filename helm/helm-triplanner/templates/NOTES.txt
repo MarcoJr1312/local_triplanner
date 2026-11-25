@@ -74,12 +74,20 @@ RBAC:
 
 8. Open the web app:
    http://{{ .Values.webService.gateway.host }}:{{ .Values.webService.gateway.port }}
-   # Requires the Cilium GatewayClass and the API/agent host ports published
-   # for the transitional web-only slice.
    curl -H "Host: {{ .Values.webService.gateway.host }}" http://127.0.0.1:{{ .Values.webService.gateway.port }}/api/health
    # /api/ready stays 200 during an API outage and reports {"backend":"down"}.
 
-8. BYOK:
+9. Metrics:
+   Every service exposes GET /metrics on its HTTP port. Example:
+     kubectl -n {{ .Release.Namespace }} exec deploy/triplanner-api -- \
+       curl -fsS http://localhost:{{ .Values.apiService.service.port }}/metrics
+   The web /metrics path redirects to / at the Gateway; Prometheus scrapes the
+   Service directly. ServiceMonitors are disabled until kube-prometheus-stack:
+     helm upgrade triplanner ./helm/helm-triplanner -n {{ .Release.Namespace }} \
+       --set metrics.serviceMonitor.enabled=true \
+       --set metrics.serviceMonitor.labels.release=kube-prometheus-stack
+
+10. BYOK:
    The email service starts with provider={{ .Values.emailService.provider }}.
    Open the app Profile -> Email delivery to add a Resend key.
    No Resend Secret is required for the recruiter demo.

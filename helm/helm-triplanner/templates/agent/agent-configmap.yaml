@@ -9,6 +9,7 @@ metadata:
     app.kubernetes.io/instance: {{ .Release.Name }}
     app.kubernetes.io/component: agent
 data:
+  SERVICE_VERSION: {{ .Chart.AppVersion | quote }}
   POSTGRES_HOST: "triplanner-agent-postgres"
   POSTGRES_PORT: {{ .Values.agentService.postgres.service.port | quote }}
   BACKEND_URL: {{ .Values.agentService.backend.url | quote }}

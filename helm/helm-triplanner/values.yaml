@@ -20,35 +20,35 @@ imagePullSecrets: []
 images:
   broker:
     name: marcojr13/triplanner-kafka
-    tag: "0.1.0"
+    tag: "0.2.0"
     pullPolicy: IfNotPresent
   email:
     name: marcojr13/triplanner-email
-    tag: "0.1.1"
+    tag: "0.2.0"
     pullPolicy: IfNotPresent
   locations:
     name: marcojr13/triplanner-locations
-    tag: "1.7.0"
+    tag: "1.8.0"
     pullPolicy: IfNotPresent
   trips:
     name: marcojr13/triplanner-trips
-    tag: "1.7.0"
+    tag: "1.8.0"
     pullPolicy: IfNotPresent
   users:
     name: marcojr13/triplanner-users
-    tag: "1.7.0"
+    tag: "1.8.0"
     pullPolicy: IfNotPresent
   agent:
     name: marcojr13/triplanner-agent
-    tag: "1.7.0"
+    tag: "1.8.0"
     pullPolicy: IfNotPresent
   api:
     name: marcojr13/triplanner-api
-    tag: "1.7.0"
+    tag: "1.8.0"
     pullPolicy: IfNotPresent
   web:
     name: marcojr13/triplanner-web
-    tag: "1.7.0"
+    tag: "1.8.0"
     pullPolicy: IfNotPresent
 
 # MongoDB 7 StatefulSet for the locations catalogue. Single node, no auth:
@@ -1068,6 +1068,18 @@ webService:
   tolerations: []
   affinity: {}
 
+metrics:
+  enabled: true
+  path: /metrics
+  serviceMonitor:
+    # Requires the Prometheus Operator CRDs from kube-prometheus-stack.
+    # Keep false until the stack is installed, then enable it and set the
+    # labels the operator selects (for example release: kube-prometheus-stack).
+    enabled: false
+    interval: 30s
+    scrapeTimeout: 10s
+    labels: {}
+
 networkPolicy:
   enabled: false
   # Kubelet probe source. Cilium sees these as the node/cilium_host IP, not
@@ -1079,6 +1091,11 @@ networkPolicy:
   dns:
     namespace: kube-system
     label: kube-dns
+  # Allow the future kube-prometheus-stack to scrape GET /metrics. The CNPs
+  # remain disabled locally; these rules are ready for a compatible cluster.
+  monitoring:
+    namespace: monitoring
+    podLabels: {}
   # Additional external hosts beyond the chart-derived Resend/HasData hosts.
   email:
     extraFQDNs: []

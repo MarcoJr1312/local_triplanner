@@ -9,6 +9,7 @@ metadata:
     app.kubernetes.io/instance: {{ .Release.Name }}
     app.kubernetes.io/component: users
 data:
+  SERVICE_VERSION: {{ .Chart.AppVersion | quote }}
   PORT: {{ .Values.usersService.service.port | quote }}
   GRPC_PORT: {{ .Values.usersService.service.grpcPort | quote }}
   POSTGRES_HOST: "triplanner-users-postgres"

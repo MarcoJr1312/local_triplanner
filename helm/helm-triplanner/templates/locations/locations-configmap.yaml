@@ -9,6 +9,7 @@ metadata:
     app.kubernetes.io/instance: {{ .Release.Name }}
     app.kubernetes.io/component: locations
 data:
+  SERVICE_VERSION: {{ .Chart.AppVersion | quote }}
   PORT: {{ .Values.locationsService.service.port | quote }}
   GRPC_PORT: {{ .Values.locationsService.service.grpcPort | quote }}
   {{- if .Values.locationsService.mongo.url }}

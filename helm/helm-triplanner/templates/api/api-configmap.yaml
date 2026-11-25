@@ -9,6 +9,7 @@ metadata:
     app.kubernetes.io/instance: {{ .Release.Name }}
     app.kubernetes.io/component: api
 data:
+  SERVICE_VERSION: {{ .Chart.AppVersion | quote }}
   NODE_ENV: "production"
   LOCAL_PORT: {{ .Values.apiService.service.port | quote }}
   APP_URL: {{ default (printf "http://%s:%v" .Values.webService.gateway.host .Values.webService.gateway.port) .Values.apiService.appUrl | quote }}

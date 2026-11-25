@@ -9,11 +9,11 @@ set -euo pipefail
 CLUSTER="${CLUSTER:-triplanner-cilium}"
 RELEASE="${RELEASE:-triplanner}"
 NAMESPACE="${NAMESPACE:-triplanner}"
-IMAGE_TAG="${IMAGE_TAG:-kind-0.14.0}"
+IMAGE_TAG="${IMAGE_TAG:-kind-0.15.1}"
 
 images=(
   "local_triplanner-kafka:latest|triplanner-local/kafka:$IMAGE_TAG"
-  "marcojr13/triplanner-email:0.1.1|triplanner-local/email:$IMAGE_TAG"
+  "local_triplanner-email:latest|triplanner-local/email:$IMAGE_TAG"
   "local_triplanner-locations:latest|triplanner-local/locations:$IMAGE_TAG"
   "local_triplanner-trips:latest|triplanner-local/trips:$IMAGE_TAG"
   "local_triplanner-users:latest|triplanner-local/users:$IMAGE_TAG"

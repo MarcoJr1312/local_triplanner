@@ -3,28 +3,28 @@
 images:
   broker:
     name: triplanner-local/kafka
-    tag: kind-0.14.0
+    tag: kind-0.15.1
   email:
     name: triplanner-local/email
-    tag: kind-0.14.0
+    tag: kind-0.15.1
   locations:
     name: triplanner-local/locations
-    tag: kind-0.14.0
+    tag: kind-0.15.1
   trips:
     name: triplanner-local/trips
-    tag: kind-0.14.0
+    tag: kind-0.15.1
   users:
     name: triplanner-local/users
-    tag: kind-0.14.0
+    tag: kind-0.15.1
   agent:
     name: triplanner-local/agent
-    tag: kind-0.14.0
+    tag: kind-0.15.1
   api:
     name: triplanner-local/api
-    tag: kind-0.14.0
+    tag: kind-0.15.1
   web:
     name: triplanner-local/web
-    tag: kind-0.14.0
+    tag: kind-0.15.1
 
 networkPolicy:
   # Docker Desktop's WSL2 kind kernel lacks xt_socket, so Cilium's DNS proxy

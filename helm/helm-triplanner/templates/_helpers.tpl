@@ -113,3 +113,22 @@ needs Kubernetes API permissions in the current design.
 {{- define "helm-triplanner.apiAttachmentSecretName" -}}
 {{- default "triplanner-api-attachments" .Values.apiService.attachments.existingSecret }}
 {{- end }}
+
+{{- define "helm-triplanner.monitoringIngress" -}}
+{{- if .root.Values.networkPolicy.monitoring.namespace }}
+- fromEndpoints:
+    - matchLabels:
+        k8s:io.kubernetes.pod.namespace: {{ .root.Values.networkPolicy.monitoring.namespace }}
+        {{- range $key, $value := .root.Values.networkPolicy.monitoring.podLabels }}
+        k8s:{{ $key }}: {{ $value | quote }}
+        {{- end }}
+  toPorts:
+    - ports:
+        - port: "{{ .port }}"
+          protocol: TCP
+      rules:
+        http:
+          - method: GET
+            path: {{ .root.Values.metrics.path | quote }}
+{{- end }}
+{{- end }}

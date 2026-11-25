@@ -57,6 +57,20 @@ curl.exe -H "Host: triplanner.localhost" http://127.0.0.1:9080/api/ready
 `/api/ready` should report `{"status":"ready","backend":"ok"}`. The
 `HTTPRoute` should show `Accepted=True` and `ResolvedRefs=True`.
 
+## Metrics
+
+Every service exposes `GET /metrics` on its internal HTTP port. Check all
+runtimes without publishing anything:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/metrics-smoke.ps1 -Target helm
+```
+
+The web `/metrics` path is redirected to `/` at the Gateway; Prometheus scrapes
+the web Service directly. ServiceMonitors are disabled until
+kube-prometheus-stack is installed; then set
+`metrics.serviceMonitor.enabled=true` and match the operator's selector labels.
+
 ## Notes
 
 - **cgroup v1:** Docker Desktop currently reports cgroup v1. The kind node

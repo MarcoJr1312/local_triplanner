@@ -20,6 +20,19 @@ spec:
   hostnames:
     - {{ $gateway.host | quote }}
   rules:
+    # Metrics share the web port in-cluster. The public Gateway must not serve
+    # them; Prometheus scrapes the Service directly.
+    - matches:
+        - path:
+            type: PathPrefix
+            value: {{ .Values.metrics.path | default "/metrics" | quote }}
+      filters:
+        - type: RequestRedirect
+          requestRedirect:
+            path:
+              type: ReplaceFullPath
+              replaceFullPath: /
+            statusCode: 302
     - matches:
         - path:
             type: PathPrefix

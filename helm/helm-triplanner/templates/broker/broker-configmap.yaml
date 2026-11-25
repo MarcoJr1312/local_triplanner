@@ -9,6 +9,7 @@ metadata:
     app.kubernetes.io/instance: {{ .Release.Name }}
     app.kubernetes.io/component: broker
 data:
+  SERVICE_VERSION: {{ .Chart.AppVersion | quote }}
   BROKER_ADDR: {{ printf ":%v" .Values.broker.service.port | quote }}
   BROKER_DB: {{ printf "%s/broker.db" (.Values.broker.persistence.mountPath | default "/data") | quote }}
 {{- end }}

@@ -9,6 +9,7 @@ metadata:
     app.kubernetes.io/instance: {{ .Release.Name }}
     app.kubernetes.io/component: trips
 data:
+  SERVICE_VERSION: {{ .Chart.AppVersion | quote }}
   PORT: {{ .Values.tripsService.service.port | quote }}
   GRPC_PORT: {{ .Values.tripsService.service.grpcPort | quote }}
   POSTGRES_HOST: "triplanner-trips-postgres"

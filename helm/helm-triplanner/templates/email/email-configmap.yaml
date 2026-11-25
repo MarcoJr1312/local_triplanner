@@ -9,6 +9,7 @@ metadata:
     app.kubernetes.io/instance: {{ .Release.Name }}
     app.kubernetes.io/component: email
 data:
+  SERVICE_VERSION: {{ .Chart.AppVersion | quote }}
   HEALTH_PORT: {{ .Values.emailService.service.port | quote }}
   BROKER_URL: {{ .Values.emailService.broker.url | quote }}
   BROKER_TOPIC: {{ .Values.emailService.broker.topic | quote }}

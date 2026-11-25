@@ -8,7 +8,7 @@ $ErrorActionPreference = 'Stop'
 $Cluster = 'triplanner-cilium'
 $Release = 'triplanner'
 $Namespace = 'triplanner'
-$ImageTag = 'kind-0.14.0'
+$ImageTag = 'kind-0.15.1'
 
 function Require-Image([string]$Name) {
   docker image inspect $Name *> $null
@@ -17,7 +17,7 @@ function Require-Image([string]$Name) {
 
 $images = @(
   @{ source = 'local_triplanner-kafka:latest'; target = "triplanner-local/kafka:$ImageTag" },
-  @{ source = 'marcojr13/triplanner-email:0.1.1'; target = "triplanner-local/email:$ImageTag" },
+  @{ source = 'local_triplanner-email:latest'; target = "triplanner-local/email:$ImageTag" },
   @{ source = 'local_triplanner-locations:latest'; target = "triplanner-local/locations:$ImageTag" },
   @{ source = 'local_triplanner-trips:latest'; target = "triplanner-local/trips:$ImageTag" },
   @{ source = 'local_triplanner-users:latest'; target = "triplanner-local/users:$ImageTag" },

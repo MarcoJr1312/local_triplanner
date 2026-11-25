@@ -15,6 +15,7 @@ spec:
       k8s:app.kubernetes.io/name: triplanner-web
       k8s:app.kubernetes.io/instance: {{ .Release.Name }}
   ingress:
+    {{- include "helm-triplanner.monitoringIngress" (dict "root" . "port" .Values.webService.service.port) | nindent 4 }}
     # Cilium Gateway traffic carries the special "ingress" identity; host
     # covers kubelet probes and the kube-rbac-proxy port-forward path.
     - fromEntities:

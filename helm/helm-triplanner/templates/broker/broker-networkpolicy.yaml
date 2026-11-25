@@ -14,6 +14,7 @@ spec:
       k8s:app.kubernetes.io/name: triplanner-kafka
       k8s:app.kubernetes.io/instance: {{ .Release.Name }}
   ingress:
+    {{- include "helm-triplanner.monitoringIngress" (dict "root" . "port" .Values.broker.service.port) | nindent 4 }}
     - fromEndpoints:
         - matchLabels:
             k8s:io.kubernetes.pod.namespace: {{ .Release.Namespace }}

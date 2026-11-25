@@ -1,0 +1,41 @@
+{{- if and .Values.metrics.enabled .Values.metrics.serviceMonitor.enabled }}
+{{- $root := . }}
+{{- $services := list
+  (dict "name" "web" "service" "triplanner-web" "enabled" .Values.webService.enabled)
+  (dict "name" "api" "service" "triplanner-api" "enabled" .Values.apiService.enabled)
+  (dict "name" "users" "service" "triplanner-users" "enabled" .Values.usersService.enabled)
+  (dict "name" "trips" "service" "triplanner-trips" "enabled" .Values.tripsService.enabled)
+  (dict "name" "locations" "service" "triplanner-locations" "enabled" .Values.locationsService.enabled)
+  (dict "name" "agent" "service" "triplanner-agent" "enabled" .Values.agentService.enabled)
+  (dict "name" "email" "service" "triplanner-email" "enabled" .Values.emailService.enabled)
+  (dict "name" "broker" "service" "triplanner-kafka" "enabled" .Values.broker.enabled)
+}}
+{{- range $services }}
+{{- if .enabled }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ .service }}
+  namespace: {{ $root.Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: {{ .service }}
+    app.kubernetes.io/instance: {{ $root.Release.Name }}
+    app.kubernetes.io/component: {{ .name }}
+    {{- with $root.Values.metrics.serviceMonitor.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  jobLabel: app.kubernetes.io/name
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ .service }}
+      app.kubernetes.io/instance: {{ $root.Release.Name }}
+  endpoints:
+    - port: http
+      path: {{ $root.Values.metrics.path | quote }}
+      interval: {{ $root.Values.metrics.serviceMonitor.interval }}
+      scrapeTimeout: {{ $root.Values.metrics.serviceMonitor.scrapeTimeout }}
+{{- end }}
+{{- end }}
+{{- end }}

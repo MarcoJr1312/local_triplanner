@@ -40,10 +40,66 @@ does not provide `xt_socket`, so `deploy/kind/triplanner-values.yaml` keeps
 `networkPolicy.enabled=false` locally. Enable it on a Cilium cluster with the
 required kernel support.
 
+When `networkPolicy.monitoring.namespace` is set (default `monitoring`), every
+service CNP allows `GET /metrics` from that namespace. Set
+`networkPolicy.monitoring.podLabels` to tighten the selector to the Prometheus
+pods; leave it empty to allow any pod in the monitoring namespace. These rules
+stay inert while `networkPolicy.enabled=false`.
+
+## Metrics
+
+Every runtime exposes Prometheus text at `GET /metrics` on its existing HTTP
+port: web `:3000`, api `:4000`, users `:4500`, trips `:4400`, locations `:4300`,
+agent `:4100`, email `:4200` and broker `:8080`. The endpoint is
+unauthenticated, ClusterIP-only and never queries a database.
+
+| Metric | Type | Labels |
+|---|---|---|
+| `triplanner_build_info` | gauge | `service`, `version` |
+| `triplanner_http_requests_total` | counter | `service`, `method`, `route`, `status` |
+| `triplanner_http_request_duration_seconds` | histogram | `service`, `method`, `route`, `status` |
+| `triplanner_http_requests_in_flight` | gauge | `service` |
+
+`route` is a bounded template (`/health`, `/internal/v1/users/*`, ...), never a
+raw path or an ID. Runtime collectors add the standard `process_*`, `nodejs_*`,
+`python_*` and `go_*` metrics.
+
+The web serves `/metrics` on the same port in-cluster, but the public Cilium
+`HTTPRoute` redirects `/metrics` to `/` with `302`. Prometheus scrapes the
+Service directly.
+
+ServiceMonitors are disabled by default because the CRDs come from
+kube-prometheus-stack:
+
+```yaml
+metrics:
+  enabled: true
+  path: /metrics
+  serviceMonitor:
+    enabled: true
+    interval: 30s
+    scrapeTimeout: 10s
+    labels:
+      release: kube-prometheus-stack
+```
+
+The stack must select ServiceMonitors in the release namespace
+(`serviceMonitorNamespaceSelector: {}`) and either use the labels above or set
+`serviceMonitorSelectorNilUsesHelmValues: false`. The monitoring namespace must
+match `networkPolicy.monitoring.namespace` when policies are enabled.
+
+Local check:
+
+```bash
+./scripts/metrics-smoke.sh --target all
+```
+
 ## Layout
 
 ```
 templates/
+  monitoring/
+    servicemonitors.yaml
   api/
     api-attachments-secret.yaml
     api-configmap.yaml
@@ -240,19 +296,19 @@ Prerequisites:
   (see [`deploy/kind`](../../deploy/kind) for the local kind setup).
 - The `triplanner-internal` Secret with `INTERNAL_TOKEN`.
 - Images referenced by the chart (override `images.*`):
-  `marcojr13/triplanner-kafka:0.1.0`,
-  `marcojr13/triplanner-email:0.1.1`,
-  `marcojr13/triplanner-locations:1.7.0`,
-  `marcojr13/triplanner-trips:1.7.0`,
-  `marcojr13/triplanner-users:1.7.0`,
-  `marcojr13/triplanner-agent:1.7.0`,
-  `marcojr13/triplanner-api:1.7.0` and
-  `marcojr13/triplanner-web:1.7.0`. The `1.7.0` tags are published by the
-  per-service workflows when the `v1.7.0` tag is pushed; override the tags for
+  `marcojr13/triplanner-kafka:0.2.0`,
+  `marcojr13/triplanner-email:0.2.0`,
+  `marcojr13/triplanner-locations:1.8.0`,
+  `marcojr13/triplanner-trips:1.8.0`,
+  `marcojr13/triplanner-users:1.8.0`,
+  `marcojr13/triplanner-agent:1.8.0`,
+  `marcojr13/triplanner-api:1.8.0` and
+  `marcojr13/triplanner-web:1.8.0`. The `1.8.0` tags are published by the
+  per-service workflows when the `v1.8.0` tag is pushed; override the tags for
   a local pre-release acceptance run.
 
 ```bash
-# Full local Cilium kind flow (cluster, images, secret, proxy values)
+# Full local Cilium kind flow (cluster, images, secret)
 deploy/kind/setup-cilium.sh   # Windows: deploy/kind/setup-cilium.ps1
 deploy/kind/deploy-demo.sh    # Windows: deploy/kind/deploy-demo.ps1
 ```
