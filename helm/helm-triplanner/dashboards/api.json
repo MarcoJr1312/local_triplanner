@@ -7,7 +7,17 @@
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
   "id": null,
-  "links": [],
+  "links": [
+    {
+      "title": "Triplanner overview",
+      "url": "/d/triplanner-overview",
+      "type": "link",
+      "icon": "dashboard",
+      "targetBlank": false,
+      "keepTime": true,
+      "includeVars": false
+    }
+  ],
   "panels": [
     {
       "collapsed": false,
@@ -25,8 +35,9 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "${datasource}"
       },
+      "description": "Scrape target health: 1 = up, 0 = down.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -62,7 +73,8 @@
               }
             ]
           },
-          "unit": "short"
+          "unit": "short",
+          "noValue": "No data"
         },
         "overrides": []
       },
@@ -75,7 +87,7 @@
       "id": 2,
       "options": {
         "colorMode": "value",
-        "graphMode": "area",
+        "graphMode": "none",
         "justifyMode": "auto",
         "orientation": "auto",
         "reduceOptions": {
@@ -89,10 +101,6 @@
       },
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "editorMode": "code",
           "expr": "up{job=\"triplanner-api\"}",
           "range": false,
@@ -100,14 +108,15 @@
           "instant": true
         }
       ],
-      "title": "Service up",
+      "title": "Up",
       "type": "stat"
     },
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "${datasource}"
       },
+      "description": "Requests per second across the selected routes.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -123,7 +132,8 @@
               }
             ]
           },
-          "unit": "reqps"
+          "unit": "reqps",
+          "noValue": "No data"
         },
         "overrides": []
       },
@@ -150,12 +160,8 @@
       },
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "editorMode": "code",
-          "expr": "sum(rate(triplanner_http_requests_total{service=\"api\"}[5m]))",
+          "expr": "sum(rate(triplanner_http_requests_total{service=\"api\",route=~\"$route\"}[$__rate_interval]))",
           "range": false,
           "refId": "A",
           "instant": true
@@ -167,8 +173,9 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "${datasource}"
       },
+      "description": "Share of requests returning 5xx; orange above 1%, red above 5%.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -192,7 +199,8 @@
               }
             ]
           },
-          "unit": "percentunit"
+          "unit": "percentunit",
+          "noValue": "No data"
         },
         "overrides": []
       },
@@ -219,12 +227,8 @@
       },
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "editorMode": "code",
-          "expr": "sum(rate(triplanner_http_requests_total{service=\"api\",status=~\"5..\"}[5m])) / clamp_min(sum(rate(triplanner_http_requests_total{service=\"api\"}[5m])), 0.001)",
+          "expr": "(sum(rate(triplanner_http_requests_total{service=\"api\",route=~\"$route\",status=~\"5..\"}[$__rate_interval])) / clamp_min(sum(rate(triplanner_http_requests_total{service=\"api\",route=~\"$route\"}[$__rate_interval])), 0.001)) or vector(0)",
           "range": false,
           "refId": "A",
           "instant": true
@@ -236,8 +240,9 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "${datasource}"
       },
+      "description": "p95 request duration; orange above 500 ms, red above 1 s.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -250,10 +255,19 @@
               {
                 "color": "green",
                 "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.5
+              },
+              {
+                "color": "red",
+                "value": 1.0
               }
             ]
           },
-          "unit": "s"
+          "unit": "s",
+          "noValue": "No data"
         },
         "overrides": []
       },
@@ -280,12 +294,8 @@
       },
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(triplanner_http_request_duration_seconds_bucket{service=\"api\"}[5m])))",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(triplanner_http_request_duration_seconds_bucket{service=\"api\",route=~\"$route\"}[$__rate_interval])))",
           "range": false,
           "refId": "A",
           "instant": true
@@ -297,8 +307,9 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "${datasource}"
       },
+      "description": "Requests currently being served.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -314,7 +325,8 @@
               }
             ]
           },
-          "unit": "short"
+          "unit": "short",
+          "noValue": "No data"
         },
         "overrides": []
       },
@@ -327,7 +339,7 @@
       "id": 6,
       "options": {
         "colorMode": "value",
-        "graphMode": "area",
+        "graphMode": "none",
         "justifyMode": "auto",
         "orientation": "auto",
         "reduceOptions": {
@@ -341,10 +353,6 @@
       },
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "editorMode": "code",
           "expr": "sum(triplanner_http_requests_in_flight{service=\"api\"})",
           "range": false,
@@ -371,8 +379,9 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "${datasource}"
       },
+      "description": "Request rate per route template.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -385,7 +394,7 @@
             "axisPlacement": "auto",
             "barAlignment": 0,
             "drawStyle": "line",
-            "fillOpacity": 10,
+            "fillOpacity": 8,
             "gradientMode": "none",
             "hideFrom": {
               "legend": false,
@@ -418,7 +427,8 @@
               }
             ]
           },
-          "unit": "reqps"
+          "unit": "reqps",
+          "noValue": "No data"
         },
         "overrides": []
       },
@@ -431,24 +441,24 @@
       "id": 8,
       "options": {
         "legend": {
-          "calcs": [],
-          "displayMode": "list",
+          "calcs": [
+            "mean",
+            "max",
+            "lastNotNull"
+          ],
+          "displayMode": "table",
           "placement": "bottom",
           "showLegend": true
         },
         "tooltip": {
-          "mode": "single",
-          "sort": "none"
+          "mode": "multi",
+          "sort": "desc"
         }
       },
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "editorMode": "code",
-          "expr": "sum by (route) (rate(triplanner_http_requests_total{service=\"api\"}[5m]))",
+          "expr": "sum by (route)(rate(triplanner_http_requests_total{service=\"api\",route=~\"$route\"}[$__rate_interval]))",
           "range": true,
           "refId": "A",
           "legendFormat": "{{route}}"
@@ -460,8 +470,9 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "${datasource}"
       },
+      "description": "p95 latency per route template.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -474,7 +485,7 @@
             "axisPlacement": "auto",
             "barAlignment": 0,
             "drawStyle": "line",
-            "fillOpacity": 10,
+            "fillOpacity": 8,
             "gradientMode": "none",
             "hideFrom": {
               "legend": false,
@@ -507,7 +518,8 @@
               }
             ]
           },
-          "unit": "s"
+          "unit": "s",
+          "noValue": "No data"
         },
         "overrides": []
       },
@@ -520,24 +532,24 @@
       "id": 9,
       "options": {
         "legend": {
-          "calcs": [],
-          "displayMode": "list",
+          "calcs": [
+            "mean",
+            "max",
+            "lastNotNull"
+          ],
+          "displayMode": "table",
           "placement": "bottom",
           "showLegend": true
         },
         "tooltip": {
-          "mode": "single",
-          "sort": "none"
+          "mode": "multi",
+          "sort": "desc"
         }
       },
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum by (le, route) (rate(triplanner_http_request_duration_seconds_bucket{service=\"api\"}[5m])))",
+          "expr": "histogram_quantile(0.95, sum by (le, route) (rate(triplanner_http_request_duration_seconds_bucket{service=\"api\",route=~\"$route\"}[$__rate_interval])))",
           "range": true,
           "refId": "A",
           "legendFormat": "{{route}}"
@@ -556,14 +568,15 @@
       },
       "id": 10,
       "panels": [],
-      "title": "Runtime",
+      "title": "Health",
       "type": "row"
     },
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "${datasource}"
       },
+      "description": "Request rate by HTTP status code.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -576,7 +589,7 @@
             "axisPlacement": "auto",
             "barAlignment": 0,
             "drawStyle": "line",
-            "fillOpacity": 10,
+            "fillOpacity": 8,
             "gradientMode": "none",
             "hideFrom": {
               "legend": false,
@@ -609,7 +622,8 @@
               }
             ]
           },
-          "unit": "percentunit"
+          "unit": "reqps",
+          "noValue": "No data"
         },
         "overrides": []
       },
@@ -622,83 +636,65 @@
       "id": 11,
       "options": {
         "legend": {
-          "calcs": [],
-          "displayMode": "list",
+          "calcs": [
+            "mean",
+            "max",
+            "lastNotNull"
+          ],
+          "displayMode": "table",
           "placement": "bottom",
           "showLegend": true
         },
         "tooltip": {
-          "mode": "single",
-          "sort": "none"
+          "mode": "multi",
+          "sort": "desc"
         }
       },
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "editorMode": "code",
-          "expr": "rate(process_cpu_seconds_total{job=\"triplanner-api\"}[5m])",
+          "expr": "sum by (status)(rate(triplanner_http_requests_total{service=\"api\",route=~\"$route\"}[$__rate_interval]))",
           "range": true,
           "refId": "A",
-          "legendFormat": "{{pod}}"
+          "legendFormat": "{{status}}"
         }
       ],
-      "title": "CPU",
+      "title": "Requests by status",
       "type": "timeseries"
     },
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "${datasource}"
       },
+      "description": "5xx share per route; orange above 1%, red above 5%.",
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
+            "mode": "thresholds"
           },
           "mappings": [],
+          "min": 0,
+          "max": 1,
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
                 "color": "green",
                 "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.01
+              },
+              {
+                "color": "red",
+                "value": 0.05
               }
             ]
           },
-          "unit": "bytes"
+          "unit": "percentunit",
+          "noValue": "No data"
         },
         "overrides": []
       },
@@ -710,38 +706,39 @@
       },
       "id": 12,
       "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
+        "displayMode": "gradient",
+        "namePlacement": "auto",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
         },
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
-        }
+        "showUnfilled": true,
+        "sizing": "auto",
+        "valueMode": "color"
       },
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "editorMode": "code",
-          "expr": "process_resident_memory_bytes{job=\"triplanner-api\"}",
-          "range": true,
+          "expr": "(sum by (route)(rate(triplanner_http_requests_total{service=\"api\",route=~\"$route\",status=~\"5..\"}[$__rate_interval])) / clamp_min(sum by (route)(rate(triplanner_http_requests_total{service=\"api\",route=~\"$route\"}[$__rate_interval])), 0.001)) or (0 * sum by (route)(rate(triplanner_http_requests_total{service=\"api\",route=~\"$route\"}[$__rate_interval])))",
+          "range": false,
           "refId": "A",
-          "legendFormat": "{{pod}}"
+          "instant": true,
+          "legendFormat": "{{route}}"
         }
       ],
-      "title": "Memory",
-      "type": "timeseries"
+      "title": "5xx ratio by route",
+      "type": "bargauge"
     },
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "${datasource}"
       },
+      "description": "Requests currently being served over time.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -754,7 +751,7 @@
             "axisPlacement": "auto",
             "barAlignment": 0,
             "drawStyle": "line",
-            "fillOpacity": 10,
+            "fillOpacity": 8,
             "gradientMode": "none",
             "hideFrom": {
               "legend": false,
@@ -787,7 +784,8 @@
               }
             ]
           },
-          "unit": "short"
+          "unit": "short",
+          "noValue": "No data"
         },
         "overrides": []
       },
@@ -800,22 +798,22 @@
       "id": 13,
       "options": {
         "legend": {
-          "calcs": [],
+          "calcs": [
+            "mean",
+            "max",
+            "lastNotNull"
+          ],
           "displayMode": "list",
           "placement": "bottom",
           "showLegend": true
         },
         "tooltip": {
           "mode": "single",
-          "sort": "none"
+          "sort": "desc"
         }
       },
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "editorMode": "code",
           "expr": "sum(triplanner_http_requests_in_flight{service=\"api\"})",
           "range": true,
@@ -836,22 +834,49 @@
       },
       "id": 14,
       "panels": [],
-      "title": "Routes and build",
+      "title": "Runtime",
       "type": "row"
     },
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "${datasource}"
       },
+      "description": "Process CPU cores used.",
       "fieldConfig": {
         "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
           "custom": {
-            "align": "auto",
-            "cellOptions": {
-              "type": "auto"
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 8,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
             },
-            "inspect": false
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
           },
           "mappings": [],
           "thresholds": {
@@ -863,7 +888,8 @@
               }
             ]
           },
-          "unit": "reqps"
+          "unit": "percentunit",
+          "noValue": "No data"
         },
         "overrides": []
       },
@@ -875,30 +901,143 @@
       },
       "id": 15,
       "options": {
-        "showHeader": true
+        "legend": {
+          "calcs": [
+            "mean",
+            "max",
+            "lastNotNull"
+          ],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "desc"
+        }
       },
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "editorMode": "code",
-          "expr": "topk(10, sum by (route) (rate(triplanner_http_requests_total{service=\"api\"}[5m])))",
-          "range": false,
+          "expr": "rate(process_cpu_seconds_total{job=\"triplanner-api\"}[$__rate_interval])",
+          "range": true,
           "refId": "A",
-          "instant": true,
-          "format": "table"
+          "legendFormat": "{{pod}}"
         }
       ],
-      "title": "Top routes",
-      "type": "table"
+      "title": "CPU",
+      "type": "timeseries"
     },
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "${datasource}"
       },
+      "description": "Resident memory of the service process.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 8,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "bytes",
+          "noValue": "No data"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 24
+      },
+      "id": 16,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "max",
+            "lastNotNull"
+          ],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "process_resident_memory_bytes{job=\"triplanner-api\"}",
+          "range": true,
+          "refId": "A",
+          "legendFormat": "{{pod}}"
+        }
+      ],
+      "title": "Memory",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 32
+      },
+      "id": 17,
+      "panels": [],
+      "title": "Routes and build",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "Top 10 routes by request rate.",
       "fieldConfig": {
         "defaults": {
           "custom": {
@@ -918,7 +1057,75 @@
               }
             ]
           },
-          "unit": "short"
+          "unit": "reqps",
+          "noValue": "No data"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 33
+      },
+      "id": 18,
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      },
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "topk(10, sum by (route)(rate(triplanner_http_requests_total{service=\"api\",route=~\"$route\"}[$__rate_interval])))",
+          "range": false,
+          "refId": "A",
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "title": "Top routes",
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "renameByName": {
+              "Value": "Requests/s"
+            }
+          }
+        }
+      ],
+      "type": "table"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "Service build metadata currently scraped.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short",
+          "noValue": "No data"
         },
         "overrides": []
       },
@@ -926,18 +1133,15 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 24
+        "y": 33
       },
-      "id": 16,
+      "id": 19,
       "options": {
-        "showHeader": true
+        "showHeader": true,
+        "cellHeight": "sm"
       },
       "targets": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "editorMode": "code",
           "expr": "triplanner_build_info{service=\"api\"}",
           "range": false,
@@ -947,23 +1151,107 @@
         }
       ],
       "title": "Build info",
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true,
+              "job": true,
+              "instance": true,
+              "namespace": true,
+              "container": true,
+              "endpoint": true,
+              "pod": true
+            },
+            "renameByName": {
+              "service": "Service",
+              "version": "Version",
+              "Value": "Present"
+            }
+          }
+        }
+      ],
       "type": "table"
     }
   ],
   "refresh": "30s",
-  "schemaVersion": 39,
+  "schemaVersion": 41,
   "tags": [
     "triplanner",
     "api"
   ],
   "templating": {
-    "list": []
+    "list": [
+      {
+        "name": "datasource",
+        "label": "Data source",
+        "type": "datasource",
+        "query": "prometheus",
+        "current": {
+          "selected": false,
+          "text": "Prometheus",
+          "value": "prometheus"
+        },
+        "hide": 0,
+        "includeAll": false,
+        "multi": false,
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false
+      },
+      {
+        "name": "route",
+        "label": "Route",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "query": {
+          "query": "label_values(triplanner_http_requests_total{service=\"api\"}, route)",
+          "refId": "A"
+        },
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "allValue": ".*",
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "sort": 1,
+        "hide": 0,
+        "regex": "",
+        "skipUrlSync": false
+      }
+    ]
   },
   "time": {
     "from": "now-6h",
     "to": "now"
   },
-  "timepicker": {},
+  "timepicker": {
+    "refresh_intervals": [
+      "5s",
+      "10s",
+      "30s",
+      "1m",
+      "5m",
+      "15m",
+      "30m",
+      "1h",
+      "6h",
+      "12h",
+      "1d"
+    ]
+  },
   "timezone": "browser",
   "title": "Triplanner / API",
   "uid": "triplanner-api",

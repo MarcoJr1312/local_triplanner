@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
 """Generate the Triplanner Grafana dashboards.
 
-The JSON files are embedded by the Helm chart through `.Files.Get`, so they are
-plain assets rather than Go templates. Run from the repository root:
+The JSON follows the vendored `grafana-dashboarding` and `grafana-promql`
+skills: schemaVersion 41, a `${datasource}` variable, 24-column layout,
+`$__rate_interval`, units, thresholds, descriptions, dashboard links,
+transformations and a route-health bar gauge.
+
+Run from the repository root:
 
     python scripts/generate-dashboards.py
 """
@@ -15,8 +19,14 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "helm" / "helm-triplanner" / "dashboards"
-DATASOURCE = {"type": "prometheus", "uid": "prometheus"}
+DATASOURCE_UID = "${datasource}"
+DATASOURCE = {"type": "prometheus", "uid": DATASOURCE_UID}
+RATE = "$__rate_interval"
 SERVICE_RE = "api|users|trips|locations|agent|email|broker|web"
+LEGEND_ROUTE = "{{route}}"
+LEGEND_STATUS = "{{status}}"
+LEGEND_POD = "{{pod}}"
+LEGEND_SERVICE = "{{service}}"
 
 SERVICES = [
     {
@@ -89,27 +99,84 @@ class Layout:
         return value
 
 
-def target(
-    expr: str,
-    legend: str | None = None,
-    *,
-    instant: bool = False,
-    fmt: str | None = None,
-) -> dict[str, Any]:
-    value: dict[str, Any] = {
-        "datasource": DATASOURCE,
-        "editorMode": "code",
-        "expr": expr,
-        "range": not instant,
-        "refId": "A",
+def datasource_variable() -> dict[str, Any]:
+    return {
+        "name": "datasource",
+        "label": "Data source",
+        "type": "datasource",
+        "query": "prometheus",
+        "current": {"selected": False, "text": "Prometheus", "value": "prometheus"},
+        "hide": 0,
+        "includeAll": False,
+        "multi": False,
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": False,
     }
-    if instant:
-        value["instant"] = True
-    if legend:
-        value["legendFormat"] = legend
-    if fmt:
-        value["format"] = fmt
-    return value
+
+
+def query_variable(name: str, label: str, query: str) -> dict[str, Any]:
+    return {
+        "name": name,
+        "label": label,
+        "type": "query",
+        "datasource": DATASOURCE,
+        "query": {"query": query, "refId": "A"},
+        "refresh": 2,
+        "includeAll": True,
+        "multi": True,
+        "allValue": ".*",
+        "current": {"selected": True, "text": ["All"], "value": ["$__all"]},
+        "sort": 1,
+        "hide": 0,
+        "regex": "",
+        "skipUrlSync": False,
+    }
+
+
+def dashboard_link(title: str, url: str) -> dict[str, Any]:
+    return {
+        "title": title,
+        "url": url,
+        "type": "link",
+        "icon": "dashboard",
+        "targetBlank": False,
+        "keepTime": True,
+        "includeVars": False,
+    }
+
+
+OVERVIEW_LINKS = [
+    dashboard_link(f"Triplanner / {svc['title']}", f"/d/triplanner-{svc['key']}")
+    for svc in SERVICES
+]
+SERVICE_LINKS = [dashboard_link("Triplanner overview", "/d/triplanner-overview")]
+
+
+def default_thresholds() -> dict[str, Any]:
+    return {"mode": "absolute", "steps": [{"color": "green", "value": None}]}
+
+
+def error_thresholds() -> dict[str, Any]:
+    return {
+        "mode": "absolute",
+        "steps": [
+            {"color": "green", "value": None},
+            {"color": "orange", "value": 0.01},
+            {"color": "red", "value": 0.05},
+        ],
+    }
+
+
+def latency_thresholds() -> dict[str, Any]:
+    return {
+        "mode": "absolute",
+        "steps": [
+            {"color": "green", "value": None},
+            {"color": "orange", "value": 0.5},
+            {"color": "red", "value": 1.0},
+        ],
+    }
 
 
 def up_mappings() -> list[dict[str, Any]]:
@@ -134,25 +201,38 @@ def up_thresholds() -> dict[str, Any]:
     }
 
 
-def error_thresholds() -> dict[str, Any]:
-    return {
-        "mode": "absolute",
-        "steps": [
-            {"color": "green", "value": None},
-            {"color": "orange", "value": 0.01},
-            {"color": "red", "value": 0.05},
-        ],
+def target(
+    expr: str,
+    legend: str | None = None,
+    *,
+    instant: bool = False,
+    fmt: str | None = None,
+) -> dict[str, Any]:
+    value: dict[str, Any] = {
+        "editorMode": "code",
+        "expr": expr,
+        "range": not instant,
+        "refId": "A",
     }
+    if instant:
+        value["instant"] = True
+    if legend:
+        value["legendFormat"] = legend
+    if fmt:
+        value["format"] = fmt
+    return value
 
 
-def default_thresholds() -> dict[str, Any]:
-    return {"mode": "absolute", "steps": [{"color": "green", "value": None}]}
-
-
-def timeseries_field(unit: str) -> dict[str, Any]:
+def timeseries_field(
+    unit: str,
+    *,
+    thresholds: dict[str, Any] | None = None,
+    color_mode: str = "palette-classic",
+    thresholds_style: str = "off",
+) -> dict[str, Any]:
     return {
         "defaults": {
-            "color": {"mode": "palette-classic"},
+            "color": {"mode": color_mode},
             "custom": {
                 "axisCenteredZero": False,
                 "axisColorMode": "text",
@@ -160,7 +240,7 @@ def timeseries_field(unit: str) -> dict[str, Any]:
                 "axisPlacement": "auto",
                 "barAlignment": 0,
                 "drawStyle": "line",
-                "fillOpacity": 10,
+                "fillOpacity": 8,
                 "gradientMode": "none",
                 "hideFrom": {"legend": False, "tooltip": False, "viz": False},
                 "lineInterpolation": "linear",
@@ -170,11 +250,12 @@ def timeseries_field(unit: str) -> dict[str, Any]:
                 "showPoints": "never",
                 "spanNulls": False,
                 "stacking": {"group": "A", "mode": "none"},
-                "thresholdsStyle": {"mode": "off"},
+                "thresholdsStyle": {"mode": thresholds_style},
             },
             "mappings": [],
-            "thresholds": default_thresholds(),
+            "thresholds": thresholds or default_thresholds(),
             "unit": unit,
+            "noValue": "No data",
         },
         "overrides": [],
     }
@@ -182,6 +263,7 @@ def timeseries_field(unit: str) -> dict[str, Any]:
 
 def stat_field(
     unit: str,
+    *,
     mappings: list[dict[str, Any]] | None = None,
     thresholds: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
@@ -191,25 +273,49 @@ def stat_field(
             "mappings": mappings or [],
             "thresholds": thresholds or default_thresholds(),
             "unit": unit,
+            "noValue": "No data",
         },
         "overrides": [],
     }
 
 
 def table_field(
-    unit: str = "short",
+    unit: str,
+    *,
     mappings: list[dict[str, Any]] | None = None,
+    thresholds: dict[str, Any] | None = None,
+    cell_type: str = "auto",
 ) -> dict[str, Any]:
     return {
         "defaults": {
             "custom": {
                 "align": "auto",
-                "cellOptions": {"type": "auto"},
+                "cellOptions": {"type": cell_type},
                 "inspect": False,
             },
             "mappings": mappings or [],
-            "thresholds": default_thresholds(),
+            "thresholds": thresholds or default_thresholds(),
             "unit": unit,
+            "noValue": "No data",
+        },
+        "overrides": [],
+    }
+
+
+def bargauge_field(
+    unit: str,
+    *,
+    thresholds: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    return {
+        "defaults": {
+            "color": {"mode": "thresholds"},
+            "mappings": [],
+            "min": 0,
+            "max": 1,
+            "thresholds": thresholds or default_thresholds(),
+            "unit": unit,
+            "noValue": "No data",
         },
         "overrides": [],
     }
@@ -236,17 +342,20 @@ def stat(
     w: int = 4,
     h: int = 4,
     *,
+    description: str = "",
     mappings: list[dict[str, Any]] | None = None,
     thresholds: dict[str, Any] | None = None,
+    graph_mode: str = "area",
 ) -> dict[str, Any]:
     return {
         "datasource": DATASOURCE,
-        "fieldConfig": stat_field(unit, mappings, thresholds),
+        "description": description,
+        "fieldConfig": stat_field(unit, mappings=mappings, thresholds=thresholds),
         "gridPos": {"h": h, "w": w, "x": x, "y": y},
         "id": panel_id,
         "options": {
             "colorMode": "value",
-            "graphMode": "area",
+            "graphMode": graph_mode,
             "justifyMode": "auto",
             "orientation": "auto",
             "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": False},
@@ -268,20 +377,33 @@ def timeseries(
     y: int,
     w: int = 12,
     h: int = 8,
+    *,
+    description: str = "",
+    legend_mode: str = "table",
+    tooltip: str = "multi",
+    thresholds: dict[str, Any] | None = None,
+    color_mode: str = "palette-classic",
+    thresholds_style: str = "off",
 ) -> dict[str, Any]:
     return {
         "datasource": DATASOURCE,
-        "fieldConfig": timeseries_field(unit),
+        "description": description,
+        "fieldConfig": timeseries_field(
+            unit,
+            thresholds=thresholds,
+            color_mode=color_mode,
+            thresholds_style=thresholds_style,
+        ),
         "gridPos": {"h": h, "w": w, "x": x, "y": y},
         "id": panel_id,
         "options": {
             "legend": {
-                "calcs": [],
-                "displayMode": "list",
+                "calcs": ["mean", "max", "lastNotNull"],
+                "displayMode": legend_mode,
                 "placement": "bottom",
                 "showLegend": True,
             },
-            "tooltip": {"mode": "single", "sort": "none"},
+            "tooltip": {"mode": tooltip, "sort": "desc"},
         },
         "targets": [target(expr, legend)],
         "title": title,
@@ -298,18 +420,64 @@ def table(
     w: int = 12,
     h: int = 8,
     *,
+    description: str = "",
     unit: str = "short",
     mappings: list[dict[str, Any]] | None = None,
+    thresholds: dict[str, Any] | None = None,
+    cell_type: str = "auto",
+    transformations: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     return {
         "datasource": DATASOURCE,
-        "fieldConfig": table_field(unit, mappings),
+        "description": description,
+        "fieldConfig": table_field(
+            unit,
+            mappings=mappings,
+            thresholds=thresholds,
+            cell_type=cell_type,
+        ),
         "gridPos": {"h": h, "w": w, "x": x, "y": y},
         "id": panel_id,
-        "options": {"showHeader": True},
+        "options": {"showHeader": True, "cellHeight": "sm"},
         "targets": [target(expr, fmt="table", instant=True)],
         "title": title,
+        "transformations": transformations or [],
         "type": "table",
+    }
+
+
+def bargauge(
+    panel_id: int,
+    title: str,
+    expr: str,
+    x: int,
+    y: int,
+    w: int = 8,
+    h: int = 8,
+    *,
+    description: str = "",
+    unit: str = "percentunit",
+    thresholds: dict[str, Any] | None = None,
+    legend: str | None = None,
+) -> dict[str, Any]:
+    return {
+        "datasource": DATASOURCE,
+        "description": description,
+        "fieldConfig": bargauge_field(unit, thresholds=thresholds),
+        "gridPos": {"h": h, "w": w, "x": x, "y": y},
+        "id": panel_id,
+        "options": {
+            "displayMode": "gradient",
+            "namePlacement": "auto",
+            "orientation": "horizontal",
+            "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": False},
+            "showUnfilled": True,
+            "sizing": "auto",
+            "valueMode": "color",
+        },
+        "targets": [target(expr, legend, instant=True)],
+        "title": title,
+        "type": "bargauge",
     }
 
 
@@ -319,6 +487,8 @@ def dashboard(
     description: str,
     tags: list[str],
     panels: list[dict[str, Any]],
+    templating: list[dict[str, Any]],
+    links: list[dict[str, Any]],
 ) -> dict[str, Any]:
     return {
         "annotations": {"list": []},
@@ -327,14 +497,16 @@ def dashboard(
         "fiscalYearStartMonth": 0,
         "graphTooltip": 1,
         "id": None,
-        "links": [],
+        "links": links,
         "panels": panels,
         "refresh": "30s",
-        "schemaVersion": 39,
+        "schemaVersion": 41,
         "tags": ["triplanner", *tags],
-        "templating": {"list": []},
+        "templating": {"list": templating},
         "time": {"from": "now-6h", "to": "now"},
-        "timepicker": {},
+        "timepicker": {
+            "refresh_intervals": ["5s", "10s", "30s", "1m", "5m", "15m", "30m", "1h", "6h", "12h", "1d"],
+        },
         "timezone": "browser",
         "title": title,
         "uid": uid,
@@ -343,179 +515,294 @@ def dashboard(
     }
 
 
+def rate_expr(metric: str, selector: str, by: str = "") -> str:
+    agg = f" by ({by})" if by else ""
+    return "sum" + agg + "(rate(" + metric + "{" + selector + "}[" + RATE + "]))"
+
+
+def p95_expr(service: str, by_route: bool = False) -> str:
+    selector = f'service="{service}",route=~"$route"'
+    by = "le, route" if by_route else "le"
+    return (
+        "histogram_quantile(0.95, sum by ("
+        + by
+        + ") (rate(triplanner_http_request_duration_seconds_bucket{"
+        + selector
+        + "}["
+        + RATE
+        + "])))"
+    )
+
+
+def error_ratio_expr(selector: str, by: str = "") -> str:
+    """5xx ratio with a zero fallback so healthy services render 0, not No data."""
+    errors = rate_expr("triplanner_http_requests_total", selector + ',status=~"5.."', by)
+    total = rate_expr("triplanner_http_requests_total", selector, by)
+    ratio = errors + " / clamp_min(" + total + ", 0.001)"
+    if by:
+        return "(" + ratio + ") or (0 * " + total + ")"
+    return "(" + ratio + ") or vector(0)"
+
+
 def service_dashboard(svc: dict[str, str]) -> dict[str, Any]:
     layout = Layout()
     panels: list[dict[str, Any]] = []
+    service = svc["service"]
+    job = svc["job"]
+    service_route = f'service="{service}",route=~"$route"'
 
-    panels.append(row(layout.id(), "Overview", layout.y))
+    def add(panel: dict[str, Any]) -> None:
+        panels.append(panel)
+
+    add(row(layout.id(), "Overview", layout.y))
     layout.y += 1
     y = layout.y
-    panels.append(
+    add(
         stat(
             layout.id(),
-            "Service up",
-            f'up{{job="{svc["job"]}"}}',
+            "Up",
+            f'up{{job="{job}"}}',
             "short",
             0,
             y,
             4,
             4,
+            description="Scrape target health: 1 = up, 0 = down.",
             mappings=up_mappings(),
             thresholds=up_thresholds(),
+            graph_mode="none",
         )
     )
-    panels.append(
+    add(
         stat(
             layout.id(),
             "Requests / sec",
-            f'sum(rate(triplanner_http_requests_total{{service="{svc["service"]}"}}[5m]))',
+            rate_expr("triplanner_http_requests_total", service_route),
             "reqps",
             4,
             y,
             5,
             4,
+            description="Requests per second across the selected routes.",
         )
     )
-    panels.append(
+    add(
         stat(
             layout.id(),
             "5xx ratio",
-            (
-                f'sum(rate(triplanner_http_requests_total{{service="{svc["service"]}",status=~"5.."}}[5m]))'
-                f' / clamp_min(sum(rate(triplanner_http_requests_total{{service="{svc["service"]}"}}[5m])), 0.001)'
-            ),
+            error_ratio_expr(service_route),
             "percentunit",
             9,
             y,
             5,
             4,
+            description="Share of requests returning 5xx; orange above 1%, red above 5%.",
             thresholds=error_thresholds(),
         )
     )
-    panels.append(
+    add(
         stat(
             layout.id(),
             "p95 latency",
-            (
-                "histogram_quantile(0.95, sum by (le) "
-                f'(rate(triplanner_http_request_duration_seconds_bucket{{service="{svc["service"]}"}}[5m])))'
-            ),
+            p95_expr(service),
             "s",
             14,
             y,
             5,
             4,
+            description="p95 request duration; orange above 500 ms, red above 1 s.",
+            thresholds=latency_thresholds(),
         )
     )
-    panels.append(
+    add(
         stat(
             layout.id(),
             "In flight",
-            f'sum(triplanner_http_requests_in_flight{{service="{svc["service"]}"}})',
+            f'sum(triplanner_http_requests_in_flight{{service="{service}"}})',
             "short",
             19,
             y,
             5,
             4,
+            description="Requests currently being served.",
+            graph_mode="none",
         )
     )
     layout.y += 4
 
-    panels.append(row(layout.id(), "Traffic", layout.y))
+    add(row(layout.id(), "Traffic", layout.y))
     layout.y += 1
     y = layout.y
-    panels.append(
+    add(
         timeseries(
             layout.id(),
             "Requests by route",
-            f'sum by (route) (rate(triplanner_http_requests_total{{service="{svc["service"]}"}}[5m]))',
-            "{{route}}",
+            rate_expr("triplanner_http_requests_total", service_route, "route"),
+            LEGEND_ROUTE,
             "reqps",
             0,
             y,
+            description="Request rate per route template.",
+            legend_mode="table",
+            tooltip="multi",
         )
     )
-    panels.append(
+    add(
         timeseries(
             layout.id(),
             "p95 by route",
-            (
-                "histogram_quantile(0.95, sum by (le, route) "
-                f'(rate(triplanner_http_request_duration_seconds_bucket{{service="{svc["service"]}"}}[5m])))'
-            ),
-            "{{route}}",
+            p95_expr(service, by_route=True),
+            LEGEND_ROUTE,
             "s",
             12,
             y,
+            description="p95 latency per route template.",
+            legend_mode="table",
+            tooltip="multi",
         )
     )
     layout.y += 8
 
-    panels.append(row(layout.id(), "Runtime", layout.y))
+    add(row(layout.id(), "Health", layout.y))
     layout.y += 1
     y = layout.y
-    panels.append(
+    add(
         timeseries(
             layout.id(),
-            "CPU",
-            f'rate(process_cpu_seconds_total{{job="{svc["job"]}"}}[5m])',
-            "{{pod}}",
-            "percentunit",
+            "Requests by status",
+            rate_expr("triplanner_http_requests_total", service_route, "status"),
+            LEGEND_STATUS,
+            "reqps",
             0,
             y,
             8,
+            description="Request rate by HTTP status code.",
+            legend_mode="table",
+            tooltip="multi",
         )
     )
-    panels.append(
-        timeseries(
+    add(
+        bargauge(
             layout.id(),
-            "Memory",
-            f'process_resident_memory_bytes{{job="{svc["job"]}"}}',
-            "{{pod}}",
-            "bytes",
+            "5xx ratio by route",
+            error_ratio_expr(service_route, "route"),
             8,
             y,
             8,
+            description="5xx share per route; orange above 1%, red above 5%.",
+            thresholds=error_thresholds(),
+            legend=LEGEND_ROUTE,
         )
     )
-    panels.append(
+    add(
         timeseries(
             layout.id(),
             "In-flight trend",
-            f'sum(triplanner_http_requests_in_flight{{service="{svc["service"]}"}})',
+            f'sum(triplanner_http_requests_in_flight{{service="{service}"}})',
             "in flight",
             "short",
             16,
             y,
             8,
+            description="Requests currently being served over time.",
+            legend_mode="list",
+            tooltip="single",
         )
     )
     layout.y += 8
 
-    panels.append(row(layout.id(), "Routes and build", layout.y))
+    add(row(layout.id(), "Runtime", layout.y))
     layout.y += 1
     y = layout.y
-    panels.append(
+    add(
+        timeseries(
+            layout.id(),
+            "CPU",
+            "rate(process_cpu_seconds_total{job=\"" + job + "\"}[" + RATE + "])",
+            LEGEND_POD,
+            "percentunit",
+            0,
+            y,
+            12,
+            description="Process CPU cores used.",
+            legend_mode="list",
+            tooltip="single",
+        )
+    )
+    add(
+        timeseries(
+            layout.id(),
+            "Memory",
+            'process_resident_memory_bytes{job="' + job + '"}',
+            LEGEND_POD,
+            "bytes",
+            12,
+            y,
+            12,
+            description="Resident memory of the service process.",
+            legend_mode="list",
+            tooltip="single",
+        )
+    )
+    layout.y += 8
+
+    add(row(layout.id(), "Routes and build", layout.y))
+    layout.y += 1
+    y = layout.y
+    add(
         table(
             layout.id(),
             "Top routes",
-            f'topk(10, sum by (route) (rate(triplanner_http_requests_total{{service="{svc["service"]}"}}[5m])))',
+            "topk(10, " + rate_expr("triplanner_http_requests_total", service_route, "route") + ")",
             0,
             y,
             12,
             8,
+            description="Top 10 routes by request rate.",
             unit="reqps",
+            transformations=[
+                {
+                    "id": "organize",
+                    "options": {
+                        "excludeByName": {"Time": True},
+                        "renameByName": {"Value": "Requests/s"},
+                    },
+                }
+            ],
         )
     )
-    panels.append(
+    add(
         table(
             layout.id(),
             "Build info",
-            f'triplanner_build_info{{service="{svc["service"]}"}}',
+            f'triplanner_build_info{{service="{service}"}}',
             12,
             y,
             12,
             8,
+            description="Service build metadata currently scraped.",
+            transformations=[
+                {
+                    "id": "organize",
+                    "options": {
+                        "excludeByName": {
+                            "Time": True,
+                            "__name__": True,
+                            "job": True,
+                            "instance": True,
+                            "namespace": True,
+                            "container": True,
+                            "endpoint": True,
+                            "pod": True,
+                        },
+                        "renameByName": {
+                            "service": "Service",
+                            "version": "Version",
+                            "Value": "Present",
+                        },
+                    },
+                }
+            ],
         )
     )
 
@@ -525,86 +812,174 @@ def service_dashboard(svc: dict[str, str]) -> dict[str, Any]:
         svc["description"],
         [svc["key"]],
         panels,
+        [
+            datasource_variable(),
+            query_variable(
+                "route",
+                "Route",
+                f'label_values(triplanner_http_requests_total{{service="{service}"}}, route)',
+            ),
+        ],
+        SERVICE_LINKS,
     )
 
 
 def overview_dashboard() -> dict[str, Any]:
     layout = Layout()
     panels: list[dict[str, Any]] = []
+    service_selector = 'service=~"$service"'
 
-    panels.append(row(layout.id(), "Health", layout.y))
+    def add(panel: dict[str, Any]) -> None:
+        panels.append(panel)
+
+    add(row(layout.id(), "Health", layout.y))
     layout.y += 1
     y = layout.y
-    panels.append(
+    add(
         table(
             layout.id(),
-            "Service health",
+            "Service health (all)",
             'up{job=~"triplanner-.*"}',
             0,
             y,
             12,
-            8,
+            10,
+            description="Prometheus scrape health for every Triplanner runtime.",
             mappings=up_mappings(),
+            thresholds=up_thresholds(),
+            transformations=[
+                {
+                    "id": "organize",
+                    "options": {
+                        "excludeByName": {
+                            "Time": True,
+                            "__name__": True,
+                            "service": True,
+                            "instance": True,
+                            "namespace": True,
+                            "container": True,
+                            "endpoint": True,
+                            "pod": True,
+                        },
+                        "renameByName": {"job": "Service", "Value": "Up"},
+                    },
+                }
+            ],
         )
     )
-    panels.append(
+    add(
         table(
             layout.id(),
             "Build info",
-            f'triplanner_build_info{{service=~"{SERVICE_RE}"}}',
+            f'triplanner_build_info{{{service_selector}}}',
             12,
             y,
             12,
-            8,
+            10,
+            description="Build metadata for the selected services.",
+            transformations=[
+                {
+                    "id": "organize",
+                    "options": {
+                        "excludeByName": {
+                            "Time": True,
+                            "__name__": True,
+                            "job": True,
+                            "instance": True,
+                            "namespace": True,
+                            "container": True,
+                            "endpoint": True,
+                            "pod": True,
+                        },
+                        "renameByName": {
+                            "service": "Service",
+                            "version": "Version",
+                            "Value": "Present",
+                        },
+                    },
+                }
+            ],
         )
     )
-    layout.y += 8
+    layout.y += 10
 
-    panels.append(row(layout.id(), "Traffic", layout.y))
+    add(row(layout.id(), "Traffic", layout.y))
     layout.y += 1
     y = layout.y
-    panels.append(
+    add(
         timeseries(
             layout.id(),
             "Requests by service",
-            (
-                f'sum by (service) (rate(triplanner_http_requests_total{{service=~"{SERVICE_RE}"}}[5m]))'
-            ),
-            "{{service}}",
+            rate_expr("triplanner_http_requests_total", service_selector, "service"),
+            LEGEND_SERVICE,
             "reqps",
             0,
             y,
+            12,
+            10,
+            description="Request rate for each selected service.",
+            legend_mode="list",
+            tooltip="multi",
         )
     )
-    panels.append(
+    add(
         timeseries(
             layout.id(),
             "5xx ratio by service",
-            (
-                f'sum by (service) (rate(triplanner_http_requests_total{{service=~"{SERVICE_RE}",status=~"5.."}}[5m]))'
-                f' / clamp_min(sum by (service) (rate(triplanner_http_requests_total{{service=~"{SERVICE_RE}"}}[5m])), 0.001)'
-            ),
-            "{{service}}",
+            error_ratio_expr(service_selector, "service"),
+            LEGEND_SERVICE,
             "percentunit",
             12,
             y,
+            12,
+            10,
+            description="5xx share per service; orange above 1%, red above 5%.",
+            thresholds=error_thresholds(),
+            color_mode="thresholds",
+            thresholds_style="line",
+            legend_mode="list",
+            tooltip="multi",
         )
     )
-    layout.y += 8
+    layout.y += 10
 
-    panels.append(
+    add(row(layout.id(), "Status and latency", layout.y))
+    layout.y += 1
+    y = layout.y
+    add(
+        timeseries(
+            layout.id(),
+            "Requests by status",
+            rate_expr("triplanner_http_requests_total", service_selector, "status"),
+            LEGEND_STATUS,
+            "reqps",
+            0,
+            y,
+            12,
+            10,
+            description="Request rate by HTTP status across the selected services.",
+            legend_mode="list",
+            tooltip="multi",
+        )
+    )
+    add(
         timeseries(
             layout.id(),
             "p95 latency by service",
-            (
-                "histogram_quantile(0.95, sum by (le, service) "
-                f'(rate(triplanner_http_request_duration_seconds_bucket{{service=~"{SERVICE_RE}"}}[5m])))'
-            ),
-            "{{service}}",
+            "histogram_quantile(0.95, sum by (le, service) (rate(triplanner_http_request_duration_seconds_bucket{"
+            + service_selector
+            + "}["
+            + RATE
+            + "])))",
+            LEGEND_SERVICE,
             "s",
-            0,
-            layout.y,
-            24,
+            12,
+            y,
+            12,
+            10,
+            description="p95 request duration per selected service.",
+            legend_mode="list",
+            tooltip="multi",
         )
     )
 
@@ -614,6 +989,15 @@ def overview_dashboard() -> dict[str, Any]:
         "One-page health, traffic and latency view for all Triplanner runtimes.",
         ["overview"],
         panels,
+        [
+            datasource_variable(),
+            query_variable(
+                "service",
+                "Service",
+                "label_values(triplanner_http_requests_total, service)",
+            ),
+        ],
+        OVERVIEW_LINKS,
     )
 
 
