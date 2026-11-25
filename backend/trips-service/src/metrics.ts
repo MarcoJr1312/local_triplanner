@@ -1,5 +1,5 @@
 // Prometheus metrics for the trips service. `/metrics` shares the internal
-// HTTP port and never touches PostgreSQL; only HTTP/runtime counters live here.
+// HTTP port and never touches PostgreSQL; HTTP/gRPC/runtime counters live here.
 
 import { Counter, Gauge, Histogram, Registry, collectDefaultMetrics } from 'prom-client';
 
@@ -62,6 +62,32 @@ export function observeHttpRequest(input: {
   };
   httpRequests.inc(labels);
   httpDuration.observe(labels, input.durationSeconds);
+}
+
+const grpcRequests = new Counter({
+  name: 'triplanner_grpc_requests_total',
+  help: 'Completed gRPC requests.',
+  labelNames: ['method', 'status'],
+  registers: [registry],
+});
+
+const grpcDuration = new Histogram({
+  name: 'triplanner_grpc_request_duration_seconds',
+  help: 'gRPC request duration in seconds.',
+  labelNames: ['method', 'status'],
+  buckets: [0.01, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 15, 60],
+  registers: [registry],
+});
+
+// Method labels are bounded by the proto contract; never use raw metadata.
+export function observeGrpcRequest(input: {
+  method: string;
+  status: string;
+  durationSeconds: number;
+}): void {
+  const labels = { method: input.method, status: input.status };
+  grpcRequests.inc(labels);
+  grpcDuration.observe(labels, input.durationSeconds);
 }
 
 let defaultMetricsStarted = false;

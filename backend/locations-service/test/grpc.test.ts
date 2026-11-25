@@ -8,6 +8,7 @@ import {
   type LocationsGrpcCatalogue,
   type LocationsGrpcHandle,
 } from '../src/grpc/server.ts';
+import { renderMetrics } from '../src/metrics.ts';
 
 const PORT = 50057;
 const PROTO_PATH = fileURLToPath(
@@ -191,5 +192,19 @@ describe('locations gRPC', () => {
     const missing: any = await call('GetById', { id: 'missing' }).catch((error) => error);
     expect(missing.code).toBe(grpc.status.NOT_FOUND);
     expect(missing.metadata.get('x-error-code')[0]).toBe('NOT_FOUND');
+  });
+
+  test('records gRPC calls and status codes in Prometheus metrics', async () => {
+    await call('GetById', { id: 'tor-cn-tower' });
+    const missing: any = await call('GetById', { id: 'missing' }).catch((error) => error);
+    expect(missing.code).toBe(grpc.status.NOT_FOUND);
+
+    const { body } = await renderMetrics();
+    expect(body).toContain('triplanner_grpc_requests_total');
+    expect(body).toContain('triplanner_grpc_request_duration_seconds');
+    expect(body).toContain('method="GetById"');
+    expect(body).toContain('status="OK"');
+    expect(body).toContain('status="NOT_FOUND"');
+    expect(body).toContain('service="locations"');
   });
 });

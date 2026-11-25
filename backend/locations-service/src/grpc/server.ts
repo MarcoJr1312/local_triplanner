@@ -5,6 +5,7 @@ import * as grpc from '@grpc/grpc-js';
 import * as loader from '@grpc/proto-loader';
 import { fileURLToPath } from 'node:url';
 import type { LocationRow } from '../catalogue/types.ts';
+import { observeGrpcRequest } from '../metrics.ts';
 
 const PROTO_PATH =
   process.env.PROTO_PATH ??
@@ -108,6 +109,48 @@ function requireItem(row: LocationRow | null): LocationRow {
   return row;
 }
 
+type UnaryHandler = (
+  call: grpc.ServerUnaryCall<any, any>,
+  callback: grpc.sendUnaryData<any>,
+) => void | Promise<void>;
+
+function grpcStatusName(code: grpc.status): string {
+  return grpc.status[code] ?? 'UNKNOWN';
+}
+
+// Wraps every unary handler so successful and failed RPCs share one metric path.
+function instrumentHandlers(
+  handlers: Record<string, UnaryHandler>,
+): Record<string, UnaryHandler> {
+  return Object.fromEntries(
+    Object.entries(handlers).map(([method, handler]) => [
+      method,
+      (call, callback) => {
+        const started = performance.now();
+        let settled = false;
+        const finish: grpc.sendUnaryData<any> = (error, value) => {
+          if (settled) return;
+          settled = true;
+          observeGrpcRequest({
+            method,
+            status: grpcStatusName(error?.code ?? grpc.status.OK),
+            durationSeconds: (performance.now() - started) / 1000,
+          });
+          callback(error, value);
+        };
+        try {
+          const result = handler(call, finish);
+          if (result && typeof result.then === 'function') {
+            result.catch((error: unknown) => finish(error as grpc.ServiceError));
+          }
+        } catch (error) {
+          finish(error as grpc.ServiceError);
+        }
+      },
+    ]),
+  );
+}
+
 export interface LocationsGrpcOptions {
   catalogue: LocationsGrpcCatalogue;
   port: number;
@@ -151,7 +194,7 @@ export async function startLocationsGrpcServer(
       callback(null, { status: 'SERVING' });
     },
   });
-  server.addService(descriptor.service, {
+  const handlers: Record<string, UnaryHandler> = {
     GetById: async (call: grpc.ServerUnaryCall<any, any>, callback: grpc.sendUnaryData<any>) => {
       try {
         guard(call);
@@ -244,7 +287,8 @@ export async function startLocationsGrpcServer(
         callback(asServiceError(error));
       }
     },
-  });
+  };
+  server.addService(descriptor.service, instrumentHandlers(handlers));
 
   await new Promise<void>((resolve, reject) => {
     server.bindAsync(

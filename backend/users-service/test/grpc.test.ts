@@ -6,6 +6,7 @@ import type { Db } from '../src/db.ts';
 import { migrate } from '../src/db/migrate.ts';
 import { UsersService } from '../src/domain/service.ts';
 import { startUsersGrpcServer, type UsersGrpcHandle } from '../src/grpc/server.ts';
+import { renderMetrics } from '../src/metrics.ts';
 import { connectTestDb, resetSchema } from './helpers/pg.ts';
 
 const PORT = 50059;
@@ -167,5 +168,29 @@ describe('users gRPC', () => {
     await expect(
       call('ListNotifications', { user_id: user.id }, '22222222-2222-4222-8222-222222222222'),
     ).rejects.toMatchObject({ code: grpc.status.PERMISSION_DENIED });
+  });
+
+  test('records gRPC calls and status codes in Prometheus metrics', async () => {
+    if (!service || !client) return;
+    const user = await service.createUser({
+      username: 'grpc-metrics',
+      password: 'secret123',
+      display_name: 'Metrics',
+    });
+
+    await call('GetUser', { user_id: user.id });
+    // bun test can race a trailers-only response on a just-used channel.
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    await expect(call('GetUser', { user_id: user.id }, undefined, 'wrong')).rejects.toMatchObject({
+      code: grpc.status.UNAUTHENTICATED,
+    });
+
+    const { body } = await renderMetrics();
+    expect(body).toContain('triplanner_grpc_requests_total');
+    expect(body).toContain('triplanner_grpc_request_duration_seconds');
+    expect(body).toContain('method="GetUser"');
+    expect(body).toContain('status="OK"');
+    expect(body).toContain('status="UNAUTHENTICATED"');
+    expect(body).toContain('service="users"');
   });
 });

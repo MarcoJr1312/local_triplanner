@@ -7,6 +7,7 @@ import { migrate } from '../src/db/migrate.ts';
 import type { LocationsClient, LocationSnapshot } from '../src/domain/locations.ts';
 import { TripsService } from '../src/domain/service.ts';
 import { startTripsGrpcServer, type TripsGrpcHandle } from '../src/grpc/server.ts';
+import { renderMetrics } from '../src/metrics.ts';
 import { connectTestDb, resetSchema } from './helpers/pg.ts';
 
 const PORT = 50056;
@@ -242,5 +243,24 @@ describe('trips gRPC', () => {
     if (!service || !client) return;
     const result = await call('DueReminders', {});
     expect(result.items ?? []).toEqual([]);
+  });
+
+  test('records gRPC calls and status codes in Prometheus metrics', async () => {
+    if (!service || !client) return;
+
+    await call('ListTrips', {}, 'u1');
+    // bun test can race a trailers-only response on a just-used channel.
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    await expect(call('ListTrips', {}, 'u1', 'wrong')).rejects.toMatchObject({
+      code: grpc.status.UNAUTHENTICATED,
+    });
+
+    const { body } = await renderMetrics();
+    expect(body).toContain('triplanner_grpc_requests_total');
+    expect(body).toContain('triplanner_grpc_request_duration_seconds');
+    expect(body).toContain('method="ListTrips"');
+    expect(body).toContain('status="OK"');
+    expect(body).toContain('status="UNAUTHENTICATED"');
+    expect(body).toContain('service="trips"');
   });
 });
