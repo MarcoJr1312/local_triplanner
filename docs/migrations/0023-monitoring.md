@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **Implemented locally (2026-11-25) — Gate 2 pending** |
+| Status | **Accepted locally — Gate 2 approved (2026-11-25)** |
 | Cycle | Kubernetes Manifest Delivery |
 | Slice | M20 — ServiceMonitors and Grafana dashboards |
 | Triplanner chart | `helm-triplanner` 0.16.0 |
@@ -238,5 +238,5 @@ services.
 
 ## 9. Gate 2
 
-Pending: review the evidence in §6.1 and approve the monitoring slice. This
-slice does not publish images or create a release tag.
+**Approved on 2026-11-25.** The ServiceMonitor and dashboard slice is accepted;
+image publication and release tagging are not part of this slice.

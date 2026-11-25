@@ -45,7 +45,7 @@ Migrations:
 - [`0022-metrics.md`](./0022-metrics.md) — `/metrics` contract, scrape wiring;
   implemented locally, Gate 2 pending
 - [`0023-monitoring.md`](./0023-monitoring.md) — ServiceMonitors and Grafana
-  dashboards; implemented locally, Gate 2 pending
+  dashboards; Gate 2 approved
 
 ## Branching (local only)
 

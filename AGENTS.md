@@ -196,7 +196,7 @@ auth and Dockerfiles.
   ServiceMonitors (`release: prometheus`, `honorLabels: true`) and 9 Grafana
   dashboard ConfigMaps (`grafana_dashboard=1`): 8 per-service dashboards plus
   an overview. Prometheus targets are 8/8 `UP`; Grafana provisions all 9.
-  Gate 2 pending; no image or release publication. Evidence:
+  Gate 2 approved; no image or release publication. Evidence:
   `docs/migrations/0023-monitoring.md`.
 - M15 done (`feature/grpc-api`): native gRPC between the API facade and the
   users/trips/locations services, with `x-internal-token`/`x-actor-id`
