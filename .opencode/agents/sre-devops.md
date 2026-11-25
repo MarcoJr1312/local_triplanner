@@ -27,6 +27,9 @@ paid key.
 2. Follow the Orkai workflow **SRE / DevOps - Kubernetes Service Delivery**
    (`9cbce416-d411-4f69-bbe5-4bcaf4bd4a1b`).
 3. Work on `refactor/helm-*` or `feature/*`. Never push to `main`.
+4. For Grafana dashboard work, load the vendored skills:
+   `.opencode/skills/grafana-dashboarding/SKILL.md` and
+   `.opencode/skills/grafana-promql/SKILL.md`.
 
 ## Non-negotiables
 
@@ -43,6 +46,18 @@ paid key.
 - Probes hit real endpoints. Resource requests/limits are set for the
   single-node budget. No HPA/PDB in the recruiter profile.
 - No `emptyDir` for data that must survive a rollout.
+
+## Grafana dashboards
+
+- Load the vendored `grafana-dashboarding` and `grafana-promql` skills before
+  writing dashboard JSON.
+- Use `schemaVersion: 41`, a `${datasource}` variable, 24-column `gridPos`,
+  `$__rate_interval` for rate windows, correct units, thresholds, panel
+  descriptions, dashboard/panel links and transformations.
+- Provision dashboards as ConfigMaps labeled `grafana_dashboard=1`; keep
+  Grafana and Prometheus ClusterIP-only.
+- Verify the dashboard with the Grafana API and a live Prometheus query, then
+  open it in a browser and confirm the panels render with data.
 
 ## Verification
 
