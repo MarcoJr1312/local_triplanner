@@ -25,7 +25,7 @@ import { toast } from 'sonner';
 import { buildGoogleMapsRouteUrl, MAX_ROUTE_STOPS, type RouteStop } from '@/lib/routes';
 import { useAuth } from '@/hooks/useAuth';
 import { useQuery } from '@/hooks/useQuery';
-import { formatDateRange, formatMoney, formatWeekday, listDays, parseDate } from '@/lib/format';
+import { formatDateRange, formatMoney, formatWeekday, listDays, parseBudgetInput, parseDate } from '@/lib/format';
 import { loadSortMode, saveSortMode, sortItemsBy, type SortMode } from '@/lib/sorting';
 import { useI18n, type Locale } from '@/lib/i18n';
 import type { Presence, TripItem } from '@/lib/types';
@@ -479,10 +479,7 @@ function TripDetailContent() {
   };
 
   const saveBudget = async () => {
-    const parsed = Number(budgetDraft);
-    if (!Number.isNaN(parsed) && parsed >= 0) {
-      await api.setBudget(trip.id, parsed);
-    }
+    await api.setBudget(trip.id, parseBudgetInput(budgetDraft));
     setEditingBudget(false);
   };
 

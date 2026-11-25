@@ -284,8 +284,8 @@ select.input{appearance:none;cursor:pointer}
 .tabs{display:inline-flex;padding:4px;border-radius:12px;background:var(--surface-2);border:1px solid var(--border)}
 .tab{height:34px;padding:0 14px;border-radius:8px;font-size:12.5px;font-weight:600;color:var(--muted);transition:.18s var(--ease)}
 .tab.active{background:var(--surface);color:var(--text);box-shadow:var(--shadow-sm)}
-.day-tabs{display:flex;gap:7px;margin:12px 0}
-.day-tab{height:34px;padding:0 13px;border-radius:9px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:12px;font-weight:600;transition:.18s var(--ease)}
+.day-tabs{display:flex;gap:7px;margin:12px 0;overflow-x:auto;padding-bottom:4px;scrollbar-width:thin;overscroll-behavior-x:contain}
+.day-tab{flex:0 0 auto;white-space:nowrap;height:34px;padding:0 13px;border-radius:9px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:12px;font-weight:600;transition:.18s var(--ease)}
 .day-tab:hover{border-color:var(--border-strong);color:var(--text)}
 .day-tab.active{background:var(--primary-soft);border-color:rgba(99,102,241,.45);color:var(--primary)}
 .action-row{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:18px}

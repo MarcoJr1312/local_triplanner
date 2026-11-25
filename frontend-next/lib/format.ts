@@ -66,10 +66,29 @@ export function listDays(start: AWSDate, end: AWSDate): AWSDate[] {
   const d = parseDate(start);
   const e = parseDate(end);
   while (d.getTime() <= e.getTime()) {
-    out.push(d.toISOString().slice(0, 10));
-    d.setUTCDate(d.getUTCDate() + 1);
+    out.push(toIsoDate(d));
+    d.setDate(d.getDate() + 1);
   }
   return out;
+}
+
+// Keep the end of a date range at or after the start. A start date selected
+// after the current end auto-extends the range to a single day.
+export function normalizeDateRange(
+  start: AWSDate,
+  end: AWSDate,
+): { start: AWSDate; end: AWSDate } {
+  if (!start) return { start, end };
+  if (!end || end < start) return { start, end: start };
+  return { start, end };
+}
+
+// Parse the budget input without forcing a leading zero. Empty means zero.
+export function parseBudgetInput(value: string): number {
+  const trimmed = value.trim();
+  if (!trimmed) return 0;
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
 }
 
 export function toIsoDate(d: Date): AWSDate {
