@@ -326,7 +326,8 @@ curl -i http://localhost:8449/health
 
 A client token must be allowed to `get` `services/proxy` for the service name in
 the proxy ConfigMap. The proxy returns 403 for an authenticated but unauthorized
-token, and proxies the upstream on success. The main app HTTP ports remain
+token, and proxies the upstream on success. A token with that permission returns
+`200`; without a token it returns `401`. The main app HTTP ports remain
 available to the app; 8443 is the RBAC-protected path.
 
 ClusterRoles and ClusterRoleBindings are cluster-scoped and therefore do not

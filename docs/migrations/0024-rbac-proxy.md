@@ -61,6 +61,10 @@ The web is the public Cilium Gateway entry and is the only exception. See
 - `triplanner-agent-rbac-proxy` / `triplanner-api-rbac-proxy` ConfigMaps and
   the corresponding ClusterRoles/Bindings exist.
 - `kubectl port-forward` to 8448/8449 returns `401` without a token.
+- A temporary ServiceAccount with `get services/proxy` on `triplanner-agent` and
+  `triplanner-api` returned `200` through 8448/8449 with a bearer token; the
+  temporary RBAC was removed afterwards. This exercises TokenReview/SAR end to
+  end.
 - Metrics smoke 8/8; Prometheus targets 8/8 up; Helm tests 7/7; login and
   `requestSuggestions` still pass.
 - No application image changes.
