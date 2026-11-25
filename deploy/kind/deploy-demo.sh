@@ -9,7 +9,7 @@ set -euo pipefail
 CLUSTER="${CLUSTER:-triplanner-cilium}"
 RELEASE="${RELEASE:-triplanner}"
 NAMESPACE="${NAMESPACE:-triplanner}"
-IMAGE_TAG="${IMAGE_TAG:-kind-0.15.1}"
+IMAGE_TAG="${IMAGE_TAG:-kind-0.17.0}"
 
 images=(
   "local_triplanner-kafka:latest|triplanner-local/kafka:$IMAGE_TAG"

@@ -8,7 +8,7 @@ $ErrorActionPreference = 'Stop'
 $Cluster = 'triplanner-cilium'
 $Release = 'triplanner'
 $Namespace = 'triplanner'
-$ImageTag = 'kind-0.15.1'
+$ImageTag = 'kind-0.17.0'
 
 function Require-Image([string]$Name) {
   docker image inspect $Name *> $null
