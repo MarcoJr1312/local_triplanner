@@ -217,9 +217,17 @@ auth and Dockerfiles.
 - M24 Prometheus data-load QA (2026-11-25): `scripts/qa-load-traffic.ps1`
   drove 1,346 GraphQL calls and 26 agent calls with 0 errors, populated the
   Web/API/Agent/Broker dashboards and generated invitations. Users/Trips/
-  Locations show probe-only traffic because the API uses gRPC; track gRPC
+  Locations showed probe-only traffic because the API uses gRPC; track gRPC
   metrics as the follow-up. Evidence:
   `docs/migrations/0027-prometheus-data-load.md`.
+- M25 gRPC metrics (2026-11-25): users, trips and locations expose
+  `triplanner_grpc_requests_total{method,status}` and
+  `triplanner_grpc_request_duration_seconds`; dashboards add a gRPC row and
+  the overview adds gRPC panels. Chart 0.19.0, images `kind-0.19.0`, revision
+  22, targets 8/8. A 1,371-call load recorded 1,068 users, 748 trips and 376
+  locations gRPC calls with 0 errors; the broker long-poll p95 note is in the
+  dashboard descriptions. Evidence:
+  `docs/migrations/0028-grpc-metrics.md`.
 - M15 done (`feature/grpc-api`): native gRPC between the API facade and the
   users/trips/locations services, with `x-internal-token`/`x-actor-id`
   metadata, `grpc.health.v1.Health`, stable `x-error-code` mapping and

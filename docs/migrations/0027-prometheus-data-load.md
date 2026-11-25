@@ -102,7 +102,8 @@ trip reads or searches.
 **Recommendation:** add gRPC server interceptors with
 `triplanner_grpc_requests_total{service,method,status}` and
 `triplanner_grpc_request_duration_seconds`, then add the corresponding
-dashboard panels.
+dashboard panels. **Resolved in
+[`0028-grpc-metrics.md`](./0028-grpc-metrics.md).**
 
 ### P3 — email dashboard only sees HTTP probes
 

@@ -144,6 +144,25 @@ Per service:
 - No label may contain an unbounded value.
 - A repeated request to the same route must not create new series.
 
+### 3.6 gRPC server metrics (M25 addendum)
+
+`users`, `trips` and `locations` also serve the API facade over gRPC. Their
+HTTP counters only see probes on the internal HTTP port, so they expose:
+
+| Metric | Type | Labels | Meaning |
+|---|---|---|---|
+| `triplanner_grpc_requests_total` | counter | `service`, `method`, `status` | Completed unary gRPC calls |
+| `triplanner_grpc_request_duration_seconds` | histogram | `service`, `method`, `status` | gRPC call duration |
+
+- `method` is the proto method name (`Login`, `GetTrip`, `Search`, ...). It is
+  bounded by the service contract; never use metadata or request values.
+- `status` is the canonical gRPC status name (`OK`, `NOT_FOUND`,
+  `UNAUTHENTICATED`, ...).
+- The same buckets as the HTTP histogram are used.
+- A wrapper instruments every unary domain handler; `grpc.health.v1.Health`
+  is not instrumented, so probes do not inflate application traffic.
+- `agent` is HTTP-only and does not expose these metrics.
+
 ## 4. Per-runtime implementation
 
 ### 4.1 `web` (Next.js)
