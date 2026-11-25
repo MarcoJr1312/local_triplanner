@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **Implemented locally (2026-11-25) — Gate 2 pending** |
+| Status | **Accepted — Gate 2 approved (2026-11-25)** |
 | Cycle | Kubernetes Manifest Delivery |
 | Slice | M21 — kube-rbac-proxy standard |
 | Triplanner chart | `helm-triplanner` 0.17.0 |
@@ -71,3 +71,9 @@ Set `agentService.rbacProxy.enabled=false` and
 `apiService.rbacProxy.enabled=false`; the sidecar templates and Service ports
 are conditional. The app is unaffected because the sidecar is not in the
 request path. No data changes.
+
+## 6. Gate 2
+
+**Approved on 2026-11-25** by the standard directive: every internal service
+uses `kube-rbac-proxy`, with the web as the only exception. No image or release
+publication is included.

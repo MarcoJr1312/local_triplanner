@@ -202,7 +202,7 @@ auth and Dockerfiles.
   the agent and API, so every internal service now exposes 8443. The web stays
   the public Gateway entry and the only exception. Evidence:
   `docs/migrations/0024-rbac-proxy.md`; ADR
-  `docs/decisions/0001-kube-rbac-proxy-standard.md`. Gate 2 pending.
+  `docs/decisions/0001-kube-rbac-proxy-standard.md`. Gate 2 approved.
 - M15 done (`feature/grpc-api`): native gRPC between the API facade and the
   users/trips/locations services, with `x-internal-token`/`x-actor-id`
   metadata, `grpc.health.v1.Health`, stable `x-error-code` mapping and
