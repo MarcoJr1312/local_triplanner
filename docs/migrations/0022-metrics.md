@@ -2,11 +2,11 @@
 
 | Field | Value |
 |---|---|
-| Status | **Proposed — Gate 1 pending** |
+| Status | **Implemented locally (2026-11-25) — Gate 2 pending** |
 | Cycle | Kubernetes Manifest Delivery |
 | Slice | M19 — Metrics endpoints and scrape contract |
-| Chart | `helm-triplanner` 0.15.0 (proposed) |
-| App version | 1.8.0 (proposed) |
+| Chart | `helm-triplanner` 0.15.0 |
+| App version | 1.8.0 |
 
 ## 1. Goal
 
@@ -293,6 +293,8 @@ The public Gateway returns `302` instead of metrics.
 - The web publishes `:3000`, so `http://localhost:3000/metrics` is reachable
   on the local host. This is local-only; the Helm Gateway blocks the public
   path.
+- The Compose stack currently runs `web`, `api`, `users`, `trips`, `locations`,
+  `agent` and `broker`; the email service is Helm-only.
 - Update the smoke scripts to verify `/metrics` through `docker compose exec`.
 
 ### 5.5 Version metadata
@@ -343,9 +345,10 @@ The public Gateway returns `302` instead of metrics.
 ### 7.3 Runtime acceptance
 
 - Compose: build and start; `docker compose exec <svc> curl -fsS
-  http://localhost:<port>/metrics` for all 8 services.
+  http://localhost:<port>/metrics` for the 7 Compose runtimes (email is
+  Helm-only).
 - Helm on `triplanner-cilium`: all pods ready; `kubectl exec` each pod and
-  curl `http://localhost:<port>/metrics`.
+  curl `http://localhost:<port>/metrics` for all 8 runtimes.
 - `curl -I http://triplanner.localhost:9080/metrics` → `302` to `/`.
 - `/api/ready`, login, trips, search and suggestions still work.
 - Sample outputs show `triplanner_http_requests_total`,
@@ -362,10 +365,33 @@ The public Gateway returns `302` instead of metrics.
   `metrics.serviceMonitor.enabled=true` and verify targets are `UP` in the
   Prometheus UI. That is M20, not this slice.
 
+### 7.5 Observed local evidence (2026-11-25)
+
+- Compose images built for `kafka`, `locations`, `trips`, `users`, `api`,
+  `agent` and `web`; the email image was built separately because the Compose
+  stack does not include it.
+- Unit suites: users 75/75, trips 76/76, locations 48/48, API 99/99, email
+  70/70, web 36/36, agent 14/14 + 7/7 + metrics.
+- Typecheck passed for all TypeScript services and the web; `next build`
+  passed; `go test ./...` passed via the Go Docker image.
+- Helm release `triplanner` chart 0.15.0 / app 1.8.0, revision 13, all pods
+  ready.
+- `scripts/metrics-smoke.ps1 -Target all`: 7/7 Compose, 8/8 Helm, Gateway
+  `/metrics` → 302.
+- `triplanner_build_info{version="1.8.0"}` in all Helm runtimes.
+- Users cardinality: 2 counter series before and after five `/health` calls;
+  no `route="/metrics"` series; no demo UUIDs, `demo123` or `INTERNAL_TOKEN` in
+  the exposition.
+- Gateway flows still pass: login, `listMyTrips`, `getTrip`, `searchLocations`
+  and `requestSuggestions`.
+- `helm template` with `metrics.serviceMonitor.enabled=true` renders 8
+  ServiceMonitors; with `networkPolicy.enabled=true` every service CNP has a
+  `GET /metrics` rule from the monitoring namespace.
+
 ## 8. Rollout and rollback
 
 - Chart 0.15.0, app version 1.8.0.
-- Local acceptance uses `kind-0.15.0` image tags.
+- Local acceptance uses `kind-0.15.1` image tags.
 - Hub images `1.8.0` are published only after Gate 2/release approval.
 - Rollback: revert the chart to 0.14.0. The `/metrics` endpoints are additive
   and harmless; ServiceMonitors are disabled by default; NetworkPolicy
@@ -403,7 +429,7 @@ The public Gateway returns `302` instead of metrics.
 
 ## 11. Gate 1 decision
 
-Approve the scope and exposure model:
+**Approved on 2026-11-24: option 1.**
 
 1. **Recommended**: all 8 runtimes, `/metrics` on existing HTTP ports, web
    `/metrics` blocked at the Cilium Gateway, ServiceMonitor scaffold disabled
@@ -414,5 +440,5 @@ Approve the scope and exposure model:
 3. **Full observability slice**: option 1 plus domain counters, a Compose
    Prometheus/Grafana stack and dashboards now.
 
-Recommendation: option 1. It prepares every runtime and the chart without
-taking on the monitoring stack, dashboards or business-metric scope yet.
+Option 1 was selected. Gate 2 remains pending; no Hub image publication or
+release tag until QA evidence is accepted.

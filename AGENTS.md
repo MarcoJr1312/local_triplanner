@@ -184,6 +184,11 @@ auth and Dockerfiles.
   are gone. The web is exposed by a **Cilium Gateway + HTTPRoute** on the
   isolated `triplanner-cilium` kind cluster; the Compose stack remains the
   recruiter quickstart. Existing `docker-desktop` ingress-nginx is untouched.
+- M19 metrics: every runtime exposes `GET /metrics` on its existing HTTP port
+  (ClusterIP-only, no database calls). Chart 0.15.0 adds disabled-by-default
+  ServiceMonitors, Cilium monitoring ingress rules and a Gateway redirect for
+  the web `/metrics` path. The monitoring stack is not deployed yet. Evidence:
+  `docs/migrations/0022-metrics.md`; local images `kind-0.15.1`.
 - M15 done (`feature/grpc-api`): native gRPC between the API facade and the
   users/trips/locations services, with `x-internal-token`/`x-actor-id`
   metadata, `grpc.health.v1.Health`, stable `x-error-code` mapping and

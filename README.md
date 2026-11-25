@@ -166,6 +166,20 @@ Gateway. The chart is self-contained: web, API facade, users, trips, locations,
 agent, broker, email and their databases all run in the cluster. The Compose
 stack remains a separate recruiter quickstart.
 
+### Metrics
+
+Every service exposes Prometheus text at `GET /metrics` on its existing HTTP
+port. The endpoints are ClusterIP-only and never query a database. The Helm
+web `/metrics` path redirects to `/` at the Cilium Gateway; Prometheus scrapes
+the web Service directly.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/metrics-smoke.ps1 -Target all
+```
+
+ServiceMonitors are disabled by default until `kube-prometheus-stack` is
+installed. See the [chart README](helm/helm-triplanner/README.md#metrics).
+
 ### What to try
 
 1. Open the seeded Toronto trip (Dec 4–6, 2026).
