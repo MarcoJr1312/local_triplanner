@@ -48,6 +48,8 @@ Migrations:
   dashboards; Gate 2 approved
 - [`0024-rbac-proxy.md`](./0024-rbac-proxy.md) — kube-rbac-proxy on agent and
   API; Gate 2 approved
+- [`0025-trip-form-fixes.md`](./0025-trip-form-fixes.md) — trip date range,
+  budget input and long-range day strip fixes
 
 ## Branching (local only)
 

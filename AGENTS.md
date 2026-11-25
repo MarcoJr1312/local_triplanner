@@ -203,6 +203,10 @@ auth and Dockerfiles.
   the public Gateway entry and the only exception. Evidence:
   `docs/migrations/0024-rbac-proxy.md`; ADR
   `docs/decisions/0001-kube-rbac-proxy-standard.md`. Gate 2 approved.
+- Trip form fixes (2026-11-25): date ranges clamp end to start, the total budget
+  input no longer forces a leading zero, and long-range day tabs scroll instead
+  of wrapping into the action row. Evidence:
+  `docs/migrations/0025-trip-form-fixes.md`.
 - M15 done (`feature/grpc-api`): native gRPC between the API facade and the
   users/trips/locations services, with `x-internal-token`/`x-actor-id`
   metadata, `grpc.health.v1.Health`, stable `x-error-code` mapping and
