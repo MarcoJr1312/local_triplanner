@@ -198,6 +198,11 @@ auth and Dockerfiles.
   an overview. Prometheus targets are 8/8 `UP`; Grafana provisions all 9.
   Gate 2 approved; no image or release publication. Evidence:
   `docs/migrations/0023-monitoring.md`.
+- M21 rbac-proxy standard: chart 0.17.0 adds the `kube-rbac-proxy` sidecar to
+  the agent and API, so every internal service now exposes 8443. The web stays
+  the public Gateway entry and the only exception. Evidence:
+  `docs/migrations/0024-rbac-proxy.md`; ADR
+  `docs/decisions/0001-kube-rbac-proxy-standard.md`. Gate 2 pending.
 - M15 done (`feature/grpc-api`): native gRPC between the API facade and the
   users/trips/locations services, with `x-internal-token`/`x-actor-id`
   metadata, `grpc.health.v1.Health`, stable `x-error-code` mapping and
@@ -217,6 +222,10 @@ current tree.
   `t()`, API errors use stable codes.
 - Membership checks on every read/mutation; attachments are gated by per-file
   visibility and short-lived HMAC URLs.
+- Every internal service (`api`, `users`, `trips`, `locations`, `agent`,
+  `email`, `broker`) ships a `kube-rbac-proxy` sidecar on 8443. The `web` is
+  the public Cilium Gateway entry and the only exception. See
+  `docs/decisions/0001-kube-rbac-proxy-standard.md`.
 - Avatars and attachments are served same-origin through the web proxy.
 - Routes use Google Maps deep links; Uber deep links never preload a pickup.
 - Every Helm manifest for a namespaced kind sets

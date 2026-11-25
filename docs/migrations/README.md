@@ -46,6 +46,8 @@ Migrations:
   implemented locally, Gate 2 pending
 - [`0023-monitoring.md`](./0023-monitoring.md) — ServiceMonitors and Grafana
   dashboards; Gate 2 approved
+- [`0024-rbac-proxy.md`](./0024-rbac-proxy.md) — kube-rbac-proxy on agent and
+  API; implemented locally, Gate 2 pending
 
 ## Branching (local only)
 
