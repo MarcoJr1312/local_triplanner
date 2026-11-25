@@ -350,6 +350,9 @@ Prerequisites:
   `marcojr13/triplanner-web:1.8.0`. The `1.8.0` tags are published by the
   per-service workflows when the `v1.8.0` tag is pushed; override the tags for
   a local pre-release acceptance run.
+- For the local kind values, `kube-prometheus-stack` in `monitoring` (or set
+  `metrics.serviceMonitor.enabled=false`). See
+  [`deploy/kind`](../../deploy/kind/README.md#monitoring).
 
 ```bash
 # Full local Cilium kind flow (cluster, images, secret)

@@ -74,9 +74,22 @@ kube-prometheus-stack is installed; then set
 ## Monitoring
 
 The `prometheus` release in `monitoring` is the local kube-prometheus-stack on
-`kind-triplanner-cilium`. `deploy/kind/triplanner-values.yaml` enables the
-Triplanner ServiceMonitors with `release: prometheus`; Prometheus selects
-ServiceMonitors from all namespaces.
+`kind-triplanner-cilium`. A fresh kind cluster needs it before
+`deploy-demo.ps1` because the local values enable the ServiceMonitors:
+
+```powershell
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm repo update
+kubectl create namespace monitoring
+helm install prometheus prometheus-community/kube-prometheus-stack `
+  --namespace monitoring --version 93.11.0
+```
+
+If you want a bare app deployment without the monitoring stack, set
+`metrics.serviceMonitor.enabled=false` (the chart default) before deploying.
+
+`deploy/kind/triplanner-values.yaml` enables the Triplanner ServiceMonitors with
+`release: prometheus`; Prometheus selects ServiceMonitors from all namespaces.
 
 Check targets through the Kubernetes API proxy:
 
