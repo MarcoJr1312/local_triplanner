@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **Implemented and verified locally (2026-11-25); Gate 2 pending** |
+| Status | **Gate 2 approved locally (2026-11-25); release deferred** |
 | Cycle | Kubernetes Manifest Delivery |
 | Slice | M26 — p50 latency baselines |
 | Chart | `helm-triplanner` 0.20.0 |
@@ -91,4 +91,6 @@ dashboard ConfigMaps change.
 
 ## 7. Gate 2 decision
 
-Pending. The change is local-only; nothing was pushed or published.
+**Approved locally on 2026-11-25: accept M26 and hold the release.**
+The p50/p95 panels are accepted on the local kind stack. Image publication,
+`git push` and release tagging remain deferred.

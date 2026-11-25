@@ -234,7 +234,8 @@ auth and Dockerfiles.
   overview HTTP/gRPC latency charts. Chart 0.20.0, revision 24, images
   unchanged at `kind-0.19.0`. A 60-second load (462 calls, 0 errors) produced
   users gRPC p50 7.02 ms / p95 239 ms and trips 5.02 / 9.54 ms. Artifact:
-  `helm/helm-triplanner/dashboards/*.json`. Evidence:
+  `helm/helm-triplanner/dashboards/*.json`. Gate 2 approved locally; release
+  deferred. Evidence:
   `docs/migrations/0029-p50-latency-baselines.md`.
 - M15 done (`feature/grpc-api`): native gRPC between the API facade and the
   users/trips/locations services, with `x-internal-token`/`x-actor-id`

@@ -58,7 +58,7 @@ Migrations:
   users, trips and locations; dashboards and load evidence; Gate 2 approved
   locally
 - [`0029-p50-latency-baselines.md`](./0029-p50-latency-baselines.md) — p50
-  added to every p95 panel; Gate 2 pending
+  added to every p95 panel; Gate 2 approved locally
 
 ## Branching (local only)
 
