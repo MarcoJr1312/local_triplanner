@@ -43,11 +43,12 @@ Path filters keep each workflow scoped to its service files.
   - `marcojr13/triplanner-locations`
   - `marcojr13/triplanner-trips`
   - `marcojr13/triplanner-users` (new: first publish is M10.14)
+  - `marcojr13/triplanner-kafka`
   - `marcojr13/triplanner-email`
 - Published tags: `latest` (current `main`), `1.2`, `1.2.2`, `sha-3e15bed`
   and `sha-4e009c3` (plus the older release tags).
 - Architectures: `linux/amd64`, `linux/arm64`.
-- Verification: all four workflows passed on `main` and tag `v1.2.2` (8/8);
+- Verification: the service workflows passed on `main` and tag `v1.2.2` (8/8);
   the published `1.2.2` stack passed the smoke test with 0 critical container
   CVEs.
 
