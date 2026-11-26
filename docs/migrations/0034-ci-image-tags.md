@@ -2,13 +2,13 @@
 
 | Field | Value |
 |---|---|
-| Status | **Implemented; PR #1 merged; image cutover ready; first `workflow_run` still unobserved** |
+| Status | **Implemented; cutover complete; `workflow_dispatch` verified; automatic `workflow_run` still unobserved** |
 | Cycle | Kubernetes Manifest Delivery |
 | Slice | M29 — CI publishes SHA tags and updates chart values |
 | Workflow | `.github/workflows/gitops-image-tags.yml` |
 | Script | `scripts/ci-update-image-tag.sh` |
 | Values target | `helm/helm-triplanner/values.yaml` |
-| Argo CD | **`HEAD` (main)** since 2026-11-26; local image overlay until cutover |
+| Argo CD | **`HEAD` (main)**; six published `sha-e377c12`, broker/email local |
 
 ## 1. Merge status
 
@@ -19,13 +19,13 @@ Application now tracks:
 targetRevision: HEAD
 ```
 
-`main` contains the chart and the GitOps workflow. The cutover branch now uses
-the chart defaults for the six published services (`sha-e377c12`) and keeps
-only broker/email local (`sha-5247619`).
+`main` contains the chart and the GitOps workflow. The cutover is merged: the
+chart defaults for six services are `sha-e377c12` and only broker/email remain
+local (`sha-5247619`).
 
-GitHub did not create a `GitOps image tags` run for the merge workflows. A
-`workflow_dispatch` fallback was added; the first image cutover is pinned
-manually so it does not block.
+GitHub did not create a `GitOps image tags` run for the merge workflows. The
+`workflow_dispatch` fallback was verified manually; the first image cutover was
+pinned in the cutover commit so it did not block.
 
 ## 2. Pipeline design
 
@@ -66,16 +66,16 @@ Properties:
 
 ## 3. Post-merge cutover
 
-PR #1 is merged and Argo CD tracks `HEAD`. The cutover branch performs:
+PR #1 is merged and Argo CD tracks `HEAD`. The cutover commit:
 
-1. Chart defaults for six services set to `sha-e377c12`.
-2. Six local image overrides removed from `deploy/kind/triplanner-values.yaml`;
-   broker/email stay local.
-3. `deploy/kind/triplanner-local-images.yaml` preserves full local source builds.
-4. `workflow_dispatch` fallback added to the tag workflow.
+1. Set chart defaults for six services to `sha-e377c12`.
+2. Removed the six local image overrides from
+   `deploy/kind/triplanner-values.yaml`; broker/email stay local.
+3. Added `deploy/kind/triplanner-local-images.yaml` for full local source
+   builds.
+4. Added the `workflow_dispatch` fallback to the tag workflow.
 
-After the cutover branch merges, Argo CD pulls the published SHA images from
-Docker Hub.
+Argo CD pulls the published SHA images from Docker Hub.
 
 ## 4. Verification performed
 
@@ -83,18 +83,20 @@ Docker Hub.
 actionlint .github/workflows/gitops-image-tags.yml  -> 0 errors
 yq 4.45.1 simulation: images.web.tag -> "sha-test123" (temp file only)
 bash -n scripts/ci-update-image-tag.sh              -> syntax OK
+workflow_dispatch (api, sha-e377c12)                -> success
 ```
 
-Not yet performed: a real `workflow_run` update on `main`; GitHub created no
-`GitOps image tags` runs for the merge workflows. A `workflow_dispatch`
-fallback is now available. All six `sha-e377c12` images are present on Docker
+The dispatch ran as [run 45768988141](https://github.com/MarcoJr1312/local_triplanner/actions/runs/45768988141)
+and found the tag already current, so it made no commit. The automatic
+`workflow_run` path is still unobserved for a service push; the next push to
+`main` should exercise it. All six `sha-e377c12` images are present on Docker
 Hub, including Web.
 
 ## 5. Risks
 
 | Risk | Mitigation |
 |---|---|
-| Workflow cannot run before merge | Documented; first run after PR #1 merge |
+| Automatic `workflow_run` not observed yet | Manual `workflow_dispatch` verified; next service push should trigger it |
 | `GITHUB_TOKEN` cannot push to protected `main` | Allow GitHub Actions to push or use a bot token with branch-protection bypass |
 | Six services update the same file | Shared concurrency group + rebase/retry |
 | `broker`/`email` have no publish workflows | Keep their local kind overrides until workflows exist |
@@ -111,5 +113,6 @@ image.
 
 ## 7. Gate
 
-This slice is implemented but not yet exercised on `main`. Gate 2 should wait
-for PR #1 to merge and the first real image-tag commit to be observed.
+The cutover is complete and `workflow_dispatch` is verified. Gate 2 should
+include the first automatic service-push update when it occurs; until then the
+manual fallback is available.
