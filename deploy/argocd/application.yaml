@@ -7,16 +7,15 @@ spec:
   project: triplanner
   sources:
     - repoURL: https://github.com/MarcoJr1312/local_triplanner
-      # Pre-merge: track the delivery branch. After PR #1 is merged, set this
-      # to HEAD so Argo CD follows main and the CI-updated chart values.
-      targetRevision: refactor/helm
+      # Follow the default branch after PR #1 was merged.
+      targetRevision: HEAD
       path: helm/helm-triplanner
       helm:
         releaseName: triplanner
         valueFiles:
           - $values/deploy/kind/triplanner-values.yaml
     - repoURL: https://github.com/MarcoJr1312/local_triplanner
-      targetRevision: refactor/helm
+      targetRevision: HEAD
       ref: values
   destination:
     server: https://kubernetes.default.svc

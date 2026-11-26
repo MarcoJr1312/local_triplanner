@@ -9,7 +9,7 @@ chart in sync.
 | Namespace | `triplanner-agrocd` |
 | Application | `triplanner` |
 | Git repo | `https://github.com/MarcoJr1312/local_triplanner` |
-| Revision | `refactor/helm` |
+| Revision | **`HEAD`** (default branch `main`) |
 | Chart path | `helm/helm-triplanner` |
 | Values | `$values/deploy/kind/triplanner-values.yaml` |
 | Sync | automated, `selfHeal: true`, `prune: false` |
@@ -82,23 +82,23 @@ iptables NAT chain can remain empty; `deploy/kind/setup-cilium.ps1` and
 Re-run `deploy-demo.ps1` after a Docker Desktop restart if GitHub cloning
 fails with `context deadline exceeded`.
 
-## After PR #1 is merged
+## Current cutover state
 
-The current Application tracks `refactor/helm` and uses the local kind image
-overrides. Once PR #1 is merged:
+PR #1 is merged and the Application tracks `HEAD` (the default branch). The
+kind overlay still keeps the local image overrides (`sha-5247619`) until the CI
+image cutover, so the app remains healthy.
 
-1. Confirm the six service workflows published `sha-<merge>` images and the
+To finish the image cutover once the six images are published:
+
+1. Confirm the service workflows pushed `sha-<merge>` images and the
    `GitOps image tags` workflow updated `helm/helm-triplanner/values.yaml`.
 2. Remove the `agent`, `api`, `locations`, `trips`, `users` and `web` image
    overrides from `deploy/kind/triplanner-values.yaml`; keep the local
    `broker`/`email` images until they have their own publish workflow.
-3. Change `targetRevision` in `deploy/argocd/application.yaml` from
-   `refactor/helm` to `HEAD`.
-4. Commit and push. Argo CD follows `main` and pulls the published SHA images
+3. Commit and push. Argo CD follows `HEAD` and pulls the published SHA images
    from Docker Hub; the kind node already has egress after the NAT fix.
 
-Until then, `targetRevision: refactor/helm` and the local `sha-5247619` images
-keep the current app healthy.
+Until then, the local `sha-5247619` images keep the current app healthy.
 
 ## Operating rules
 

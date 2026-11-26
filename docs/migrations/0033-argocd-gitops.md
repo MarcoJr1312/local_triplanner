@@ -9,7 +9,7 @@
 | Argo CD release | `argocd` revision 3, namespace `triplanner-agrocd` |
 | Application | `triplanner` — **Synced / Healthy** |
 | Git source | `https://github.com/MarcoJr1312/local_triplanner` |
-| Git revision | `refactor/helm` at `593e29b` |
+| Git revision | **`HEAD`** (default branch `main`) at `e377c12` |
 | Chart path | `helm/helm-triplanner` |
 | Image SHA | `sha-5247619` (image build commit) |
 | Triplanner chart | 0.21.0, Helm release still at revision 29 (frozen) |
@@ -24,7 +24,7 @@ application in `triplanner`:
 - The UI is ClusterIP-only; `kubectl port-forward svc/argocd-server 8080:443`
   returns HTTP 200 with a self-signed certificate.
 - Application `triplanner` uses a multi-source Helm definition:
-  - chart `helm/helm-triplanner` at `refactor/helm`;
+  - chart `helm/helm-triplanner` at `HEAD`;
   - values `$values/deploy/kind/triplanner-values.yaml`.
 - Automated sync is on with `selfHeal: true` and `prune: false`.
 - The existing Helm release `triplanner` revision 29 was adopted in place; no
