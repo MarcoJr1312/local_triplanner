@@ -490,11 +490,6 @@ cd backend/server && bun audit
 - Demo-only values are intentional: the PostgreSQL/MongoDB passwords,
   `dev-internal-token` and `dev-attachment-secret` are local defaults and must
   never be reused outside the demo.
-- The historical Firebase **web** key in `local/.env.example` was already
-  public on `origin/main`; restrict or rotate it in Google Cloud independently.
-  It is not a blocker for this push and no history rewrite is required.
-- `AGENTS.md`, `.opencode/` and `.orkai.yaml` are local-only and gitignored.
-  `.opencode/` history contains no secrets.
 - `backend/.env.fetch` is untracked and holds a live-looking HasData key; it
   must stay ignored and must never be force-added.
 - Full controls, accepted risks and scan details:
