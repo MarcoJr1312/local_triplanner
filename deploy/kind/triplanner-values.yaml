@@ -1,10 +1,11 @@
-# Values for the isolated Cilium kind cluster. Images are loaded from the local
-# Docker daemon by deploy/kind/deploy-demo.ps1 / deploy-demo.sh.
+# Values for the isolated Cilium kind cluster.
 #
-# Pre-merge: these overrides keep the app on locally built images. After PR #1
-# is merged and the GitOps workflow has updated helm/helm-triplanner/values.yaml,
-# remove the agent/api/locations/trips/users/web overrides (keep broker/email)
-# and switch the Argo CD Application targetRevision to HEAD.
+# The six CI-published services (web, api, users, trips, locations, agent) use
+# the chart defaults, pinned to the image build SHA.
+#
+# broker/email do not have publish workflows yet, so keep their locally loaded
+# images here. For a full source build, deploy-demo also passes
+# deploy/kind/triplanner-local-images.yaml.
 images:
   broker:
     name: triplanner-local/kafka
@@ -12,52 +13,3 @@ images:
   email:
     name: triplanner-local/email
     tag: sha-5247619
-  locations:
-    name: triplanner-local/locations
-    tag: sha-5247619
-  trips:
-    name: triplanner-local/trips
-    tag: sha-5247619
-  users:
-    name: triplanner-local/users
-    tag: sha-5247619
-  agent:
-    name: triplanner-local/agent
-    tag: sha-5247619
-  api:
-    name: triplanner-local/api
-    tag: sha-5247619
-  web:
-    name: triplanner-local/web
-    tag: sha-5247619
-
-# The kube-prometheus-stack release `prometheus` selects ServiceMonitors from
-# all namespaces with `release: prometheus`. Dashboards are picked up by the
-# Grafana sidecar (`grafana_dashboard=1`, all namespaces).
-metrics:
-  enabled: true
-  serviceMonitor:
-    enabled: true
-    labels:
-      release: prometheus
-  dashboards:
-    enabled: true
-
-networkPolicy:
-  # Docker Desktop's WSL2 kind kernel lacks xt_socket, so Cilium's DNS proxy
-  # (required by toFQDNs) and the probe path are not usable here. Enable this on
-  # a Cilium cluster with a compatible kernel; see deploy/kind/README.md.
-  enabled: false
-  probeCIDRs:
-    - 10.244.0.73/32
-    - 172.19.0.7/32
-  email:
-    extraFQDNs: []
-  locations:
-    extraFQDNs: []
-  agent:
-    extraFQDNs:
-      - api.openai.com
-      - api.anthropic.com
-      - api.deepseek.com
-    ollamaCIDRs: []

@@ -13,6 +13,23 @@ on:
       - Users service - test and publish
       - Web - test and publish
     types: [completed]
+  workflow_dispatch:
+    inputs:
+      service:
+        description: Image service key
+        required: true
+        type: choice
+        options:
+          - agent
+          - api
+          - locations
+          - trips
+          - users
+          - web
+      tag:
+        description: Published image tag, for example sha-e377c12
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -25,8 +42,9 @@ jobs:
   update:
     name: Update values.yaml image tag
     if: >-
-      github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.head_branch == 'main'
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -40,19 +58,26 @@ jobs:
         env:
           WORKFLOW_NAME: ${{ github.event.workflow_run.name }}
           HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          INPUT_SERVICE: ${{ inputs.service }}
+          INPUT_TAG: ${{ inputs.tag }}
         run: |
-          case "$WORKFLOW_NAME" in
-            "Agent - test and publish") SERVICE=agent ;;
-            "API - test and publish") SERVICE=api ;;
-            "Locations service - test and publish") SERVICE=locations ;;
-            "Trips service - test and publish") SERVICE=trips ;;
-            "Users service - test and publish") SERVICE=users ;;
-            "Web - test and publish") SERVICE=web ;;
-            *)
-              echo "No GitOps mapping for workflow: $WORKFLOW_NAME" >&2
-              exit 1
-              ;;
-          esac
-          IMAGE_TAG="sha-${HEAD_SHA::7}"
+          if [ -n "${INPUT_SERVICE:-}" ]; then
+            SERVICE="$INPUT_SERVICE"
+            IMAGE_TAG="$INPUT_TAG"
+          else
+            case "$WORKFLOW_NAME" in
+              "Agent - test and publish") SERVICE=agent ;;
+              "API - test and publish") SERVICE=api ;;
+              "Locations service - test and publish") SERVICE=locations ;;
+              "Trips service - test and publish") SERVICE=trips ;;
+              "Users service - test and publish") SERVICE=users ;;
+              "Web - test and publish") SERVICE=web ;;
+              *)
+                echo "No GitOps mapping for workflow: $WORKFLOW_NAME" >&2
+                exit 1
+                ;;
+            esac
+            IMAGE_TAG="sha-${HEAD_SHA::7}"
+          fi
           echo "Updating images.${SERVICE}.tag to ${IMAGE_TAG}"
           ./scripts/ci-update-image-tag.sh "$SERVICE" "$IMAGE_TAG"

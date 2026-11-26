@@ -1,5 +1,11 @@
 # 0033 — Argo CD GitOps
 
+> **Update 2026-11-26:** the image cutover is complete. Six services now use
+> `marcojr13/triplanner-*:sha-e377c12`; broker/email remain local
+> `triplanner-local/*:sha-5247619`. See
+> [`0035-gitops-image-cutover.md`](./0035-gitops-image-cutover.md). The image
+> table below records the pre-cutover adoption snapshot.
+
 | Field | Value |
 |---|---|
 | Status | **Implemented and verified locally (2026-11-26); Gate 2 pending** |

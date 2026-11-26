@@ -60,6 +60,7 @@ helm upgrade --install $Release $chart `
   --kube-context "kind-$Cluster" `
   --namespace $Namespace `
   --values (Join-Path $PSScriptRoot 'triplanner-values.yaml') `
+  --values (Join-Path $PSScriptRoot 'triplanner-local-images.yaml') `
   --wait `
   --timeout 15m
 if ($LASTEXITCODE -ne 0) { throw 'Helm deployment failed.' }

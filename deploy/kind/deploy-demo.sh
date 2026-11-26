@@ -57,6 +57,7 @@ helm upgrade --install "$RELEASE" "$HERE/../../helm/helm-triplanner" \
   --kube-context "kind-$CLUSTER" \
   --namespace "$NAMESPACE" \
   --values "$HERE/triplanner-values.yaml" \
+  --values "$HERE/triplanner-local-images.yaml" \
   --wait \
   --timeout 15m
 

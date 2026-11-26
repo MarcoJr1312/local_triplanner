@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **Implemented; PR #1 merged; first `workflow_run` did not trigger; image cutover pending** |
+| Status | **Implemented; PR #1 merged; image cutover ready; first `workflow_run` still unobserved** |
 | Cycle | Kubernetes Manifest Delivery |
 | Slice | M29 — CI publishes SHA tags and updates chart values |
 | Workflow | `.github/workflows/gitops-image-tags.yml` |
@@ -19,9 +19,13 @@ Application now tracks:
 targetRevision: HEAD
 ```
 
-`main` contains the chart and the GitOps workflow. The kind overlay still
-overrides the six service images with local `sha-5247619` tags, so the running
-app stays healthy while the CI image cutover is completed.
+`main` contains the chart and the GitOps workflow. The cutover branch now uses
+the chart defaults for the six published services (`sha-e377c12`) and keeps
+only broker/email local (`sha-5247619`).
+
+GitHub did not create a `GitOps image tags` run for the merge workflows. A
+`workflow_dispatch` fallback was added; the first image cutover is pinned
+manually so it does not block.
 
 ## 2. Pipeline design
 
@@ -62,17 +66,16 @@ Properties:
 
 ## 3. Post-merge cutover
 
-PR #1 is merged and Argo CD already tracks `HEAD`. Remaining steps:
+PR #1 is merged and Argo CD tracks `HEAD`. The cutover branch performs:
 
-1. Confirm all six service workflows pushed `sha-e377c12` images to Docker Hub.
-2. Confirm `GitOps image tags` updated `helm/helm-triplanner/values.yaml`.
-3. Remove the six service image overrides from
-   `deploy/kind/triplanner-values.yaml`; keep `broker`/`email` local until they
-   have publish workflows.
-4. Commit and push; Argo CD pulls the published SHA images from Docker Hub.
+1. Chart defaults for six services set to `sha-e377c12`.
+2. Six local image overrides removed from `deploy/kind/triplanner-values.yaml`;
+   broker/email stay local.
+3. `deploy/kind/triplanner-local-images.yaml` preserves full local source builds.
+4. `workflow_dispatch` fallback added to the tag workflow.
 
-The current app stays healthy on the local `sha-5247619` images until these
-steps.
+After the cutover branch merges, Argo CD pulls the published SHA images from
+Docker Hub.
 
 ## 4. Verification performed
 
@@ -82,13 +85,10 @@ yq 4.45.1 simulation: images.web.tag -> "sha-test123" (temp file only)
 bash -n scripts/ci-update-image-tag.sh              -> syntax OK
 ```
 
-Not yet performed: a real `workflow_run` update on `main`. The six service
-workflows completed for merge commit `e377c12`, but GitHub created no
-`GitOps image tags` runs for them. The workflow file was added in the same
-merge, which likely prevented the first `workflow_run` trigger; the next
-service push to `main` should exercise it. `triplanner-web:sha-e377c12` was
-also not yet visible on Docker Hub when checked, so the image cutover is not
-complete.
+Not yet performed: a real `workflow_run` update on `main`; GitHub created no
+`GitOps image tags` runs for the merge workflows. A `workflow_dispatch`
+fallback is now available. All six `sha-e377c12` images are present on Docker
+Hub, including Web.
 
 ## 5. Risks
 
