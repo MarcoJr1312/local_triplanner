@@ -2,14 +2,14 @@
 
 | Field | Value |
 |---|---|
-| Status | **Prepared on `feature/argocd-head`; merge pending** |
+| Status | **Merged and verified locally (2026-11-26); Gate 2 pending** |
 | Cycle | Kubernetes Manifest Delivery |
 | Slice | M29.2 — published SHA images, HEAD tracking |
 | Chart | `helm-triplanner` 0.21.0 |
-| Argo CD | Application `triplanner`, `targetRevision: HEAD`, Synced/Healthy |
+| Argo CD | Application `triplanner`, `targetRevision: HEAD`, **Synced/Healthy** |
 | Published images | `marcojr13/triplanner-*:sha-e377c12` for six services |
 | Local images | `triplanner-local/{kafka,email}:sha-5247619` |
-| Source | `main` at `a893b9c`; branch `feature/argocd-head` |
+| Source | `main` at `ed582ab`; PRs #4, #5 and #6 merged |
 
 ## 1. What changed
 
@@ -68,29 +68,32 @@ kubectl apply --dry-run=server Application unchanged (HEAD)
 
 ## 3. Live state
 
-Before this branch merges, Argo CD is already on `HEAD` and the live app still
-uses the local `sha-5247619` images because `main` still has the old overlay.
-After the cutover branch merges:
+The cutover merged to `main` at `7acfeab` and the overlay fix at `0d7e5f4`;
+the CI yq permission fix is `ed582ab`.
 
-1. Argo CD syncs `main` with the six chart-default SHA images.
-2. Six Deployments roll to Docker Hub `sha-e377c12` images.
-3. Broker/email stay on local images already loaded in kind.
-4. `/api/ready` must remain `{"status":"ready","backend":"ok"}`.
+```text
+Argo CD:       Synced / Healthy
+Revision:      ed582ab
+Images:        six marcojr13/triplanner-*:sha-e377c12
+               triplanner-local/{kafka,email}:sha-5247619
+Live:          /api/health ok, /api/ready {"status":"ready","backend":"ok"}
+Prometheus:    13/13 targets
+Grafana:       11 dashboards
+```
 
-The kind node has GitHub/Docker Hub egress through the NAT rule added by the
-setup/deploy scripts.
+The kind node pulls the published images from Docker Hub through the NAT rule
+added by the setup/deploy scripts.
 
 ## 4. Residual risk
 
 | Risk | Mitigation |
 |---|---|
-| `workflow_run` still not observed | `workflow_dispatch` fallback; next service push should exercise it |
+| Automatic `workflow_run` still not observed | `workflow_dispatch` verified with run `45768988141`; next service push should exercise the automatic path |
 | Docker Hub pull on kind | Public manifests verified; NAT fix applied |
 | Broker/email have no publish workflows | Keep local overrides until workflows exist |
 | Chart source revision newer than image SHA | Expected when only docs/CI change |
-| Cutover branch not merged | Live app remains on local images; no data risk |
 
 ## 5. Gate
 
-Gate 2 should wait for the cutover branch merge and the first published-image
-rollout. Until then, the live app remains healthy on local images.
+Ready for Gate 2. Local acceptance is complete; the live app is on the
+published SHA images for six services and local broker/email images.
