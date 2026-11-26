@@ -67,12 +67,14 @@ Migrations:
 - [`0032-argocd-gitops-plan.md`](./0032-argocd-gitops-plan.md) — Argo CD
   GitOps plan for `helm/helm-triplanner`; Gate 1 approved
 - [`0033-argocd-gitops.md`](./0033-argocd-gitops.md) — Argo CD installation,
-  SHA-pinned images, auto-sync/self-heal and egress workaround; Gate 2 pending
+  SHA-pinned images, auto-sync/self-heal and egress workaround; Gate 2 approved
+  locally
 - [`0034-ci-image-tags.md`](./0034-ci-image-tags.md) — CI publishes SHA tags
-  and updates the Helm values after main; first run pending
-- [`0035-gitops-image-cutover.md`](./0035-gitops-image-cutover.md) - six
+  and updates the Helm values after main; `workflow_dispatch` verified,
+  automatic run pending
+- [`0035-gitops-image-cutover.md`](./0035-gitops-image-cutover.md) — six
   published `sha-e377c12` images, HEAD tracking and local broker/email; merged
-  and verified PR #1 merge
+  and verified
 
 ## Branching (local only)
 

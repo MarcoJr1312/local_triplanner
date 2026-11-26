@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **Implemented; cutover complete; `workflow_dispatch` verified; automatic `workflow_run` still unobserved** |
+| Status | **Gate 2 approved locally (2026-11-26); automatic `workflow_run` residual accepted; release deferred** |
 | Cycle | Kubernetes Manifest Delivery |
 | Slice | M29 — CI publishes SHA tags and updates chart values |
 | Workflow | `.github/workflows/gitops-image-tags.yml` |
@@ -113,6 +113,6 @@ image.
 
 ## 7. Gate
 
-The cutover is complete and `workflow_dispatch` is verified. Gate 2 should
-include the first automatic service-push update when it occurs; until then the
-manual fallback is available.
+**Approved locally on 2026-11-26: accept M29 and hold the release.** The
+cutover is complete and `workflow_dispatch` is verified; the first automatic
+service-push update remains a documented residual.
