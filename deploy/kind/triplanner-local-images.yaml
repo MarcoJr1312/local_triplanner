@@ -1,0 +1,28 @@
+# Local source-build image overrides for deploy/kind/deploy-demo.ps1 / .sh.
+# Argo CD does not use this file; it uses the chart defaults for the six
+# published services and deploy/kind/triplanner-values.yaml for broker/email.
+images:
+  broker:
+    name: triplanner-local/kafka
+    tag: sha-5247619
+  email:
+    name: triplanner-local/email
+    tag: sha-5247619
+  locations:
+    name: triplanner-local/locations
+    tag: sha-5247619
+  trips:
+    name: triplanner-local/trips
+    tag: sha-5247619
+  users:
+    name: triplanner-local/users
+    tag: sha-5247619
+  agent:
+    name: triplanner-local/agent
+    tag: sha-5247619
+  api:
+    name: triplanner-local/api
+    tag: sha-5247619
+  web:
+    name: triplanner-local/web
+    tag: sha-5247619

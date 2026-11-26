@@ -51,28 +51,24 @@ is never committed.
 
 ## Images
 
-Argo CD renders the chart but does not build or load images. The kind overlay
-pins the application images to the image build SHA:
+Argo CD renders the chart but does not build or load images. The six
+CI-published services use the chart defaults:
 
 ```yaml
 images:
   web:
-    tag: sha-5247619
+    tag: sha-e377c12
 ```
 
-The chart source revision is the Git commit that Argo CD synced; the image SHA
-is the service-image build commit and can be older when only docs/chart files
+`broker` and `email` have no publish workflows yet, so
+`deploy/kind/triplanner-values.yaml` keeps them on local
+`triplanner-local/*:sha-5247619` images. `deploy/kind/deploy-demo.ps1` and
+`.sh` also pass `deploy/kind/triplanner-local-images.yaml` for a full local
+source build.
+
+The chart source revision is the Git commit Argo CD synced; the image SHA is
+the service-image build commit and can be older when only docs/chart files
 changed.
-
-The images must be tagged and loaded before Argo CD syncs that revision:
-
-```powershell
-docker tag triplanner-local/web:kind-0.19.0 triplanner-local/web:sha-5247619
-kind load docker-image --name triplanner-cilium triplanner-local/web:sha-5247619
-```
-
-Use the same pattern for all eight application images. A future image
-publication pipeline should produce `sha-<commit>` tags directly.
 
 ## Pod egress prerequisite
 
@@ -84,21 +80,13 @@ fails with `context deadline exceeded`.
 
 ## Current cutover state
 
-PR #1 is merged and the Application tracks `HEAD` (the default branch). The
-kind overlay still keeps the local image overrides (`sha-5247619`) until the CI
-image cutover, so the app remains healthy.
+PR #1 is merged and the Application tracks `HEAD` (the default branch).
 
-To finish the image cutover once the six images are published:
-
-1. Confirm the service workflows pushed `sha-<merge>` images and the
-   `GitOps image tags` workflow updated `helm/helm-triplanner/values.yaml`.
-2. Remove the `agent`, `api`, `locations`, `trips`, `users` and `web` image
-   overrides from `deploy/kind/triplanner-values.yaml`; keep the local
-   `broker`/`email` images until they have their own publish workflow.
-3. Commit and push. Argo CD follows `HEAD` and pulls the published SHA images
-   from Docker Hub; the kind node already has egress after the NAT fix.
-
-Until then, the local `sha-5247619` images keep the current app healthy.
+- Six services: `marcojr13/triplanner-*:sha-e377c12`, pulled from Docker Hub.
+- Broker/email: local `triplanner-local/*:sha-5247619`.
+- The `GitOps image tags` workflow has `workflow_dispatch` as a manual fallback;
+  its first `workflow_run` was not observed for the merge commit.
+- The kind node has egress after the NAT fix.
 
 ## Operating rules
 

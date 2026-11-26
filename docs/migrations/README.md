@@ -69,7 +69,10 @@ Migrations:
 - [`0033-argocd-gitops.md`](./0033-argocd-gitops.md) — Argo CD installation,
   SHA-pinned images, auto-sync/self-heal and egress workaround; Gate 2 pending
 - [`0034-ci-image-tags.md`](./0034-ci-image-tags.md) — CI publishes SHA tags
-  and updates the Helm values after main; first run pending PR #1 merge
+  and updates the Helm values after main; first run pending
+- [`0035-gitops-image-cutover.md`](./0035-gitops-image-cutover.md) — six
+  published `sha-e377c12` images, HEAD tracking and local broker/email; merge
+  pending PR #1 merge
 
 ## Branching (local only)
 

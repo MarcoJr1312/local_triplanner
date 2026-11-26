@@ -17,8 +17,9 @@ profile settings.
 > Release tagging and image publication are deferred. The Compose stack remains
 > the recruiter quickstart; the Helm/Cilium stack is the advanced local path.
 > Four PostgreSQL exporters, one MongoDB exporter and 11 Grafana dashboards are
-> live. Argo CD GitOps is live in `triplanner-agrocd`; the application images
-> are pinned to the image build SHA `sha-5247619`.
+> live. Argo CD GitOps is live in `triplanner-agrocd`; six services use
+> CI-published `sha-e377c12` images and broker/email use local
+> `sha-5247619` images.
 
 ## Documentation
 
@@ -27,6 +28,7 @@ profile settings.
 - [Argo CD GitOps plan](docs/migrations/0032-argocd-gitops-plan.md)
 - [Argo CD implementation evidence](docs/migrations/0033-argocd-gitops.md)
 - [CI image-tag automation](docs/migrations/0034-ci-image-tags.md)
+- [Argo CD image cutover](docs/migrations/0035-gitops-image-cutover.md)
 - [10-minute demo tour](docs/DEMO_TOUR.md)
 - [Troubleshooting](docs/TROUBLESHOOTING.md)
 - [Security notes](docs/SECURITY.md)
@@ -244,13 +246,13 @@ the first sync:
   branch), path `helm/helm-triplanner`, with automated sync and `selfHeal`.
 - The kind values are supplied through a multi-source `$values` reference to
   `deploy/kind/triplanner-values.yaml`.
-- Application images are pinned to the image build SHA `sha-5247619`, not a
-  mutable tag.
+- The six CI services run published `sha-e377c12` images; `broker`/`email`
+  remain local `sha-5247619` images until they have publish workflows.
 - `prune` is disabled so PVCs and Secrets are not deleted by a sync.
 - Helm upgrades are frozen for `triplanner`; changes go through Git.
 - CI publishes `sha-<short>` images on `main` and the `GitOps image tags`
-  workflow updates `helm/helm-triplanner/values.yaml` after each service
-  publish. The kind overlay keeps local image overrides until PR #1 is merged.
+  workflow updates `helm/helm-triplanner/values.yaml`; `workflow_dispatch`
+  is available as a manual fallback.
 
 Open the UI:
 
@@ -423,10 +425,10 @@ without building:
 docker compose -f deploy/docker-compose.hub.yml up -d
 ```
 
-> **Current local delivery:** the current Helm images are tagged
-> `sha-5247619` and loaded into the kind node. Publishing the `1.8.0` service
-> images and tagging the release are deferred; the published `1.2.2` images
-> above are historical.
+> **Current local delivery:** the six service images are published as
+> `sha-e377c12`; `broker`/`email` remain local `sha-5247619` images. Publishing
+> the `1.8.0` release images and tagging the release are deferred; the published
+> `1.2.2` images above are historical.
 
 The file defaults to `DOCKERHUB_USERNAME=marcojr13` and `IMAGE_TAG=latest`.
 Override them for a fork or a pinned version:
