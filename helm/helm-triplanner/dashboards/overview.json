@@ -79,6 +79,24 @@
       "targetBlank": false,
       "keepTime": true,
       "includeVars": false
+    },
+    {
+      "title": "Triplanner / PostgreSQL",
+      "url": "/d/triplanner-postgres",
+      "type": "link",
+      "icon": "dashboard",
+      "targetBlank": false,
+      "keepTime": true,
+      "includeVars": false
+    },
+    {
+      "title": "Triplanner / MongoDB",
+      "url": "/d/triplanner-mongodb",
+      "type": "link",
+      "icon": "dashboard",
+      "targetBlank": false,
+      "keepTime": true,
+      "includeVars": false
     }
   ],
   "panels": [

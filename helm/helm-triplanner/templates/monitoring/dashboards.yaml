@@ -1,6 +1,6 @@
 {{- if and .Values.metrics.enabled .Values.metrics.dashboards.enabled }}
 {{- $root := . }}
-{{- range $name := list "overview" "api" "users" "trips" "locations" "agent" "email" "broker" "web" }}
+{{- range $name := list "overview" "api" "users" "trips" "locations" "agent" "email" "broker" "web" "postgres" "mongodb" }}
 ---
 apiVersion: v1
 kind: ConfigMap

@@ -152,8 +152,17 @@ def dashboard_link(title: str, url: str) -> dict[str, Any]:
 OVERVIEW_LINKS = [
     dashboard_link(f"Triplanner / {svc['title']}", f"/d/triplanner-{svc['key']}")
     for svc in SERVICES
+] + [
+    dashboard_link("Triplanner / PostgreSQL", "/d/triplanner-postgres"),
+    dashboard_link("Triplanner / MongoDB", "/d/triplanner-mongodb"),
 ]
 SERVICE_LINKS = [dashboard_link("Triplanner overview", "/d/triplanner-overview")]
+POSTGRES_LINKS = SERVICE_LINKS + [
+    dashboard_link("Triplanner / MongoDB", "/d/triplanner-mongodb")
+]
+MONGO_LINKS = SERVICE_LINKS + [
+    dashboard_link("Triplanner / PostgreSQL", "/d/triplanner-postgres")
+]
 
 
 def default_thresholds() -> dict[str, Any]:
@@ -178,6 +187,50 @@ def latency_thresholds() -> dict[str, Any]:
             {"color": "green", "value": None},
             {"color": "orange", "value": 0.5},
             {"color": "red", "value": 1.0},
+        ],
+    }
+
+
+def usage_thresholds() -> dict[str, Any]:
+    return {
+        "mode": "absolute",
+        "steps": [
+            {"color": "green", "value": None},
+            {"color": "orange", "value": 0.8},
+            {"color": "red", "value": 0.95},
+        ],
+    }
+
+
+def cache_hit_thresholds() -> dict[str, Any]:
+    return {
+        "mode": "absolute",
+        "steps": [
+            {"color": "red", "value": None},
+            {"color": "orange", "value": 0.8},
+            {"color": "green", "value": 0.95},
+        ],
+    }
+
+
+def deadlock_thresholds() -> dict[str, Any]:
+    return {
+        "mode": "absolute",
+        "steps": [
+            {"color": "green", "value": None},
+            {"color": "orange", "value": 0.01},
+            {"color": "red", "value": 0.1},
+        ],
+    }
+
+
+def transaction_thresholds() -> dict[str, Any]:
+    return {
+        "mode": "absolute",
+        "steps": [
+            {"color": "green", "value": None},
+            {"color": "orange", "value": 300},
+            {"color": "red", "value": 900},
         ],
     }
 
@@ -966,6 +1019,945 @@ def service_dashboard(svc: dict[str, str]) -> dict[str, Any]:
     )
 
 
+def postgres_dashboard() -> dict[str, Any]:
+    layout = Layout()
+    panels: list[dict[str, Any]] = []
+    service_sel = 'service=~"$service"'
+    db_sel = 'service=~"$service",datname=~"$datname",datname!~"template.*|postgres"'
+
+    def add(panel: dict[str, Any]) -> None:
+        panels.append(panel)
+
+    add(row(layout.id(), "Overview", layout.y))
+    layout.y += 1
+    y = layout.y
+    add(
+        stat(
+            layout.id(),
+            "Up",
+            f'min(pg_up{{{service_sel}}})',
+            "short",
+            0,
+            y,
+            8,
+            4,
+            description="1 when every selected PostgreSQL exporter reports pg_up=1.",
+            mappings=up_mappings(),
+            thresholds=up_thresholds(),
+            graph_mode="none",
+        )
+    )
+    add(
+        stat(
+            layout.id(),
+            "Connections",
+            f'sum(pg_stat_database_numbackends{{{service_sel}}})',
+            "short",
+            8,
+            y,
+            8,
+            4,
+            description="Client backends across the selected PostgreSQL instances.",
+        )
+    )
+    add(
+        stat(
+            layout.id(),
+            "Max connections",
+            f'max(pg_settings_max_connections{{{service_sel}}})',
+            "short",
+            16,
+            y,
+            8,
+            4,
+            description="max_connections on the selected instances.",
+        )
+    )
+    layout.y += 4
+    y = layout.y
+    add(
+        stat(
+            layout.id(),
+            "Database size",
+            f'sum(pg_database_size_bytes{{{db_sel}}})',
+            "bytes",
+            0,
+            y,
+            8,
+            4,
+            description="Total size of the selected application databases.",
+        )
+    )
+    add(
+        stat(
+            layout.id(),
+            "Cache hit ratio",
+            f'sum(pg_stat_database_blks_hit{{{db_sel}}}) / clamp_min(sum(pg_stat_database_blks_hit{{{db_sel}}}) + sum(pg_stat_database_blks_read{{{db_sel}}}), 1)',
+            "percentunit",
+            8,
+            y,
+            8,
+            4,
+            description="Lifetime buffer cache hit ratio; red below 80%, green above 95%.",
+            thresholds=cache_hit_thresholds(),
+        )
+    )
+    add(
+        stat(
+            layout.id(),
+            "Deadlocks / sec",
+            f'sum(rate(pg_stat_database_deadlocks{{{db_sel}}}[{RATE}]))',
+            "ops",
+            16,
+            y,
+            8,
+            4,
+            description="Deadlocks per second across the selected databases.",
+            thresholds=deadlock_thresholds(),
+        )
+    )
+    layout.y += 4
+
+    add(row(layout.id(), "Connections", layout.y))
+    layout.y += 1
+    y = layout.y
+    add(
+        timeseries(
+            layout.id(),
+            "Connections by database",
+            f'sum by (datname) (pg_stat_database_numbackends{{{db_sel}}})',
+            "{{datname}}",
+            "short",
+            0,
+            y,
+            description="Client backends per application database.",
+            legend_mode="table",
+            tooltip="multi",
+        )
+    )
+    add(
+        timeseries(
+            layout.id(),
+            "Sessions by state",
+            f'sum by (state) (pg_stat_activity_count{{{db_sel}}})',
+            "{{state}}",
+            "short",
+            12,
+            y,
+            description="pg_stat_activity sessions grouped by state.",
+            legend_mode="table",
+            tooltip="multi",
+        )
+    )
+    layout.y += 8
+    y = layout.y
+    add(
+        bargauge(
+            layout.id(),
+            "Connection usage by instance",
+            f'sum by (service) (pg_stat_database_numbackends{{{service_sel}}}) / max by (service) (pg_settings_max_connections{{{service_sel}}})',
+            0,
+            y,
+            12,
+            6,
+            description="Active connections divided by max_connections; orange above 80%, red above 95%.",
+            thresholds=usage_thresholds(),
+            legend=LEGEND_SERVICE,
+        )
+    )
+    add(
+        table(
+            layout.id(),
+            "Instances",
+            f'pg_up{{{service_sel}}}',
+            12,
+            y,
+            12,
+            6,
+            description="Scrape health for every PostgreSQL exporter.",
+            mappings=up_mappings(),
+            thresholds=up_thresholds(),
+            transformations=[
+                {
+                    "id": "organize",
+                    "options": {
+                        "excludeByName": {
+                            "Time": True,
+                            "__name__": True,
+                            "job": True,
+                            "instance": True,
+                            "namespace": True,
+                            "container": True,
+                            "endpoint": True,
+                            "pod": True,
+                        },
+                        "renameByName": {"service": "Instance", "Value": "Up"},
+                    },
+                }
+            ],
+        )
+    )
+    layout.y += 6
+
+    add(row(layout.id(), "Transactions", layout.y))
+    layout.y += 1
+    y = layout.y
+    add(
+        timeseries(
+            layout.id(),
+            "Transactions by instance",
+            f'sum by (service) (rate(pg_stat_database_xact_commit{{{db_sel}}}[{RATE}]))',
+            "commit {{service}}",
+            "ops",
+            0,
+            y,
+            description="Committed and rolled-back transactions per second.",
+            legend_mode="table",
+            tooltip="multi",
+            extra=[
+                (
+                    f'sum by (service) (rate(pg_stat_database_xact_rollback{{{db_sel}}}[{RATE}]))',
+                    "rollback {{service}}",
+                )
+            ],
+        )
+    )
+    add(
+        timeseries(
+            layout.id(),
+            "Rollback ratio by instance",
+            f'sum by (service) (rate(pg_stat_database_xact_rollback{{{db_sel}}}[{RATE}])) / clamp_min(sum by (service) (rate(pg_stat_database_xact_commit{{{db_sel}}}[{RATE}])) + sum by (service) (rate(pg_stat_database_xact_rollback{{{db_sel}}}[{RATE}])), 0.001)',
+            LEGEND_SERVICE,
+            "percentunit",
+            12,
+            y,
+            description="Rollbacks as a share of all transactions; orange above 1%, red above 5%.",
+            thresholds=error_thresholds(),
+            min_value=0,
+            max_value=1,
+            legend_mode="table",
+            tooltip="multi",
+        )
+    )
+    layout.y += 8
+    y = layout.y
+    add(
+        table(
+            layout.id(),
+            "Top databases by commits",
+            f'topk(10, sum by (service, datname) (rate(pg_stat_database_xact_commit{{{db_sel}}}[{RATE}])))',
+            0,
+            y,
+            12,
+            8,
+            description="Top 10 databases by committed transactions per second.",
+            unit="ops",
+            transformations=[
+                {
+                    "id": "organize",
+                    "options": {
+                        "excludeByName": {
+                            "Time": True,
+                            "__name__": True,
+                            "job": True,
+                            "instance": True,
+                            "namespace": True,
+                            "container": True,
+                            "endpoint": True,
+                            "pod": True,
+                        },
+                        "renameByName": {
+                            "service": "Instance",
+                            "datname": "Database",
+                            "Value": "Commits/s",
+                        },
+                    },
+                }
+            ],
+        )
+    )
+    add(
+        timeseries(
+            layout.id(),
+            "Rollback rate by database",
+            f'sum by (service, datname) (rate(pg_stat_database_xact_rollback{{{db_sel}}}[{RATE}]))',
+            "{{service}} / {{datname}}",
+            "ops",
+            12,
+            y,
+            12,
+            8,
+            description="Rolled-back transactions per second per database.",
+            legend_mode="table",
+            tooltip="multi",
+        )
+    )
+    layout.y += 8
+
+    add(row(layout.id(), "Cache and I/O", layout.y))
+    layout.y += 1
+    y = layout.y
+    add(
+        timeseries(
+            layout.id(),
+            "Cache hit ratio by instance",
+            f'sum by (service) (pg_stat_database_blks_hit{{{db_sel}}}) / clamp_min(sum by (service) (pg_stat_database_blks_hit{{{db_sel}}}) + sum by (service) (pg_stat_database_blks_read{{{db_sel}}}), 1)',
+            LEGEND_SERVICE,
+            "percentunit",
+            0,
+            y,
+            description="Lifetime buffer cache hit ratio per instance.",
+            thresholds=cache_hit_thresholds(),
+            color_mode="thresholds",
+            thresholds_style="line",
+            min_value=0,
+            max_value=1,
+            legend_mode="table",
+            tooltip="multi",
+        )
+    )
+    add(
+        timeseries(
+            layout.id(),
+            "Blocks read / sec",
+            f'sum by (service) (rate(pg_stat_database_blks_read{{{db_sel}}}[{RATE}]))',
+            LEGEND_SERVICE,
+            "ops",
+            12,
+            y,
+            description="Disk blocks read per second; a falling cache hit ratio usually raises this.",
+            legend_mode="table",
+            tooltip="multi",
+        )
+    )
+    layout.y += 8
+    y = layout.y
+    add(
+        timeseries(
+            layout.id(),
+            "Temp bytes / sec",
+            f'sum by (service) (rate(pg_stat_database_temp_bytes{{{db_sel}}}[{RATE}]))',
+            LEGEND_SERVICE,
+            "Bps",
+            0,
+            y,
+            description="Temporary bytes written per second; spikes indicate spills.",
+            legend_mode="table",
+            tooltip="multi",
+        )
+    )
+    add(
+        timeseries(
+            layout.id(),
+            "WAL size",
+            f'pg_wal_size_bytes{{{service_sel}}}',
+            LEGEND_SERVICE,
+            "bytes",
+            12,
+            y,
+            description="Current WAL size per PostgreSQL instance.",
+            legend_mode="table",
+            tooltip="multi",
+        )
+    )
+    layout.y += 8
+
+    add(row(layout.id(), "Locks", layout.y))
+    layout.y += 1
+    y = layout.y
+    add(
+        timeseries(
+            layout.id(),
+            "Locks by mode",
+            f'sum by (mode) (pg_locks_count{{{db_sel}}})',
+            "{{mode}}",
+            "short",
+            0,
+            y,
+            8,
+            8,
+            description="PostgreSQL lock count grouped by lock mode.",
+            legend_mode="table",
+            tooltip="multi",
+        )
+    )
+    add(
+        timeseries(
+            layout.id(),
+            "Deadlocks / sec by instance",
+            f'sum by (service) (rate(pg_stat_database_deadlocks{{{db_sel}}}[{RATE}]))',
+            LEGEND_SERVICE,
+            "ops",
+            8,
+            y,
+            8,
+            8,
+            description="Deadlocks per second per PostgreSQL instance.",
+            thresholds=deadlock_thresholds(),
+            thresholds_style="line",
+            legend_mode="table",
+            tooltip="multi",
+        )
+    )
+    add(
+        stat(
+            layout.id(),
+            "Longest transaction",
+            f'max(pg_stat_activity_max_tx_duration{{{db_sel}}})',
+            "s",
+            16,
+            y,
+            8,
+            8,
+            description="Longest open transaction in seconds; orange above 5 minutes, red above 15 minutes.",
+            thresholds=transaction_thresholds(),
+        )
+    )
+    layout.y += 8
+
+    add(row(layout.id(), "Databases", layout.y))
+    layout.y += 1
+    y = layout.y
+    add(
+        timeseries(
+            layout.id(),
+            "Database size by instance",
+            f'pg_database_size_bytes{{{db_sel}}}',
+            "{{service}} / {{datname}}",
+            "bytes",
+            0,
+            y,
+            description="Application database size over time.",
+            legend_mode="table",
+            tooltip="multi",
+        )
+    )
+    add(
+        table(
+            layout.id(),
+            "Top databases by size",
+            f'topk(10, pg_database_size_bytes{{{db_sel}}})',
+            12,
+            y,
+            12,
+            8,
+            description="Top 10 application databases by current size.",
+            unit="bytes",
+            transformations=[
+                {
+                    "id": "organize",
+                    "options": {
+                        "excludeByName": {
+                            "Time": True,
+                            "__name__": True,
+                            "job": True,
+                            "instance": True,
+                            "namespace": True,
+                            "container": True,
+                            "endpoint": True,
+                            "pod": True,
+                        },
+                        "renameByName": {
+                            "service": "Instance",
+                            "datname": "Database",
+                            "Value": "Size",
+                        },
+                    },
+                }
+            ],
+        )
+    )
+    layout.y += 8
+
+    add(row(layout.id(), "Exporter", layout.y))
+    layout.y += 1
+    y = layout.y
+    add(
+        stat(
+            layout.id(),
+            "Scrape error",
+            f'sum(pg_exporter_last_scrape_error{{{service_sel}}})',
+            "short",
+            0,
+            y,
+            8,
+            4,
+            description="0 means the last scrape succeeded on every selected instance.",
+            thresholds=deadlock_thresholds(),
+            graph_mode="none",
+        )
+    )
+    add(
+        stat(
+            layout.id(),
+            "Last scrape",
+            f'max(pg_exporter_last_scrape_duration_seconds{{{service_sel}}})',
+            "s",
+            8,
+            y,
+            8,
+            4,
+            description="Duration of the slowest last scrape; orange above 500 ms, red above 1 s.",
+            thresholds=latency_thresholds(),
+        )
+    )
+    add(
+        stat(
+            layout.id(),
+            "Scrapes",
+            f'sum(pg_exporter_scrapes_total{{{service_sel}}})',
+            "short",
+            16,
+            y,
+            8,
+            4,
+            description="Cumulative exporter scrapes since pod start.",
+            graph_mode="none",
+        )
+    )
+    layout.y += 4
+    y = layout.y
+    add(
+        timeseries(
+            layout.id(),
+            "Exporter CPU",
+            f'rate(process_cpu_seconds_total{{job=~"triplanner-postgres-.*"}}[{RATE}])',
+            "{{job}}",
+            "percentunit",
+            0,
+            y,
+            description="CPU cores used by the PostgreSQL exporters.",
+            legend_mode="table",
+            tooltip="multi",
+        )
+    )
+    add(
+        timeseries(
+            layout.id(),
+            "Exporter memory",
+            'process_resident_memory_bytes{job=~"triplanner-postgres-.*"}',
+            "{{job}}",
+            "bytes",
+            12,
+            y,
+            description="Resident memory of the PostgreSQL exporters.",
+            legend_mode="table",
+            tooltip="multi",
+        )
+    )
+    layout.y += 8
+
+    return dashboard(
+        "triplanner-postgres",
+        "Triplanner / PostgreSQL",
+        "Connections, transactions, cache, locks and size for the four Triplanner PostgreSQL instances.",
+        ["postgres", "database"],
+        panels,
+        [
+            datasource_variable(),
+            query_variable("service", "Instance", "label_values(pg_up, service)"),
+            query_variable(
+                "datname",
+                "Database",
+                'label_values(pg_stat_database_numbackends{service=~"$service"}, datname)',
+            ),
+        ],
+        POSTGRES_LINKS,
+    )
+
+
+def mongodb_dashboard() -> dict[str, Any]:
+    layout = Layout()
+    panels: list[dict[str, Any]] = []
+    service_sel = 'service=~"$service"'
+
+    def add(panel: dict[str, Any]) -> None:
+        panels.append(panel)
+
+    add(row(layout.id(), "Overview", layout.y))
+    layout.y += 1
+    y = layout.y
+    add(
+        stat(
+            layout.id(),
+            "Up",
+            f'min(mongodb_up{{{service_sel}}})',
+            "short",
+            0,
+            y,
+            8,
+            4,
+            description="1 when the selected MongoDB exporter reports mongodb_up=1.",
+            mappings=up_mappings(),
+            thresholds=up_thresholds(),
+            graph_mode="none",
+        )
+    )
+    add(
+        stat(
+            layout.id(),
+            "Uptime",
+            f'min(mongodb_ss_uptime{{{service_sel}}})',
+            "s",
+            8,
+            y,
+            8,
+            4,
+            description="MongoDB server uptime in seconds.",
+        )
+    )
+    add(
+        stat(
+            layout.id(),
+            "Connections",
+            f'sum(mongodb_ss_connections{{{service_sel},conn_type="current"}})',
+            "short",
+            16,
+            y,
+            8,
+            4,
+            description="Current MongoDB connections.",
+        )
+    )
+    layout.y += 4
+    y = layout.y
+    add(
+        stat(
+            layout.id(),
+            "Available connections",
+            f'sum(mongodb_ss_connections{{{service_sel},conn_type="available"}})',
+            "short",
+            0,
+            y,
+            8,
+            4,
+            description="Connections still available before the server limit.",
+        )
+    )
+    add(
+        stat(
+            layout.id(),
+            "Resident memory",
+            f'sum(mongodb_ss_mem_resident{{{service_sel}}})',
+            "decmbytes",
+            8,
+            y,
+            8,
+            4,
+            description="MongoDB resident memory in megabytes.",
+        )
+    )
+    add(
+        stat(
+            layout.id(),
+            "Operations / sec",
+            f'sum(rate(mongodb_ss_opcounters{{{service_sel}}}[{RATE}]))',
+            "ops",
+            16,
+            y,
+            8,
+            4,
+            description="Total MongoDB opcounter rate.",
+        )
+    )
+    layout.y += 4
+
+    add(row(layout.id(), "Connections", layout.y))
+    layout.y += 1
+    y = layout.y
+    add(
+        timeseries(
+            layout.id(),
+            "Connections current / available",
+            f'mongodb_ss_connections{{{service_sel},conn_type="current"}}',
+            "current",
+            "short",
+            0,
+            y,
+            description="Current and available MongoDB connection slots.",
+            legend_mode="table",
+            tooltip="multi",
+            extra=[
+                (
+                    f'mongodb_ss_connections{{{service_sel},conn_type="available"}}',
+                    "available",
+                )
+            ],
+        )
+    )
+    add(
+        bargauge(
+            layout.id(),
+            "Connection usage",
+            f'sum by (service) (mongodb_ss_connections{{{service_sel},conn_type="current"}}) / clamp_min(sum by (service) (mongodb_ss_connections{{{service_sel},conn_type="current"}}) + sum by (service) (mongodb_ss_connections{{{service_sel},conn_type="available"}}), 1)',
+            12,
+            y,
+            12,
+            8,
+            description="Current connections divided by current + available; orange above 80%, red above 95%.",
+            thresholds=usage_thresholds(),
+            legend=LEGEND_SERVICE,
+        )
+    )
+    layout.y += 8
+
+    add(row(layout.id(), "Operations", layout.y))
+    layout.y += 1
+    y = layout.y
+    add(
+        timeseries(
+            layout.id(),
+            "Opcounters by type",
+            f'sum by (legacy_op_type) (rate(mongodb_ss_opcounters{{{service_sel}}}[{RATE}]))',
+            "{{legacy_op_type}}",
+            "ops",
+            0,
+            y,
+            description="Insert, query, update, delete, getmore and command rates.",
+            legend_mode="table",
+            tooltip="multi",
+        )
+    )
+    add(
+        timeseries(
+            layout.id(),
+            "Document operations by type",
+            f'sum by (doc_op_type) (rate(mongodb_ss_metrics_document{{{service_sel}}}[{RATE}]))',
+            "{{doc_op_type}}",
+            "ops",
+            12,
+            y,
+            description="Inserted, returned, updated and deleted documents per second.",
+            legend_mode="table",
+            tooltip="multi",
+        )
+    )
+    layout.y += 8
+
+    add(row(layout.id(), "Memory and cache", layout.y))
+    layout.y += 1
+    y = layout.y
+    add(
+        timeseries(
+            layout.id(),
+            "Memory resident / virtual",
+            f'mongodb_ss_mem_resident{{{service_sel}}}',
+            "resident",
+            "decmbytes",
+            0,
+            y,
+            description="MongoDB resident and virtual memory in megabytes.",
+            legend_mode="table",
+            tooltip="multi",
+            extra=[(f'mongodb_ss_mem_virtual{{{service_sel}}}', "virtual")],
+        )
+    )
+    add(
+        timeseries(
+            layout.id(),
+            "WiredTiger cache bytes",
+            f'mongodb_ss_wt_cache_bytes_currently_in_the_cache{{{service_sel}}}',
+            "in cache",
+            "bytes",
+            12,
+            y,
+            description="Bytes currently in cache, tracked dirty bytes and the configured maximum.",
+            legend_mode="table",
+            tooltip="multi",
+            extra=[
+                (
+                    f'mongodb_ss_wt_cache_tracked_dirty_bytes_in_the_cache{{{service_sel}}}',
+                    "dirty",
+                ),
+                (
+                    f'mongodb_ss_wt_cache_maximum_bytes_configured{{{service_sel}}}',
+                    "maximum",
+                ),
+            ],
+        )
+    )
+    layout.y += 8
+    y = layout.y
+    add(
+        bargauge(
+            layout.id(),
+            "Cache usage",
+            f'mongodb_ss_wt_cache_bytes_currently_in_the_cache{{{service_sel}}} / clamp_min(mongodb_ss_wt_cache_maximum_bytes_configured{{{service_sel}}}, 1)',
+            0,
+            y,
+            12,
+            6,
+            description="Cache bytes divided by the configured maximum; orange above 80%, red above 95%.",
+            thresholds=usage_thresholds(),
+            legend="cache",
+        )
+    )
+    add(
+        stat(
+            layout.id(),
+            "Dirty cache bytes",
+            f'mongodb_ss_wt_cache_tracked_dirty_bytes_in_the_cache{{{service_sel}}}',
+            "bytes",
+            12,
+            y,
+            12,
+            6,
+            description="Dirty bytes currently tracked by WiredTiger.",
+        )
+    )
+    layout.y += 6
+
+    add(row(layout.id(), "Network", layout.y))
+    layout.y += 1
+    y = layout.y
+    add(
+        timeseries(
+            layout.id(),
+            "Network bytes / sec",
+            f'rate(mongodb_ss_network_bytesIn{{{service_sel}}}[{RATE}])',
+            "in",
+            "Bps",
+            0,
+            y,
+            24,
+            8,
+            description="MongoDB network ingress and egress per second.",
+            legend_mode="table",
+            tooltip="multi",
+            extra=[(f'rate(mongodb_ss_network_bytesOut{{{service_sel}}}[{RATE}])', "out")],
+        )
+    )
+    layout.y += 8
+
+    add(row(layout.id(), "Locks and documents", layout.y))
+    layout.y += 1
+    y = layout.y
+    add(
+        timeseries(
+            layout.id(),
+            "Global lock queue",
+            f'mongodb_ss_globalLock_currentQueue{{{service_sel}}}',
+            "{{count_type}}",
+            "short",
+            0,
+            y,
+            description="Global lock queue length for readers, writers and total.",
+            legend_mode="table",
+            tooltip="multi",
+        )
+    )
+    add(
+        timeseries(
+            layout.id(),
+            "Objects by database",
+            f'mongodb_dbstats_objects{{{service_sel},database=~"$database"}}',
+            "{{database}}",
+            "short",
+            12,
+            y,
+            description="Document/object count per MongoDB database.",
+            legend_mode="table",
+            tooltip="multi",
+        )
+    )
+    layout.y += 8
+
+    add(row(layout.id(), "Exporter", layout.y))
+    layout.y += 1
+    y = layout.y
+    add(
+        stat(
+            layout.id(),
+            "Exporter CPU",
+            f'rate(process_cpu_seconds_total{{job="triplanner-mongodb"}}[{RATE}])',
+            "percentunit",
+            0,
+            y,
+            8,
+            4,
+            description="CPU cores used by the MongoDB exporter.",
+        )
+    )
+    add(
+        stat(
+            layout.id(),
+            "Exporter memory",
+            'process_resident_memory_bytes{job="triplanner-mongodb"}',
+            "bytes",
+            8,
+            y,
+            8,
+            4,
+            description="Resident memory of the MongoDB exporter.",
+        )
+    )
+    add(
+        stat(
+            layout.id(),
+            "Goroutines",
+            'go_goroutines{job="triplanner-mongodb"}',
+            "short",
+            16,
+            y,
+            8,
+            4,
+            description="Exporter goroutines.",
+            graph_mode="none",
+        )
+    )
+    layout.y += 4
+    y = layout.y
+    add(
+        timeseries(
+            layout.id(),
+            "Exporter CPU trend",
+            f'rate(process_cpu_seconds_total{{job="triplanner-mongodb"}}[{RATE}])',
+            "cpu",
+            "percentunit",
+            0,
+            y,
+            12,
+            description="CPU cores used by the MongoDB exporter over time.",
+            legend_mode="list",
+            tooltip="single",
+        )
+    )
+    add(
+        timeseries(
+            layout.id(),
+            "Exporter memory trend",
+            'process_resident_memory_bytes{job="triplanner-mongodb"}',
+            "memory",
+            "bytes",
+            12,
+            y,
+            12,
+            description="Resident memory of the MongoDB exporter over time.",
+            legend_mode="list",
+            tooltip="single",
+        )
+    )
+    layout.y += 8
+
+    return dashboard(
+        "triplanner-mongodb",
+        "Triplanner / MongoDB",
+        "Connections, operations, WiredTiger cache, network and locks for the locations catalogue.",
+        ["mongodb", "database"],
+        panels,
+        [
+            datasource_variable(),
+            query_variable("service", "Instance", "label_values(mongodb_up, service)"),
+            query_variable(
+                "database",
+                "Database",
+                'label_values(mongodb_dbstats_objects{service=~"$service"}, database)',
+            ),
+        ],
+        MONGO_LINKS,
+    )
+
+
 def overview_dashboard() -> dict[str, Any]:
     layout = Layout()
     panels: list[dict[str, Any]] = []
@@ -1212,7 +2204,11 @@ def overview_dashboard() -> dict[str, Any]:
 
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
-    dashboards = {"overview": overview_dashboard()}
+    dashboards = {
+        "overview": overview_dashboard(),
+        "postgres": postgres_dashboard(),
+        "mongodb": mongodb_dashboard(),
+    }
     dashboards.update({svc["key"]: service_dashboard(svc) for svc in SERVICES})
     for name, value in dashboards.items():
         path = OUT / f"{name}.json"

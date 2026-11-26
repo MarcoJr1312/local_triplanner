@@ -4,7 +4,7 @@ description: Triplanner local demo services (Next.js web behind a Cilium Gateway
 type: application
 
 # Chart version. Bump on chart changes.
-version: 0.20.0
+version: 0.21.0
 
 # Version of the deployed application images.
 appVersion: "1.8.0"

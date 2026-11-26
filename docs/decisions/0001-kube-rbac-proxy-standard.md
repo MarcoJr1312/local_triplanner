@@ -39,7 +39,18 @@ access; never expose 8443 outside the cluster.
 - The pod mounts its ServiceAccount token when the sidecar is enabled.
 - The sidecar requires cluster-scoped TokenReview/SAR permissions. It is a
   local demo/ops surface, not a replacement for the application tokens.
-- The port-forward helper maps the sidecars to local ports 8443–8449.
+- The port-forward helper maps the sidecars to local ports 8443—8449.
+
+## Exemptions
+
+Monitoring exporters (`prometheus-postgres-exporter` and
+`prometheus-mongodb-exporter`) are **not** application services and do not run
+the sidecar. They expose a ClusterIP-only `/metrics` endpoint on `9187` or
+`9216`, are scraped only by Prometheus, and have no human or internal API
+surface. Adding `kube-rbac-proxy` would require Prometheus to present bearer
+tokens and is not supported by the upstream charts. Their ClusterIP Services,
+NetworkPolicy rules and read-only database identities are the security
+boundary. See `docs/migrations/0031-database-exporters.md`.
 
 ## References
 
