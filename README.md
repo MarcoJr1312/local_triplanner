@@ -240,8 +240,8 @@ the first sync:
 
 - `argo/argo-cd` **10.20.0** (app v3.6.3), ClusterIP-only UI.
 - Application `triplanner` watches
-  `https://github.com/MarcoJr1312/local_triplanner`, revision `refactor/helm`,
-  path `helm/helm-triplanner`, with automated sync and `selfHeal`.
+  `https://github.com/MarcoJr1312/local_triplanner`, revision `HEAD` (default
+  branch), path `helm/helm-triplanner`, with automated sync and `selfHeal`.
 - The kind values are supplied through a multi-source `$values` reference to
   `deploy/kind/triplanner-values.yaml`.
 - Application images are pinned to the image build SHA `sha-5247619`, not a
