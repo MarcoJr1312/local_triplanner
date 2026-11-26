@@ -11,12 +11,9 @@ global:
   # URL the recruiter actually opens. Used for invite links (API) and the
   # welcome email CTA.
   appUrl: http://localhost:3000
-
 nameOverride: ""
 fullnameOverride: ""
-
 imagePullSecrets: []
-
 images:
   broker:
     name: marcojr13/triplanner-kafka
@@ -50,7 +47,6 @@ images:
     name: marcojr13/triplanner-web
     tag: "sha-e377c12"
     pullPolicy: IfNotPresent
-
 # MongoDB 7 StatefulSet for the locations catalogue. Single node, no auth:
 # the Service is ClusterIP-only and the NetworkPolicy limits ingress.
 mongo:
@@ -89,7 +85,7 @@ mongo:
     allowPrivilegeEscalation: false
     readOnlyRootFilesystem: true
     capabilities:
-      drop: [ "ALL" ]
+      drop: ["ALL"]
   resources:
     requests:
       cpu: 100m
@@ -100,7 +96,6 @@ mongo:
   nodeSelector: {}
   tolerations: []
   affinity: {}
-
 # Go HTTP broker. Topic/offset/ack; not the Kafka wire protocol.
 broker:
   enabled: true
@@ -152,7 +147,7 @@ broker:
       runAsUser: 65532
       runAsGroup: 65532
       capabilities:
-        drop: [ "ALL" ]
+        drop: ["ALL"]
   podAnnotations: {}
   podLabels: {}
   podSecurityContext:
@@ -167,7 +162,7 @@ broker:
     allowPrivilegeEscalation: false
     readOnlyRootFilesystem: true
     capabilities:
-      drop: [ "ALL" ]
+      drop: ["ALL"]
   resources:
     requests:
       cpu: 25m
@@ -192,29 +187,24 @@ broker:
   nodeSelector: {}
   tolerations: []
   affinity: {}
-
 # Email service configuration values.
 emailService:
   enabled: true
   replicaCount: 1
-
   # Key-free demo: the service logs and drops messages until the recruiter adds
   # a Resend key in Profile -> Email delivery.
   provider: sink
   logLevel: info
   shutdownTimeoutMs: 15000
-
   service:
     type: ClusterIP
     port: 4200
-
   settingsFile: /app/.data/email.json
   persistence:
     enabled: true
     size: 1Gi
     mountPath: /app/.data
     existingClaim: ""
-
   internalToken:
     existingSecret: triplanner-internal
     key: INTERNAL_TOKEN
@@ -257,8 +247,7 @@ emailService:
       runAsUser: 65532
       runAsGroup: 65532
       capabilities:
-        drop: [ "ALL" ]
-
+        drop: ["ALL"]
   broker:
     url: http://triplanner-kafka:8080
     topic: TripInvitation
@@ -268,7 +257,6 @@ emailService:
     waitSeconds: 20
     requestTimeoutMs: 35000
     retryDelayMs: 1000
-
   resend:
     from: "Triplanner <onboarding@resend.dev>"
     replyTo: ""
@@ -277,11 +265,9 @@ emailService:
     # Optional seed/fallback. The app-entered key lives on the PVC.
     existingSecret: ""
     apiKeyKey: RESEND_API_KEY
-
   retry:
     maxAttempts: 5
     baseDelayMs: 500
-
   podAnnotations: {}
   podLabels: {}
   podSecurityContext:
@@ -296,8 +282,7 @@ emailService:
     allowPrivilegeEscalation: false
     readOnlyRootFilesystem: true
     capabilities:
-      drop: [ "ALL" ]
-
+      drop: ["ALL"]
   resources:
     requests:
       cpu: 50m
@@ -305,7 +290,6 @@ emailService:
     limits:
       cpu: 500m
       memory: 256Mi
-
   livenessProbe:
     httpGet:
       path: /health
@@ -320,17 +304,14 @@ emailService:
     initialDelaySeconds: 5
     periodSeconds: 5
     failureThreshold: 3
-
   autoscaling:
     enabled: false
     minReplicas: 1
     maxReplicas: 3
     targetCPUUtilizationPercentage: 70
-
   nodeSelector: {}
   tolerations: []
   affinity: {}
-
 # Locations/activities catalogue. The only MongoDB owner in the chart.
 locationsService:
   enabled: true
@@ -411,7 +392,7 @@ locationsService:
       runAsUser: 65532
       runAsGroup: 65532
       capabilities:
-        drop: [ "ALL" ]
+        drop: ["ALL"]
   podAnnotations: {}
   podLabels: {}
   podSecurityContext:
@@ -426,7 +407,7 @@ locationsService:
     allowPrivilegeEscalation: false
     readOnlyRootFilesystem: true
     capabilities:
-      drop: [ "ALL" ]
+      drop: ["ALL"]
   resources:
     requests:
       cpu: 50m
@@ -451,7 +432,6 @@ locationsService:
   nodeSelector: {}
   tolerations: []
   affinity: {}
-
 # Trips service. Owns trips, memberships, items and invitations, its own
 # PostgreSQL database and the transactional email outbox.
 tripsService:
@@ -497,7 +477,7 @@ tripsService:
       allowPrivilegeEscalation: false
       readOnlyRootFilesystem: true
       capabilities:
-        drop: [ "ALL" ]
+        drop: ["ALL"]
     resources:
       requests:
         cpu: 100m
@@ -558,7 +538,7 @@ tripsService:
       runAsUser: 65532
       runAsGroup: 65532
       capabilities:
-        drop: [ "ALL" ]
+        drop: ["ALL"]
   podAnnotations: {}
   podLabels: {}
   podSecurityContext:
@@ -573,7 +553,7 @@ tripsService:
     allowPrivilegeEscalation: false
     readOnlyRootFilesystem: true
     capabilities:
-      drop: [ "ALL" ]
+      drop: ["ALL"]
   resources:
     requests:
       cpu: 50m
@@ -598,7 +578,6 @@ tripsService:
   nodeSelector: {}
   tolerations: []
   affinity: {}
-
 # Users service. Owns accounts, password login and the local notification inbox
 # in its own PostgreSQL database.
 usersService:
@@ -644,7 +623,7 @@ usersService:
       allowPrivilegeEscalation: false
       readOnlyRootFilesystem: true
       capabilities:
-        drop: [ "ALL" ]
+        drop: ["ALL"]
     resources:
       requests:
         cpu: 100m
@@ -694,7 +673,7 @@ usersService:
       runAsUser: 65532
       runAsGroup: 65532
       capabilities:
-        drop: [ "ALL" ]
+        drop: ["ALL"]
   podAnnotations: {}
   podLabels: {}
   podSecurityContext:
@@ -709,7 +688,7 @@ usersService:
     allowPrivilegeEscalation: false
     readOnlyRootFilesystem: true
     capabilities:
-      drop: [ "ALL" ]
+      drop: ["ALL"]
   resources:
     requests:
       cpu: 50m
@@ -734,7 +713,6 @@ usersService:
   nodeSelector: {}
   tolerations: []
   affinity: {}
-
 # Agent service. Owns the pgvector index and consumes LocationChanged.
 agentService:
   enabled: true
@@ -742,7 +720,6 @@ agentService:
   service:
     type: ClusterIP
     port: 4100
-
   postgres:
     enabled: true
     image:
@@ -777,7 +754,7 @@ agentService:
       allowPrivilegeEscalation: false
       readOnlyRootFilesystem: true
       capabilities:
-        drop: [ "ALL" ]
+        drop: ["ALL"]
     resources:
       requests:
         cpu: 100m
@@ -785,7 +762,6 @@ agentService:
       limits:
         cpu: 500m
         memory: 512Mi
-
   backend:
     url: http://triplanner-api:4000
     # The Compose API can use a different internal token than this chart.
@@ -804,11 +780,9 @@ agentService:
     intervalMs: 300000
     matchThreshold: 60
     enrichLimit: 20
-
   internalToken:
     existingSecret: triplanner-internal
     key: INTERNAL_TOKEN
-
   llm:
     provider: none
     model: ""
@@ -816,19 +790,16 @@ agentService:
     # Optional seed for LLM_API_KEY; the app-entered key lives on the PVC.
     existingSecret: ""
     apiKeyKey: LLM_API_KEY
-
   persistence:
     enabled: true
     size: 64Mi
     mountPath: /app/.data
     existingClaim: ""
-
   serviceAccount:
     create: true
     name: ""
     automount: false
     annotations: {}
-
   # Must stay ClusterRole while rbacProxy.enabled: TokenReview and
   # SubjectAccessReview are cluster-scoped and the chart adds those rules.
   rbac:
@@ -862,8 +833,7 @@ agentService:
       runAsUser: 65532
       runAsGroup: 65532
       capabilities:
-        drop: [ "ALL" ]
-
+        drop: ["ALL"]
   hostAliases: []
   podAnnotations: {}
   podLabels: {}
@@ -879,7 +849,7 @@ agentService:
     allowPrivilegeEscalation: false
     readOnlyRootFilesystem: true
     capabilities:
-      drop: [ "ALL" ]
+      drop: ["ALL"]
   resources:
     requests:
       cpu: 100m
@@ -905,7 +875,6 @@ agentService:
   nodeSelector: {}
   tolerations: []
   affinity: {}
-
 # GraphQL API facade. Owns the public schema, demo auth, uploads, attachments,
 # chats, interests and the internal agent routes. All domain services are
 # in-cluster; the API talks to them over gRPC/HTTP.
@@ -950,7 +919,7 @@ apiService:
       allowPrivilegeEscalation: false
       readOnlyRootFilesystem: true
       capabilities:
-        drop: [ "ALL" ]
+        drop: ["ALL"]
     resources:
       requests:
         cpu: 100m
@@ -1022,7 +991,7 @@ apiService:
       runAsUser: 65532
       runAsGroup: 65532
       capabilities:
-        drop: [ "ALL" ]
+        drop: ["ALL"]
   podAnnotations: {}
   podLabels: {}
   podSecurityContext:
@@ -1037,7 +1006,7 @@ apiService:
     allowPrivilegeEscalation: false
     readOnlyRootFilesystem: true
     capabilities:
-      drop: [ "ALL" ]
+      drop: ["ALL"]
   resources:
     requests:
       cpu: 100m
@@ -1062,7 +1031,6 @@ apiService:
   nodeSelector: {}
   tolerations: []
   affinity: {}
-
 # Web frontend. Next.js standalone behind a Cilium Gateway and HTTPRoute. The
 # API and agent are in-cluster.
 webService:
@@ -1110,7 +1078,7 @@ webService:
     allowPrivilegeEscalation: false
     readOnlyRootFilesystem: true
     capabilities:
-      drop: [ "ALL" ]
+      drop: ["ALL"]
   resources:
     requests:
       cpu: 100m
@@ -1136,7 +1104,6 @@ webService:
   nodeSelector: {}
   tolerations: []
   affinity: {}
-
 metrics:
   enabled: true
   path: /metrics
@@ -1154,7 +1121,6 @@ metrics:
     enabled: true
     folder: Triplanner
     labels: {}
-
 networkPolicy:
   enabled: false
   # Kubelet probe source. Cilium sees these as the node/cilium_host IP, not
