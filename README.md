@@ -17,9 +17,8 @@ profile settings.
 > Release tagging and image publication are deferred. The Compose stack remains
 > the recruiter quickstart; the Helm/Cilium stack is the advanced local path.
 > Four PostgreSQL exporters, one MongoDB exporter and 11 Grafana dashboards are
-> live. Argo CD GitOps is live in `triplanner-agrocd`; six services use
-> CI-published `sha-e377c12` images and broker/email use local
-> `sha-5247619` images.
+> live. Argo CD GitOps is live in `triplanner-agrocd`; all eight services use
+> CI-published SHA images: six `sha-e377c12` and broker/email `sha-714d97a`.
 
 ## Documentation
 
@@ -243,8 +242,9 @@ the first sync:
   branch), path `helm/helm-triplanner`, with automated sync and `selfHeal`.
 - The kind values are supplied through a multi-source `$values` reference to
   `deploy/kind/triplanner-values.yaml`.
-- The six CI services run published `sha-e377c12` images; `broker`/`email`
-  remain local `sha-5247619` images until they have publish workflows.
+- All eight services run CI-published SHA images: six `sha-e377c12` and
+  broker/email `sha-714d97a`. `deploy/kind/triplanner-local-images.yaml` is
+  used only for local source builds.
 - `prune` is disabled so PVCs and Secrets are not deleted by a sync.
 - Helm upgrades are frozen for `triplanner`; changes go through Git.
 - CI publishes `sha-<short>` images on `main` and the `GitOps image tags`
@@ -425,10 +425,12 @@ without building:
 docker compose -f deploy/docker-compose.hub.yml up -d
 ```
 
-> **Current local delivery:** the six service images are published as
-> `sha-e377c12`; `broker`/`email` remain local `sha-5247619` images. Publishing
-> the `1.8.0` release images and tagging the release are deferred; the published
-> `1.2.2` images above are historical.
+> **Current local delivery:** all eight services use CI-published SHA images
+> (six `sha-e377c12`, broker/email `sha-714d97a`). Local source builds use
+> `triplanner-local/*:sha-5247619` via
+> `deploy/kind/triplanner-local-images.yaml`. Publishing the `1.8.0` release
+> images and tagging the release are deferred; the published `1.2.2` images
+> above are historical.
 
 The file defaults to `DOCKERHUB_USERNAME=marcojr13` and `IMAGE_TAG=latest`.
 Override them for a fork or a pinned version:

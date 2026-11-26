@@ -1,22 +1,8 @@
 # Values for the isolated Cilium kind cluster.
 #
-# The six CI-published services (web, api, users, trips, locations, agent) use
-# the chart defaults, pinned to the image build SHA.
-#
-# broker/email do not have publish workflows yet, so keep their locally loaded
-# images here. For a full source build, deploy-demo also passes
+# All eight application images come from the chart defaults, pinned to their
+# published SHA tags. For a full local source build, deploy-demo also passes
 # deploy/kind/triplanner-local-images.yaml.
-images:
-  broker:
-    name: triplanner-local/kafka
-    tag: sha-5247619
-  email:
-    name: triplanner-local/email
-    tag: sha-5247619
-
-# The kube-prometheus-stack release `prometheus` selects ServiceMonitors from
-# all namespaces with `release: prometheus`. Dashboards are picked up by the
-# Grafana sidecar (`grafana_dashboard=1`, all namespaces).
 metrics:
   enabled: true
   serviceMonitor:
