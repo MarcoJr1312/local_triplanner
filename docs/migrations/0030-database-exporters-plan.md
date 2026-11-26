@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **Plan — Gate 1 pending** |
+| Status | **Gate 1 approved (2026-11-25); implementation evidence in `0031-database-exporters.md`** |
 | Cycle | Kubernetes Manifest Delivery |
 | Slice | M27 — database exporters and dashboards |
 | Chart target | `helm-triplanner` 0.21.0 (dashboards only) |
@@ -347,13 +347,12 @@ actually exist, not guessed.
 
 ## 13. Gate 1 decision
 
-**Pending.** Approve or change:
+**Approved on 2026-11-25.**
 
 1. **Topology** — four PostgreSQL exporters (one per instance) + one MongoDB
-   exporter (recommended), or one multi-target PostgreSQL exporter.
-2. **Credentials** — dedicated `postgres_exporter` / `mongodb_exporter` users
-   (recommended), or reuse the existing application credentials for the demo.
+   exporter.
+2. **Credentials** — dedicated `postgres_exporter` / `mongodb_exporter` users.
 3. **Exposure** — ClusterIP-only, no rbac-proxy sidecar, documented as a
-   monitoring exception (recommended), or add the sidecar and Prometheus auth.
+   monitoring exception.
 
-No manifests or cluster changes are made before this approval.
+Implementation and evidence: [`0031-database-exporters.md`](./0031-database-exporters.md).

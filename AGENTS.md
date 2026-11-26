@@ -237,6 +237,15 @@ auth and Dockerfiles.
   `helm/helm-triplanner/dashboards/*.json`. Gate 2 approved locally; release
   deferred. Evidence:
   `docs/migrations/0029-p50-latency-baselines.md`.
+- M27 database exporters (2026-11-25): four PostgreSQL exporters (users, trips,
+  API, agent) and one MongoDB exporter as separate prometheus-community
+  releases (`8.3.0` / `3.23.2`) in `triplanner`, with dedicated read-only
+  roles, ClusterIP-only Services, no rbac-proxy (ADR exemption), 23 rendered
+  CNPs and two dashboards (`triplanner-postgres`, `triplanner-mongodb`).
+  Chart 0.21.0 revision 29, images unchanged at `kind-0.19.0`; Prometheus
+  targets 13/13, `pg_up` 4/4, `mongodb_up` 1. Failure and uninstall/reinstall
+  drills passed. Gate 2 pending. Evidence:
+  `docs/migrations/0031-database-exporters.md`.
 - M15 done (`feature/grpc-api`): native gRPC between the API facade and the
   users/trips/locations services, with `x-internal-token`/`x-actor-id`
   metadata, `grpc.health.v1.Health`, stable `x-error-code` mapping and

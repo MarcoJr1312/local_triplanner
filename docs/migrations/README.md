@@ -60,7 +60,10 @@ Migrations:
 - [`0029-p50-latency-baselines.md`](./0029-p50-latency-baselines.md) — p50
   added to every p95 panel; Gate 2 approved locally
 - [`0030-database-exporters-plan.md`](./0030-database-exporters-plan.md) —
-  PostgreSQL and MongoDB exporter plan; Gate 1 pending
+  PostgreSQL and MongoDB exporter plan; Gate 1 approved
+- [`0031-database-exporters.md`](./0031-database-exporters.md) — five
+  exporters, read-only roles, two dashboards and cluster evidence; Gate 2
+  pending
 
 ## Branching (local only)
 
