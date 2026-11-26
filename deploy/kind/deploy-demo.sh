@@ -9,6 +9,7 @@ set -euo pipefail
 CLUSTER="${CLUSTER:-triplanner-cilium}"
 RELEASE="${RELEASE:-triplanner}"
 NAMESPACE="${NAMESPACE:-triplanner}"
+# Image build SHA; update when service images change.
 IMAGE_TAG="${IMAGE_TAG:-sha-5247619}"
 
 images=(

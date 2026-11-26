@@ -52,13 +52,17 @@ is never committed.
 ## Images
 
 Argo CD renders the chart but does not build or load images. The kind overlay
-pins the application images to the current commit SHA:
+pins the application images to the image build SHA:
 
 ```yaml
 images:
   web:
     tag: sha-5247619
 ```
+
+The chart source revision is the Git commit that Argo CD synced; the image SHA
+is the service-image build commit and can be older when only docs/chart files
+changed.
 
 The images must be tagged and loaded before Argo CD syncs that revision:
 

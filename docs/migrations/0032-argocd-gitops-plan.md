@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **Plan — Gate 1 pending** |
+| Status | **Gate 1 approved (2026-11-25); implemented in `0033-argocd-gitops.md`** |
 | Cycle | Kubernetes Manifest Delivery |
 | Slice | M28 — Argo CD and GitOps |
 | Argo CD chart | `argo/argo-cd` **10.20.0** (app v3.6.3) |

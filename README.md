@@ -13,18 +13,19 @@ to Google Maps routes or an Uber deep link.
 The product UI is **English by default**, with an **es/en** switch in the
 profile settings.
 
-> **Status:** local delivery through **M27** — chart `0.21.0`, app `1.8.0`.
+> **Status:** local delivery through **M28** — chart `0.21.0`, app `1.8.0`.
 > Release tagging and image publication are deferred. The Compose stack remains
 > the recruiter quickstart; the Helm/Cilium stack is the advanced local path.
 > Four PostgreSQL exporters, one MongoDB exporter and 11 Grafana dashboards are
 > live. Argo CD GitOps is live in `triplanner-agrocd`; the application images
-> are pinned to `sha-5247619`.
+> are pinned to the image build SHA `sha-5247619`.
 
 ## Documentation
 
 - [Migration evidence and delivery log](docs/migrations/README.md)
 - [Database exporters and dashboards](docs/migrations/0031-database-exporters.md)
 - [Argo CD GitOps plan](docs/migrations/0032-argocd-gitops-plan.md)
+- [Argo CD implementation evidence](docs/migrations/0033-argocd-gitops.md)
 - [10-minute demo tour](docs/DEMO_TOUR.md)
 - [Troubleshooting](docs/TROUBLESHOOTING.md)
 - [Security notes](docs/SECURITY.md)
@@ -242,8 +243,8 @@ the first sync:
   path `helm/helm-triplanner`, with automated sync and `selfHeal`.
 - The kind values are supplied through a multi-source `$values` reference to
   `deploy/kind/triplanner-values.yaml`.
-- Application images are pinned to the commit SHA `sha-5247619`, not a mutable
-  tag.
+- Application images are pinned to the image build SHA `sha-5247619`, not a
+  mutable tag.
 - `prune` is disabled so PVCs and Secrets are not deleted by a sync.
 - Helm upgrades are frozen for `triplanner`; changes go through Git.
 

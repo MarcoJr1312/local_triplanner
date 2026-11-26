@@ -65,7 +65,9 @@ Migrations:
   exporters, read-only roles, two dashboards and cluster evidence; Gate 2
   approved locally
 - [`0032-argocd-gitops-plan.md`](./0032-argocd-gitops-plan.md) — Argo CD
-  GitOps plan for `helm/helm-triplanner`; Gate 1 pending
+  GitOps plan for `helm/helm-triplanner`; Gate 1 approved
+- [`0033-argocd-gitops.md`](./0033-argocd-gitops.md) — Argo CD installation,
+  SHA-pinned images, auto-sync/self-heal and egress workaround; Gate 2 pending
 
 ## Branching (local only)
 

@@ -8,7 +8,7 @@ $ErrorActionPreference = 'Stop'
 $Cluster = 'triplanner-cilium'
 $Release = 'triplanner'
 $Namespace = 'triplanner'
-$ImageTag = 'sha-5247619'
+$ImageTag = 'sha-5247619'  # Image build SHA; update when service images change.
 
 function Require-Image([string]$Name) {
   docker image inspect $Name *> $null
