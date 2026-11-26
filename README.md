@@ -13,17 +13,22 @@ to Google Maps routes or an Uber deep link.
 The product UI is **English by default**, with an **es/en** switch in the
 profile settings.
 
-> **Status:** **v1.4.0** — users microservice with username/password login,
-> local invite notifications and its own PostgreSQL. The v1.x Compose/Helm
-> services, optional HasData/Resend BYOK and optional LLM providers remain.
-> Firebase and AWS are removed from the runtime.
+> **Status:** local delivery through **M27** — chart `0.21.0`, app `1.8.0`.
+> Release tagging and image publication are deferred. The Compose stack remains
+> the recruiter quickstart; the Helm/Cilium stack is the advanced local path.
+> Four PostgreSQL exporters, one MongoDB exporter and 11 Grafana dashboards are
+> live. The Argo CD GitOps slice is planned in
+> [`docs/migrations/0032-argocd-gitops-plan.md`](docs/migrations/0032-argocd-gitops-plan.md).
 
 ## Documentation
 
-- [Release notes v1.4.0](docs/RELEASE_NOTES_v1.4.0.md)
+- [Migration evidence and delivery log](docs/migrations/README.md)
+- [Database exporters and dashboards](docs/migrations/0031-database-exporters.md)
+- [Argo CD GitOps plan](docs/migrations/0032-argocd-gitops-plan.md)
 - [10-minute demo tour](docs/DEMO_TOUR.md)
 - [Troubleshooting](docs/TROUBLESHOOTING.md)
 - [Security notes](docs/SECURITY.md)
+- [Release notes v1.4.0](docs/RELEASE_NOTES_v1.4.0.md)
 - [Release notes v1.2.2](docs/RELEASE_NOTES_v1.2.2.md)
 - [Release notes v1.1.0](docs/RELEASE_NOTES_v1.1.0.md)
 - [Release notes v1.0.0](docs/RELEASE_NOTES_v1.0.0.md)
@@ -52,6 +57,9 @@ profile settings.
 - **AI agent** — deterministic demo mode by default, optional DeepSeek /
   OpenAI / Anthropic / Ollama providers.
 - **Routes / Uber** — Google Maps multi-stop links and Uber deep links.
+- **Observability** — `/metrics` on every runtime, gRPC server metrics,
+  p50/p95 latency, four PostgreSQL exporters, one MongoDB exporter and 11
+  Grafana dashboards.
 
 ## Architecture
 
@@ -75,6 +83,11 @@ web (Next.js 15)
 The browser only talks to the Next.js origin. Backend URLs and keys never reach
 the client.
 
+The Helm stack splits the API facade into its own PostgreSQL database and adds
+four service PostgreSQL instances (users, trips, API, agent), MongoDB, five
+database exporters, Prometheus ServiceMonitors and 11 Grafana dashboards. The
+Compose stack below keeps the shared `postgres` database for the API and agent.
+
 ## Tech stack
 
 | Area | Stack |
@@ -85,6 +98,8 @@ the client.
 | Trips (`backend/trips-service/`) | TypeScript on Bun, internal REST v1, PostgreSQL (`pg`) |
 | Users (`backend/users-service/`) | TypeScript on Bun, internal REST v1, PostgreSQL (`pg`), Argon2id (`Bun.password`) |
 | Agent (`backend/agent-service/`) | Python 3.12, uv, FastAPI, Agno, pgvector |
+| Observability | Prometheus `/metrics`, kube-prometheus-stack, Grafana, `prometheus-postgres-exporter`, `prometheus-mongodb-exporter` |
+| GitOps (planned) | Argo CD `argo/argo-cd` 10.20.0, Application for `helm/helm-triplanner` |
 | Data (`backend/db/`) | Postgres `pg/schema.sql` + idempotent seed; Toronto catalogue JSON |
 | Local infra | Docker Compose: web, api, locations, trips, users, agent, PostgreSQL 17 + pgvector, two service PostgreSQL databases, MongoDB 7 |
 
@@ -101,10 +116,18 @@ the client.
 │   ├── graphql/            base schema
 │   └── .env.example        backend configuration template
 ├── deploy/
-│   ├── docker-compose.yml             source-build stack
-│   └── docker-compose.hub.yml         published images
-└── AGENTS.md               working agreement for AI agents
+│   ├── docker-compose.yml        source-build stack
+│   ├── docker-compose.hub.yml    published images
+│   ├── exporters/                PostgreSQL/MongoDB exporter values
+│   └── kind/                     Cilium kind cluster, values and deploy scripts
+├── helm/
+│   └── helm-triplanner/          chart, dashboards and templates
+├── scripts/                      bootstrap, deploy, QA and smoke helpers
+└── docs/                         migration evidence, security and runbooks
 ```
+
+`AGENTS.md`, `.opencode/` and `.orkai.yaml` are local-only and gitignored; a
+fresh clone does not include them.
 
 ## Quickstart (recruiter)
 
@@ -179,8 +202,11 @@ powershell -ExecutionPolicy Bypass -File scripts/metrics-smoke.ps1 -Target all
 
 ServiceMonitors are disabled by default in the chart. The local
 `prometheus` release in `kind-triplanner-cilium/monitoring` enables them and
-scrapes all 8 runtimes. Grafana provisions 9 dashboards: one per service plus a
-Triplanner overview. Grafana and Prometheus stay ClusterIP-only:
+scrapes **13 targets**: the 8 application runtimes plus 4 PostgreSQL exporters
+and 1 MongoDB exporter. Grafana provisions **11 dashboards**: 8 per-service
+dashboards, a Triplanner overview, PostgreSQL and MongoDB. Application metrics
+include gRPC server counters for users, trips and locations, plus p50/p95
+latency. Grafana and Prometheus stay ClusterIP-only:
 
 ```powershell
 kubectl -n monitoring port-forward svc/prometheus-grafana 3001:80
@@ -189,6 +215,36 @@ kubectl -n monitoring port-forward svc/prometheus-grafana 3001:80
 
 See the [chart README](helm/helm-triplanner/README.md#metrics) and the
 [Cilium kind guide](deploy/kind/README.md#monitoring).
+
+### Database exporters
+
+The Helm stack runs four `prometheus-postgres-exporter` releases (users, trips,
+API and agent) and one `prometheus-mongodb-exporter` release. They use dedicated
+read-only database users, ClusterIP-only Services and the upstream
+prometheus-community charts.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/bootstrap-exporters.ps1
+powershell -ExecutionPolicy Bypass -File scripts/deploy-exporters.ps1
+```
+
+Evidence and operational notes:
+[database exporters](docs/migrations/0031-database-exporters.md).
+
+### GitOps (planned)
+
+The next slice puts `helm/helm-triplanner` under Argo CD:
+
+- `argo/argo-cd` **10.20.0** in namespace `triplanner-agrocd`.
+- Application `triplanner` watches
+  `https://github.com/MarcoJr1312/local_triplanner`, revision `refactor/helm`,
+  path `helm/helm-triplanner`, with automated sync and `selfHeal`.
+- The existing kind values are supplied through a multi-source `$values`
+  reference to `deploy/kind/triplanner-values.yaml`.
+- The UI stays ClusterIP-only and is reached with `kubectl port-forward`.
+
+Plan: [`docs/migrations/0032-argocd-gitops-plan.md`](docs/migrations/0032-argocd-gitops-plan.md).
+
 
 ### What to try
 
@@ -332,6 +388,8 @@ Each service has its own GitHub Actions workflow and test suite:
 |---|---|---|
 | `web.yml` | `frontend-next/lib/*.test.ts` | `triplanner-web` |
 | `api.yml` | `backend/server/test/*.test.ts` | `triplanner-api` |
+| `users.yml` | `backend/users-service/test/*.test.ts` | `triplanner-users` |
+| `trips.yml` | `backend/trips-service/test/*.test.ts` | `triplanner-trips` |
 | `locations.yml` | `backend/locations-service/test/*.test.ts` | `triplanner-locations` |
 | `agent.yml` | `backend/agent-service/tests/test_m2.py` + `tests/test_settings.py` | `triplanner-agent` |
 | `compose-smoke.yml` | full Compose + `scripts/smoke.sh` | no push |
@@ -347,6 +405,11 @@ without building:
 ```bash
 docker compose -f deploy/docker-compose.hub.yml up -d
 ```
+
+> **Current local delivery:** the current Helm images are built as
+> `kind-0.19.0` and loaded into the kind node. Publishing the `1.8.0` service
+> images and tagging the release are deferred; the published `1.2.2` images
+> above are historical.
 
 The file defaults to `DOCKERHUB_USERNAME=marcojr13` and `IMAGE_TAG=latest`.
 Override them for a fork or a pinned version:
@@ -405,5 +468,17 @@ cd backend/server && bun audit
 - Demo auth only; no production identity provider is wired.
 - Membership checks on every read and mutation.
 - Attachments are gated by per-file visibility and short-lived HMAC URLs.
-- No live secrets in the current tree; the only historical finding is an old
-  Firebase web key documented in [docs/SECURITY.md](docs/SECURITY.md).
+- No live secrets in the current tree. The pre-push review on 2026-11-26
+  returned **GO**: no new real credential is introduced by this branch.
+- Demo-only values are intentional: the PostgreSQL/MongoDB passwords,
+  `dev-internal-token` and `dev-attachment-secret` are local defaults and must
+  never be reused outside the demo.
+- The historical Firebase **web** key in `local/.env.example` was already
+  public on `origin/main`; restrict or rotate it in Google Cloud independently.
+  It is not a blocker for this push and no history rewrite is required.
+- `AGENTS.md`, `.opencode/` and `.orkai.yaml` are local-only and gitignored.
+  `.opencode/` history contains no secrets.
+- `backend/.env.fetch` is untracked and holds a live-looking HasData key; it
+  must stay ignored and must never be force-added.
+- Full controls, accepted risks and scan details:
+  [docs/SECURITY.md](docs/SECURITY.md).

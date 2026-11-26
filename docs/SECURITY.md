@@ -34,6 +34,36 @@ Desktop.
   email PVC, and the HasData key only on the locations PVC; none is returned to
   the browser.
 
+## Pre-push review — 2026-11-26
+
+Scope: branch `refactor/helm` (221 commits) before its first push. Verdict:
+**GO**. No new real credential is introduced by the branch.
+
+- `gitleaks` over the full history: 2 hits, 1 false positive.
+- `trufflehog` over all refs: 12 unverified, **0 verified**; all are demo
+  database credentials or the historical Firebase web key.
+- No `.env`, `*.pem`, `*.key`, `id_rsa`, kubeconfig or private key was ever
+  committed.
+- **Real finding:** the Firebase web API key in `local/.env.example`
+  (`bee7caf`, removed in `d901d9b`). It is already public on `origin/main`;
+  restrict or rotate it in Google Cloud. It does not require a history rewrite
+  for this push because the exposure predates the branch.
+- **Demo-only:** the committed PostgreSQL/MongoDB demo passwords,
+  `dev-internal-token` and `dev-attachment-secret` are intentional local
+  defaults. They are not production secrets.
+- **Test fixtures:** `postgres://u:p@db:5432`, `trips|users|triplanner` and
+  `test-key` are test-only values.
+- **Placeholders:** Resend/HasData/LLM keys in `.env.example` and migration docs
+  are empty or examples.
+- `backend/.env.fetch` is untracked (a live-looking HasData key) and is not in
+  any commit; keep it ignored.
+- `AGENTS.md`, `.opencode/` and `.orkai.yaml` are now local-only and gitignored.
+  `.opencode/` history contains no secrets.
+
+Not covered: online verification of the Firebase key (deliberately not sent to
+Google), merge commits skipped by gitleaks, and binary blobs. `AGENTS.md` is
+already public on `origin/main` from earlier history.
+
 ## Scan results — 2026-11-14
 
 ### Secrets
