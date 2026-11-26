@@ -112,7 +112,14 @@ export default function MembersPanel({ trip, presence, currentUserId, onInvite, 
                   {isMe && <span className="text-[10px] font-normal text-muted">{t('members.you')}</span>}
                   {m.role === 'owner' && <Crown className="h-3.5 w-3.5 shrink-0 text-amber-400" />}
                 </p>
-                <p className="truncate text-[10.5px] text-muted">{m.email}</p>
+                <p className="flex items-center gap-1.5 truncate text-[10.5px] text-muted">
+                  <span className="truncate">{m.invitedEmail ?? m.email}</span>
+                  {m.invitedEmail && (
+                    <span className="shrink-0 rounded-full bg-brand-600/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-brand-700 dark:text-brand-300">
+                      {t('members.demoInvite')}
+                    </span>
+                  )}
+                </p>
                 {online && (
                   <p className="mt-0.5 flex items-center gap-1 text-[10px] font-medium text-[var(--success)]">
                     <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> {t('members.online')}

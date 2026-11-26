@@ -17,13 +17,49 @@ try {
 // ---- Base publica para los links de invitacion ----
 export const APP_URL = process.env.APP_URL ?? 'http://localhost:3000';
 
-// ---- MongoDB (catalogo de lugares) ----
-export const MONGODB_URL = process.env.MONGODB_URL ?? 'mongodb://127.0.0.1:27017/triplanner';
-
+// ---- Servicio de catalogo (locations/activities, :4300) ----
+export const LOCATIONS_URL = (process.env.LOCATIONS_URL ?? 'http://127.0.0.1:4300').replace(/\/+$/, '');
+export const LOCATIONS_TIMEOUT_MS = Number(process.env.LOCATIONS_TIMEOUT_MS ?? 2000);
 export const PORT = Number(process.env.LOCAL_PORT ?? 4000);
 
 // ---- Servicio agente (FastAPI, :4100) ----
 export const AGENT_BASE_URL = (process.env.AGENT_BASE_URL ?? 'http://127.0.0.1:4100').replace(/\/+$/, '');
+
+// ---- Servicio de email (Kafka consumer + BYOK settings, :4200) ----
+export const EMAIL_SERVICE_URL = (process.env.EMAIL_SERVICE_URL ?? 'http://127.0.0.1:4200').replace(/\/+$/, '');
+
+// ---- Trips service (:4400) ----
+// The service owns trips, memberships, items and invitations. The API always
+// calls it (remote-only after the M9.11 decommission).
+export const TRIPS_URL = (process.env.TRIPS_URL ?? 'http://127.0.0.1:4400').replace(/\/+$/, '');
+// Must exceed the trips service's own locations timeout (2 s) plus DB work.
+export const TRIPS_TIMEOUT_MS = Number(process.env.TRIPS_TIMEOUT_MS ?? 5000);
+
+// ---- Users service (:4500) ----
+// The service owns accounts and notifications. The API always calls it.
+export const USERS_URL = (process.env.USERS_URL ?? 'http://127.0.0.1:4500').replace(/\/+$/, '');
+export const USERS_TIMEOUT_MS = Number(process.env.USERS_TIMEOUT_MS ?? 3000);
+
+// ---- Internal gRPC transport (M15) ----
+// Each facade service can be reached over HTTP (legacy) or native gRPC.
+export type ServiceTransport = 'http' | 'grpc';
+
+function transportEnv(name: string, fallback: ServiceTransport = 'http'): ServiceTransport {
+  const value = (process.env[name] ?? '').trim().toLowerCase();
+  if (value === 'grpc') return 'grpc';
+  if (value === 'http') return 'http';
+  return fallback;
+}
+
+export const USERS_TRANSPORT = transportEnv('USERS_TRANSPORT');
+export const USERS_GRPC_URL = process.env.USERS_GRPC_URL ?? '127.0.0.1:50051';
+export const TRIPS_TRANSPORT = transportEnv('TRIPS_TRANSPORT');
+export const TRIPS_GRPC_URL = process.env.TRIPS_GRPC_URL ?? '127.0.0.1:50052';
+export const LOCATIONS_TRANSPORT = transportEnv('LOCATIONS_TRANSPORT');
+export const LOCATIONS_GRPC_URL = process.env.LOCATIONS_GRPC_URL ?? '127.0.0.1:50053';
+
+// In-app activity reminder sweep. One API replica runs it in the demo.
+export const REMINDER_SWEEP_MS = Number(process.env.REMINDER_SWEEP_MS ?? 30_000);
 
 // ---- Token interno (endpoints REST /internal/*) ----
 export const INTERNAL_TOKEN = process.env.INTERNAL_TOKEN ?? 'dev-internal-token';

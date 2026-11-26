@@ -1,0 +1,10 @@
+apiVersion: v2
+name: helm-triplanner
+description: Triplanner local demo services (Next.js web behind a Cilium Gateway, GraphQL API facade, Go HTTP broker, email consumer, locations catalogue with optional HasData BYOK + MongoDB, trips service with activity reminders, users service with private favorites and agent service with its own pgvector PostgreSQL; Prometheus /metrics on every runtime)
+type: application
+
+# Chart version. Bump on chart changes.
+version: 0.21.0
+
+# Version of the deployed application images.
+appVersion: "1.8.0"

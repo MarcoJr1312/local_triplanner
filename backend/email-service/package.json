@@ -1,0 +1,20 @@
+{
+  "name": "triplanner-email-service",
+  "version": "0.1.0",
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "typescript": "^7.0.2"
+  },
+  "description": "HTTP broker-driven email microservice for Triplanner. Renders templates and delivers through Resend.",
+  "private": true,
+  "scripts": {
+    "start": "bun src/index.ts",
+    "dev": "bun --watch src/index.ts",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "type": "module",
+  "dependencies": {
+    "prom-client": "^15.1.3"
+  }
+}

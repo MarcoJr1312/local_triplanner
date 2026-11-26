@@ -1,0 +1,20 @@
+{{- if .Values.webService.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: triplanner-web-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: triplanner-web
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: web
+data:
+  SERVICE_VERSION: {{ .Chart.AppVersion | quote }}
+  NODE_ENV: "production"
+  PORT: {{ .Values.webService.service.port | quote }}
+  HOSTNAME: "0.0.0.0"
+  NEXT_TELEMETRY_DISABLED: "1"
+  NEXT_PRIVATE_BACKEND_URL: {{ .Values.webService.backend.url | quote }}
+  NEXT_PRIVATE_BACKEND_ORIGIN: {{ .Values.webService.backend.origin | quote }}
+  NEXT_PRIVATE_AGENT_URL: {{ .Values.webService.agent.url | quote }}
+{{- end }}

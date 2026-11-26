@@ -1,16 +1,18 @@
 import type { NextRequest } from 'next/server';
+import { backendGraphqlUrl } from '@/lib/server-config';
+import { withHttpMetrics } from '@/lib/metrics';
 
 // Proxy seguro de GraphQL. El navegador SOLO habla con esta ruta; aqui se
 // reenvia al backend local resolviendo el x-user-id del lado del servidor.
 // No hay claves de servicios externos: el backend resuelve el catalogo local.
 
-const DEFAULT_BACKEND = 'http://localhost:4000/graphql';
-const DEMO_USER_ID = 'demo-user';
-
+export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export async function POST(request: NextRequest) {
-  const backend = (process.env.NEXT_PRIVATE_BACKEND_URL ?? '').trim() || DEFAULT_BACKEND;
+const DEMO_USER_ID = '11111111-1111-4111-8111-111111111111';
+
+async function postHandler(request: NextRequest) {
+  const backend = backendGraphqlUrl();
 
   let body: string;
   try {
@@ -34,7 +36,7 @@ export async function POST(request: NextRequest) {
     });
   } catch {
     return Response.json(
-      { errors: [{ message: 'No se pudo conectar con el backend local.' }] },
+      { errors: [{ message: 'The local backend is unavailable.' }] },
       { status: 502 }
     );
   }
@@ -62,3 +64,5 @@ export async function POST(request: NextRequest) {
     headers: { 'Content-Type': contentType },
   });
 }
+
+export const POST = withHttpMetrics('/api/graphql', postHandler);

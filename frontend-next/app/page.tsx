@@ -11,7 +11,6 @@ import {
   Plus,
   Search,
   Sparkles,
-  Users,
   Wallet,
 } from 'lucide-react';
 import { api } from '@/lib/api';
@@ -153,13 +152,6 @@ function TripsContent() {
     router.push(`/trip/${trip.id}?template=1`);
   };
 
-  const roleKey =
-    featured?.myRole === 'owner'
-      ? 'roles.owner'
-      : featured?.myRole === 'editor'
-        ? 'roles.editor'
-        : 'roles.viewer';
-
   const categoryLabel = (category: string) =>
     category === 'food'
       ? t('categories.food')
@@ -205,7 +197,6 @@ function TripsContent() {
           <div>
             <div className="stat-label">{t('premium.stat.trips')}</div>
             <div className="stat-value">{list.length}</div>
-            <div className="stat-delta">+0</div>
           </div>
         </div>
         <div className="stat card">
@@ -257,10 +248,6 @@ function TripsContent() {
                         <CalendarDays /> {formatDateRange(featured.startDate, featured.endDate, locale)}
                       </span>
                       <span>
-                        <Users /> {featured.members.length}{' '}
-                        {t(featured.members.length === 1 ? 'units.member' : 'units.members')}
-                      </span>
-                      <span>
                         <Clock /> {daysAhead} {t('units.days')}
                       </span>
                     </div>
@@ -295,14 +282,6 @@ function TripsContent() {
                   </div>
                 </div>
                 <div className="featured-foot">
-                  <div className="avatar-stack">
-                    <span className="avatar">
-                      {featured.members[0]?.displayName?.charAt(0).toUpperCase() || 'D'}
-                    </span>
-                    <span className="avatar avatar-sm" style={{ background: 'var(--surface-3)', color: 'var(--muted)', border: '2px solid var(--surface)' }}>
-                      +
-                    </span>
-                  </div>
                   <span className="btn btn-primary btn-sm">
                     {t('premium.openTrip')} <ArrowRight className="icon-sm" />
                   </span>
@@ -347,31 +326,6 @@ function TripsContent() {
               )}
               <Link href={`/trip/${featured.id}`} className="btn btn-ghost btn-block btn-sm" style={{ marginTop: 14 }}>
                 {t('premium.viewItinerary')}
-              </Link>
-            </div>
-
-            <div className="side-card card">
-              <div className="side-head">
-                <h3>{t('premium.team')}</h3>
-                <span className="mono">
-                  {featured.members.length}{' '}
-                  {t(featured.members.length === 1 ? 'units.member' : 'units.members')}
-                </span>
-              </div>
-              {featured.members.slice(0, 3).map((member) => (
-                <div key={member.userId} className="team-row">
-                  <div className="team-person">
-                    <span className="avatar">{member.displayName.charAt(0).toUpperCase()}</span>
-                    <div>
-                      <strong>{member.displayName}</strong>
-                      <span>{member.email}</span>
-                    </div>
-                  </div>
-                  <span className="badge badge-sight">{t(roleKey)}</span>
-                </div>
-              ))}
-              <Link href={`/trip/${featured.id}`} className="btn btn-ghost btn-block btn-sm" style={{ marginTop: 12 }}>
-                <Plus className="icon-sm" /> {t('premium.invite')}
               </Link>
             </div>
 

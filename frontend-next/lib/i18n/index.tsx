@@ -27,7 +27,7 @@ export function isLocale(value: unknown): value is Locale {
 
 const STORAGE_KEY = 'triplanner.locale.v2';
 
-// The demo defaults to English; Spanish remains available in settings.
+// The recruiter demo defaults to English; Spanish is available in settings.
 function readStoredLocale(): Locale {
   if (typeof window === 'undefined') return 'en';
   try {

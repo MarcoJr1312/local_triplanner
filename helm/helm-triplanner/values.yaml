@@ -1,0 +1,1185 @@
+# Triplanner demo services - single-node recruiter profile.
+# The chart deploys the Go demo broker, the email consumer, the locations
+# catalogue and its MongoDB StatefulSet.
+#
+# Every manifest renders `metadata.namespace: {{ .Release.Namespace }}`.
+# First create the namespace, then install with the same -n:
+#   kubectl create namespace triplanner
+#   helm install triplanner ./helm/helm-triplanner -n triplanner
+
+global:
+  # URL the recruiter actually opens. Used for invite links (API) and the
+  # welcome email CTA.
+  appUrl: http://localhost:3000
+
+nameOverride: ""
+fullnameOverride: ""
+
+imagePullSecrets: []
+
+images:
+  broker:
+    name: marcojr13/triplanner-kafka
+    tag: "0.2.0"
+    pullPolicy: IfNotPresent
+  email:
+    name: marcojr13/triplanner-email
+    tag: "0.2.0"
+    pullPolicy: IfNotPresent
+  locations:
+    name: marcojr13/triplanner-locations
+    tag: "1.8.0"
+    pullPolicy: IfNotPresent
+  trips:
+    name: marcojr13/triplanner-trips
+    tag: "1.8.0"
+    pullPolicy: IfNotPresent
+  users:
+    name: marcojr13/triplanner-users
+    tag: "1.8.0"
+    pullPolicy: IfNotPresent
+  agent:
+    name: marcojr13/triplanner-agent
+    tag: "1.8.0"
+    pullPolicy: IfNotPresent
+  api:
+    name: marcojr13/triplanner-api
+    tag: "1.8.0"
+    pullPolicy: IfNotPresent
+  web:
+    name: marcojr13/triplanner-web
+    tag: "1.8.0"
+    pullPolicy: IfNotPresent
+
+# MongoDB 7 StatefulSet for the locations catalogue. Single node, no auth:
+# the Service is ClusterIP-only and the NetworkPolicy limits ingress.
+mongo:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: mongo
+    tag: "7"
+    pullPolicy: IfNotPresent
+  auth:
+    enabled: true
+    # DEMO ONLY. These values are rendered into a Kubernetes Secret so the
+    # demo remains self-contained. In production, set existingSecret to a
+    # Secret managed by HashiCorp Vault, External Secrets, Sealed Secrets or
+    # your platform's secret manager. Never commit real credentials here.
+    username: triplanner
+    password: triplanner-demo
+    existingSecret: ""
+    usernameKey: MONGO_ROOT_USERNAME
+    passwordKey: MONGO_ROOT_PASSWORD
+  service:
+    port: 27017
+  persistence:
+    enabled: true
+    size: 2Gi
+    storageClass: ""
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 999
+    runAsGroup: 999
+    fsGroup: 999
+    fsGroupChangePolicy: OnRootMismatch
+    seccompProfile:
+      type: RuntimeDefault
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop: [ "ALL" ]
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# Go HTTP broker. Topic/offset/ack; not the Kafka wire protocol.
+broker:
+  enabled: true
+  replicaCount: 1
+  service:
+    type: ClusterIP
+    port: 8080
+  persistence:
+    enabled: true
+    size: 1Gi
+    mountPath: /data
+    existingClaim: ""
+  serviceAccount:
+    create: true
+    name: ""
+    automount: false
+    annotations: {}
+  # Must stay ClusterRole while rbacProxy.enabled: TokenReview and
+  # SubjectAccessReview are cluster-scoped and the chart adds those rules.
+  # Add any extra service rules here.
+  rbac:
+    create: true
+    kind: ClusterRole
+    rules: []
+  # Local demo: HTTP 8443 for kubectl port-forward only. Never expose it.
+  rbacProxy:
+    enabled: true
+    image:
+      repository: quay.io/brancz/kube-rbac-proxy
+      tag: v0.23.1
+      pullPolicy: IfNotPresent
+    port: 8443
+    config:
+      apiVersion: v1
+      resource: services
+      subresource: proxy
+      name: triplanner-kafka
+    resources:
+      requests:
+        cpu: 10m
+        memory: 32Mi
+      limits:
+        cpu: 100m
+        memory: 64Mi
+    securityContext:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      runAsNonRoot: true
+      runAsUser: 65532
+      runAsGroup: 65532
+      capabilities:
+        drop: [ "ALL" ]
+  podAnnotations: {}
+  podLabels: {}
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 100
+    runAsGroup: 101
+    fsGroup: 101
+    fsGroupChangePolicy: OnRootMismatch
+    seccompProfile:
+      type: RuntimeDefault
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop: [ "ALL" ]
+  resources:
+    requests:
+      cpu: 25m
+      memory: 64Mi
+    limits:
+      cpu: 250m
+      memory: 128Mi
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: http
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    failureThreshold: 3
+  readinessProbe:
+    httpGet:
+      path: /ready
+      port: http
+    initialDelaySeconds: 3
+    periodSeconds: 5
+    failureThreshold: 3
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# Email service configuration values.
+emailService:
+  enabled: true
+  replicaCount: 1
+
+  # Key-free demo: the service logs and drops messages until the recruiter adds
+  # a Resend key in Profile -> Email delivery.
+  provider: sink
+  logLevel: info
+  shutdownTimeoutMs: 15000
+
+  service:
+    type: ClusterIP
+    port: 4200
+
+  settingsFile: /app/.data/email.json
+  persistence:
+    enabled: true
+    size: 1Gi
+    mountPath: /app/.data
+    existingClaim: ""
+
+  internalToken:
+    existingSecret: triplanner-internal
+    key: INTERNAL_TOKEN
+  serviceAccount:
+    create: true
+    name: ""
+    automount: false
+    annotations: {}
+  # Must stay ClusterRole while rbacProxy.enabled: TokenReview and
+  # SubjectAccessReview are cluster-scoped and the chart adds those rules.
+  # Add any extra service rules here.
+  rbac:
+    create: true
+    kind: ClusterRole
+    rules: []
+  # Local demo: HTTP 8443 for kubectl port-forward only. Never expose it.
+  rbacProxy:
+    enabled: true
+    image:
+      repository: quay.io/brancz/kube-rbac-proxy
+      tag: v0.23.1
+      pullPolicy: IfNotPresent
+    port: 8443
+    config:
+      apiVersion: v1
+      resource: services
+      subresource: proxy
+      name: triplanner-email
+    resources:
+      requests:
+        cpu: 10m
+        memory: 32Mi
+      limits:
+        cpu: 100m
+        memory: 64Mi
+    securityContext:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      runAsNonRoot: true
+      runAsUser: 65532
+      runAsGroup: 65532
+      capabilities:
+        drop: [ "ALL" ]
+
+  broker:
+    url: http://triplanner-kafka:8080
+    topic: TripInvitation
+    consumer: email-service
+    dlqTopic: TripInvitation.dlq
+    batchSize: 10
+    waitSeconds: 20
+    requestTimeoutMs: 35000
+    retryDelayMs: 1000
+
+  resend:
+    from: "Triplanner <onboarding@resend.dev>"
+    replyTo: ""
+    endpoint: https://api.resend.com/emails
+    timeoutMs: 10000
+    # Optional seed/fallback. The app-entered key lives on the PVC.
+    existingSecret: ""
+    apiKeyKey: RESEND_API_KEY
+
+  retry:
+    maxAttempts: 5
+    baseDelayMs: 500
+
+  podAnnotations: {}
+  podLabels: {}
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 100
+    runAsGroup: 101
+    fsGroup: 101
+    fsGroupChangePolicy: OnRootMismatch
+    seccompProfile:
+      type: RuntimeDefault
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop: [ "ALL" ]
+
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: http
+    initialDelaySeconds: 15
+    periodSeconds: 10
+    failureThreshold: 3
+  readinessProbe:
+    httpGet:
+      path: /ready
+      port: http
+    initialDelaySeconds: 5
+    periodSeconds: 5
+    failureThreshold: 3
+
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 3
+    targetCPUUtilizationPercentage: 70
+
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# Locations/activities catalogue. The only MongoDB owner in the chart.
+locationsService:
+  enabled: true
+  replicaCount: 1
+  service:
+    type: ClusterIP
+    port: 4300
+    grpcPort: 50053
+  mongo:
+    # Optional full URL override; normally leave empty and use host/database
+    # plus the Secret-backed MONGODB_USERNAME/MONGODB_PASSWORD.
+    url: ""
+    host: triplanner-mongo:27017
+    database: triplanner
+    authSource: admin
+    collection: locations
+  seed:
+    enabled: true
+    dataPath: /app/db/toronto-locations.json
+  settingsFile: /app/.data/locations.json
+  persistence:
+    enabled: true
+    size: 64Mi
+    mountPath: /app/.data
+    existingClaim: ""
+  hasdata:
+    apiBase: https://api.hasdata.com/scrape/google-maps
+    # Cached HasData rows expire after 5 days (Mongo TTL index).
+    cacheTtlHours: 120
+    timeoutMs: 8000
+    hl: en
+    gl: ca
+  broker:
+    url: http://triplanner-kafka:8080
+    topic: LocationChanged
+  outbox:
+    intervalMs: 1000
+    batchSize: 50
+  internalToken:
+    existingSecret: triplanner-internal
+    key: INTERNAL_TOKEN
+  serviceAccount:
+    create: true
+    name: ""
+    automount: false
+    annotations: {}
+  # Must stay ClusterRole while rbacProxy.enabled: TokenReview and
+  # SubjectAccessReview are cluster-scoped and the chart adds those rules.
+  # Add any extra service rules here.
+  rbac:
+    create: true
+    kind: ClusterRole
+    rules: []
+  # Local demo: HTTP 8443 for kubectl port-forward only. Never expose it.
+  rbacProxy:
+    enabled: true
+    image:
+      repository: quay.io/brancz/kube-rbac-proxy
+      tag: v0.23.1
+      pullPolicy: IfNotPresent
+    port: 8443
+    config:
+      apiVersion: v1
+      resource: services
+      subresource: proxy
+      name: triplanner-locations
+    resources:
+      requests:
+        cpu: 10m
+        memory: 32Mi
+      limits:
+        cpu: 100m
+        memory: 64Mi
+    securityContext:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      runAsNonRoot: true
+      runAsUser: 65532
+      runAsGroup: 65532
+      capabilities:
+        drop: [ "ALL" ]
+  podAnnotations: {}
+  podLabels: {}
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 100
+    runAsGroup: 101
+    fsGroup: 101
+    fsGroupChangePolicy: OnRootMismatch
+    seccompProfile:
+      type: RuntimeDefault
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop: [ "ALL" ]
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: http
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    failureThreshold: 3
+  readinessProbe:
+    httpGet:
+      path: /ready
+      port: http
+    initialDelaySeconds: 5
+    periodSeconds: 5
+    failureThreshold: 3
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# Trips service. Owns trips, memberships, items and invitations, its own
+# PostgreSQL database and the transactional email outbox.
+tripsService:
+  enabled: true
+  replicaCount: 1
+  service:
+    type: ClusterIP
+    port: 4400
+    grpcPort: 50052
+  postgres:
+    enabled: true
+    image:
+      repository: postgres
+      tag: "17"
+      pullPolicy: IfNotPresent
+    auth:
+      enabled: true
+      # DEMO ONLY. These values render into the
+      # triplanner-trips-postgres-credentials Secret. In production set
+      # existingSecret to a Vault/External Secrets managed Secret.
+      username: trips
+      password: trips-demo
+      database: trips
+      existingSecret: ""
+      usernameKey: POSTGRES_USER
+      passwordKey: POSTGRES_PASSWORD
+      databaseKey: POSTGRES_DB
+    service:
+      port: 5432
+    persistence:
+      enabled: true
+      size: 2Gi
+      storageClass: ""
+    podSecurityContext:
+      runAsNonRoot: true
+      runAsUser: 999
+      runAsGroup: 999
+      fsGroup: 999
+      fsGroupChangePolicy: OnRootMismatch
+      seccompProfile:
+        type: RuntimeDefault
+    securityContext:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities:
+        drop: [ "ALL" ]
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+  locations:
+    url: http://triplanner-locations:4300
+    timeoutMs: 2000
+  broker:
+    url: http://triplanner-kafka:8080
+    topic: TripInvitation
+    timeoutMs: 3000
+  outbox:
+    intervalMs: 1000
+    batchSize: 10
+    maxAttempts: 20
+  seedDemo: true
+  internalToken:
+    existingSecret: triplanner-internal
+    key: INTERNAL_TOKEN
+  serviceAccount:
+    create: true
+    name: ""
+    automount: false
+    annotations: {}
+  # Must stay ClusterRole while rbacProxy.enabled: TokenReview and
+  # SubjectAccessReview are cluster-scoped and the chart adds those rules.
+  rbac:
+    create: true
+    kind: ClusterRole
+    rules: []
+  # Local demo: HTTP 8443 for kubectl port-forward only. Never expose it.
+  rbacProxy:
+    enabled: true
+    image:
+      repository: quay.io/brancz/kube-rbac-proxy
+      tag: v0.23.1
+      pullPolicy: IfNotPresent
+    port: 8443
+    config:
+      apiVersion: v1
+      resource: services
+      subresource: proxy
+      name: triplanner-trips
+    resources:
+      requests:
+        cpu: 10m
+        memory: 32Mi
+      limits:
+        cpu: 100m
+        memory: 64Mi
+    securityContext:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      runAsNonRoot: true
+      runAsUser: 65532
+      runAsGroup: 65532
+      capabilities:
+        drop: [ "ALL" ]
+  podAnnotations: {}
+  podLabels: {}
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 100
+    runAsGroup: 101
+    fsGroup: 101
+    fsGroupChangePolicy: OnRootMismatch
+    seccompProfile:
+      type: RuntimeDefault
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop: [ "ALL" ]
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: http
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    failureThreshold: 3
+  readinessProbe:
+    httpGet:
+      path: /ready
+      port: http
+    initialDelaySeconds: 5
+    periodSeconds: 5
+    failureThreshold: 3
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# Users service. Owns accounts, password login and the local notification inbox
+# in its own PostgreSQL database.
+usersService:
+  enabled: true
+  replicaCount: 1
+  service:
+    type: ClusterIP
+    port: 4500
+    grpcPort: 50051
+  postgres:
+    enabled: true
+    image:
+      repository: postgres
+      tag: "17"
+      pullPolicy: IfNotPresent
+    auth:
+      enabled: true
+      # DEMO ONLY. These values render into the
+      # triplanner-users-postgres-credentials Secret. In production set
+      # existingSecret to a Vault/External Secrets managed Secret.
+      username: users
+      password: users-demo
+      database: users
+      existingSecret: ""
+      usernameKey: POSTGRES_USER
+      passwordKey: POSTGRES_PASSWORD
+      databaseKey: POSTGRES_DB
+    service:
+      port: 5432
+    persistence:
+      enabled: true
+      size: 2Gi
+      storageClass: ""
+    podSecurityContext:
+      runAsNonRoot: true
+      runAsUser: 999
+      runAsGroup: 999
+      fsGroup: 999
+      fsGroupChangePolicy: OnRootMismatch
+      seccompProfile:
+        type: RuntimeDefault
+    securityContext:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities:
+        drop: [ "ALL" ]
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+  seedDemo: true
+  internalToken:
+    existingSecret: triplanner-internal
+    key: INTERNAL_TOKEN
+  serviceAccount:
+    create: true
+    name: ""
+    automount: false
+    annotations: {}
+  # Must stay ClusterRole while rbacProxy.enabled: TokenReview and
+  # SubjectAccessReview are cluster-scoped and the chart adds those rules.
+  rbac:
+    create: true
+    kind: ClusterRole
+    rules: []
+  # Local demo: HTTP 8443 for kubectl port-forward only. Never expose it.
+  rbacProxy:
+    enabled: true
+    image:
+      repository: quay.io/brancz/kube-rbac-proxy
+      tag: v0.23.1
+      pullPolicy: IfNotPresent
+    port: 8443
+    config:
+      apiVersion: v1
+      resource: services
+      subresource: proxy
+      name: triplanner-users
+    resources:
+      requests:
+        cpu: 10m
+        memory: 32Mi
+      limits:
+        cpu: 100m
+        memory: 64Mi
+    securityContext:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      runAsNonRoot: true
+      runAsUser: 65532
+      runAsGroup: 65532
+      capabilities:
+        drop: [ "ALL" ]
+  podAnnotations: {}
+  podLabels: {}
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 100
+    runAsGroup: 101
+    fsGroup: 101
+    fsGroupChangePolicy: OnRootMismatch
+    seccompProfile:
+      type: RuntimeDefault
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop: [ "ALL" ]
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: http
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    failureThreshold: 3
+  readinessProbe:
+    httpGet:
+      path: /ready
+      port: http
+    initialDelaySeconds: 5
+    periodSeconds: 5
+    failureThreshold: 3
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# Agent service. Owns the pgvector index and consumes LocationChanged.
+agentService:
+  enabled: true
+  replicaCount: 1
+  service:
+    type: ClusterIP
+    port: 4100
+
+  postgres:
+    enabled: true
+    image:
+      repository: pgvector/pgvector
+      tag: "pg17"
+      pullPolicy: IfNotPresent
+    auth:
+      enabled: true
+      # DEMO ONLY. Render into triplanner-agent-postgres-credentials.
+      username: agent
+      password: agent-demo
+      database: agent
+      existingSecret: ""
+      usernameKey: POSTGRES_USER
+      passwordKey: POSTGRES_PASSWORD
+      databaseKey: POSTGRES_DB
+    service:
+      port: 5432
+    persistence:
+      enabled: true
+      size: 2Gi
+      storageClass: ""
+    podSecurityContext:
+      runAsNonRoot: true
+      runAsUser: 999
+      runAsGroup: 999
+      fsGroup: 999
+      fsGroupChangePolicy: OnRootMismatch
+      seccompProfile:
+        type: RuntimeDefault
+    securityContext:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities:
+        drop: [ "ALL" ]
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+
+  backend:
+    url: http://triplanner-api:4000
+    # The Compose API can use a different internal token than this chart.
+    # Create this Secret with INTERNAL_TOKEN in the release namespace.
+    internalToken:
+      existingSecret: ""
+      key: INTERNAL_TOKEN
+  locations:
+    url: http://triplanner-locations:4300
+    timeoutMs: 8000
+  broker:
+    url: http://triplanner-kafka:8080
+    topic: LocationChanged
+    consumer: agent-locations
+  sync:
+    intervalMs: 300000
+    matchThreshold: 60
+    enrichLimit: 20
+
+  internalToken:
+    existingSecret: triplanner-internal
+    key: INTERNAL_TOKEN
+
+  llm:
+    provider: none
+    model: ""
+    baseUrl: ""
+    # Optional seed for LLM_API_KEY; the app-entered key lives on the PVC.
+    existingSecret: ""
+    apiKeyKey: LLM_API_KEY
+
+  persistence:
+    enabled: true
+    size: 64Mi
+    mountPath: /app/.data
+    existingClaim: ""
+
+  serviceAccount:
+    create: true
+    name: ""
+    automount: false
+    annotations: {}
+
+  # Must stay ClusterRole while rbacProxy.enabled: TokenReview and
+  # SubjectAccessReview are cluster-scoped and the chart adds those rules.
+  rbac:
+    create: true
+    kind: ClusterRole
+    rules: []
+  # Local demo: HTTP 8443 for kubectl port-forward only. Never expose it.
+  rbacProxy:
+    enabled: true
+    image:
+      repository: quay.io/brancz/kube-rbac-proxy
+      tag: v0.23.1
+      pullPolicy: IfNotPresent
+    port: 8443
+    config:
+      apiVersion: v1
+      resource: services
+      subresource: proxy
+      name: triplanner-agent
+    resources:
+      requests:
+        cpu: 10m
+        memory: 32Mi
+      limits:
+        cpu: 100m
+        memory: 64Mi
+    securityContext:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      runAsNonRoot: true
+      runAsUser: 65532
+      runAsGroup: 65532
+      capabilities:
+        drop: [ "ALL" ]
+
+  hostAliases: []
+  podAnnotations: {}
+  podLabels: {}
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 10001
+    runAsGroup: 10001
+    fsGroup: 10001
+    fsGroupChangePolicy: OnRootMismatch
+    seccompProfile:
+      type: RuntimeDefault
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop: [ "ALL" ]
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: http
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    failureThreshold: 3
+  readinessProbe:
+    httpGet:
+      path: /ready
+      port: http
+    initialDelaySeconds: 10
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 12
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# GraphQL API facade. Owns the public schema, demo auth, uploads, attachments,
+# chats, interests and the internal agent routes. All domain services are
+# in-cluster; the API talks to them over gRPC/HTTP.
+apiService:
+  enabled: true
+  replicaCount: 1
+  service:
+    type: ClusterIP
+    port: 4000
+  postgres:
+    enabled: true
+    image:
+      repository: postgres
+      tag: "17"
+      pullPolicy: IfNotPresent
+    auth:
+      enabled: true
+      # DEMO ONLY. Rendered into triplanner-api-postgres-credentials.
+      username: triplanner
+      password: triplanner-demo
+      database: triplanner
+      existingSecret: ""
+      usernameKey: POSTGRES_USER
+      passwordKey: POSTGRES_PASSWORD
+      databaseKey: POSTGRES_DB
+      databaseUrlKey: DATABASE_URL
+    service:
+      port: 5432
+    persistence:
+      enabled: true
+      size: 2Gi
+      storageClass: ""
+    podSecurityContext:
+      runAsNonRoot: true
+      runAsUser: 999
+      runAsGroup: 999
+      fsGroup: 999
+      fsGroupChangePolicy: OnRootMismatch
+      seccompProfile:
+        type: RuntimeDefault
+    securityContext:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities:
+        drop: [ "ALL" ]
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+  uploads:
+    mountPath: /app/uploads
+    persistence:
+      enabled: true
+      size: 1Gi
+      storageClass: ""
+      existingClaim: ""
+  attachments:
+    # HMAC secret for short-lived attachment URLs.
+    existingSecret: ""
+    key: ATTACHMENT_TOKEN_SECRET
+    tokenSecret: dev-attachment-secret
+  appUrl: ""
+  reminderSweepMs: 30000
+  backend:
+    agentUrl: http://triplanner-agent:4100
+    emailServiceUrl: http://triplanner-email:4200
+    locationsUrl: http://triplanner-locations:4300
+    locationsGrpcUrl: triplanner-locations:50053
+    tripsUrl: http://triplanner-trips:4400
+    tripsGrpcUrl: triplanner-trips:50052
+    usersUrl: http://triplanner-users:4500
+    usersGrpcUrl: triplanner-users:50051
+  internalToken:
+    existingSecret: triplanner-internal
+    key: INTERNAL_TOKEN
+  serviceAccount:
+    create: true
+    name: ""
+    automount: false
+    annotations: {}
+  # Must stay ClusterRole while rbacProxy.enabled: TokenReview and
+  # SubjectAccessReview are cluster-scoped and the chart adds those rules.
+  rbac:
+    create: true
+    kind: ClusterRole
+    rules: []
+  # Local demo: HTTP 8443 for kubectl port-forward only. Never expose it.
+  rbacProxy:
+    enabled: true
+    image:
+      repository: quay.io/brancz/kube-rbac-proxy
+      tag: v0.23.1
+      pullPolicy: IfNotPresent
+    port: 8443
+    config:
+      apiVersion: v1
+      resource: services
+      subresource: proxy
+      name: triplanner-api
+    resources:
+      requests:
+        cpu: 10m
+        memory: 32Mi
+      limits:
+        cpu: 100m
+        memory: 64Mi
+    securityContext:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      runAsNonRoot: true
+      runAsUser: 65532
+      runAsGroup: 65532
+      capabilities:
+        drop: [ "ALL" ]
+  podAnnotations: {}
+  podLabels: {}
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 100
+    runAsGroup: 101
+    fsGroup: 101
+    fsGroupChangePolicy: OnRootMismatch
+    seccompProfile:
+      type: RuntimeDefault
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop: [ "ALL" ]
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 750m
+      memory: 768Mi
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: http
+    initialDelaySeconds: 15
+    periodSeconds: 10
+    failureThreshold: 6
+  readinessProbe:
+    httpGet:
+      path: /health
+      port: http
+    initialDelaySeconds: 5
+    periodSeconds: 5
+    failureThreshold: 6
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# Web frontend. Next.js standalone behind a Cilium Gateway and HTTPRoute. The
+# API and agent are in-cluster.
+webService:
+  enabled: true
+  replicaCount: 1
+  service:
+    type: ClusterIP
+    port: 3000
+  backend:
+    url: http://triplanner-api:4000/graphql
+    origin: http://triplanner-api:4000
+  agent:
+    url: http://triplanner-agent:4100
+  gateway:
+    enabled: true
+    className: cilium
+    host: triplanner.localhost
+    # Cilium Gateway host-network listener; kind maps 9080 to the host.
+    port: 9080
+    path: /
+    annotations: {}
+    httpRouteAnnotations: {}
+  # Optional extra /etc/hosts entries for custom backends.
+  hostAliases: []
+  # When the optional NetworkPolicy is enabled, add the node/kubelet CIDR here
+  # so liveness/readiness probes are not blocked, e.g. ["172.19.0.0/16"].
+  networkPolicy:
+    probeCIDRs: []
+  serviceAccount:
+    create: true
+    name: ""
+    automount: false
+    annotations: {}
+  podAnnotations: {}
+  podLabels: {}
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
+    fsGroupChangePolicy: OnRootMismatch
+    seccompProfile:
+      type: RuntimeDefault
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop: [ "ALL" ]
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  livenessProbe:
+    httpGet:
+      path: /api/health
+      port: http
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    failureThreshold: 3
+  readinessProbe:
+    httpGet:
+      path: /api/ready
+      port: http
+    initialDelaySeconds: 5
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 3
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+metrics:
+  enabled: true
+  path: /metrics
+  serviceMonitor:
+    # Requires the Prometheus Operator CRDs from kube-prometheus-stack.
+    # Keep false until the stack is installed, then enable it and set the
+    # labels the operator selects (for example release: prometheus).
+    enabled: false
+    interval: 30s
+    scrapeTimeout: 10s
+    labels: {}
+  dashboards:
+    # Grafana sidecar dashboards: ConfigMaps labeled grafana_dashboard=1.
+    # The kube-prometheus-stack sidecar watches all namespaces by default.
+    enabled: true
+    folder: Triplanner
+    labels: {}
+
+networkPolicy:
+  enabled: false
+  # Kubelet probe source. Cilium sees these as the node/cilium_host IP, not
+  # the "host" entity on this kind cluster. Set to the node and cilium_host /32
+  # (the kind values do this).
+  probeCIDRs: []
+  # Cilium DNS proxy target. Every egress policy allows kube-dns; toFQDNs
+  # rules rely on this rule for resolution.
+  dns:
+    namespace: kube-system
+    label: kube-dns
+  # Allow the future kube-prometheus-stack to scrape GET /metrics. The CNPs
+  # remain disabled locally; these rules are ready for a compatible cluster.
+  monitoring:
+    namespace: monitoring
+    podLabels: {}
+  # Additional external hosts beyond the chart-derived Resend/HasData hosts.
+  email:
+    extraFQDNs: []
+  locations:
+    extraFQDNs: []
+  agent:
+    extraFQDNs:
+      - api.openai.com
+      - api.anthropic.com
+      - api.deepseek.com
+    # Ollama is usually host-local. Add the gateway CIDR(s) when used.
+    ollamaCIDRs: []

@@ -6,21 +6,63 @@ export type MemberRole = 'owner' | 'editor' | 'viewer';
 
 export interface UserProfile {
   userId: string;
-  email: string;
+  username: string;
+  email: string | null;
   displayName: string;
   color?: string | null;
   avatarUrl?: string | null;
   language?: 'es' | 'en' | null;
+  deletedAt?: string | null;
 }
 
 export interface Member {
   userId: string;
+  username?: string | null;
   displayName: string;
-  email: string;
+  email: string | null;
+  invitedEmail?: string | null;
   role: MemberRole;
   joinedAt?: string | null;
   color?: string | null;
   avatarUrl?: string | null;
+}
+
+export interface Notification {
+  id: string;
+  type: string;
+  tripId: string;
+  tripName: string;
+  invitationId?: string | null;
+  inviter?: UserProfile | null;
+  role?: MemberRole | null;
+  itemId?: string | null;
+  itemTitle?: string | null;
+  startAt?: string | null;
+  leadMinutes?: number | null;
+  status: 'unread' | 'read' | 'accepted' | 'declined';
+  createdAt: string;
+  readAt?: string | null;
+}
+
+export interface LocalInviteResult {
+  invitationId: string;
+  notificationId: string;
+  user: UserProfile;
+  status: string;
+}
+
+export interface CreateUserInput {
+  username: string;
+  password: string;
+  displayName: string;
+  language?: 'es' | 'en' | null;
+}
+
+export interface TripItemReminder {
+  enabled: boolean;
+  leadMinutes: number;
+  recipientIds: string[];
+  canEdit: boolean;
 }
 
 export interface TripItem {
@@ -40,7 +82,7 @@ export interface TripItem {
   lat?: number | null;
   lng?: number | null;
   locationText?: string | null;
-  reminderEnabled?: number;
+  reminder?: TripItemReminder;
 }
 
 export type AttachmentVisibility = 'private' | 'shared' | 'legacy';
@@ -261,20 +303,15 @@ export interface PresenceInput {
   editingItemId?: string | null;
 }
 
-export interface InviteMemberArgs {
-  userId?: string;
-  email: string;
-  displayName: string;
-  role: MemberRole;
-}
-
 export interface TriplannerApi {
-  loginDemo(userId?: string): Promise<UserProfile>;
+  login(username: string, password: string): Promise<UserProfile>;
   logout(): Promise<void>;
   restoreSession(): Promise<UserProfile | null>;
   getCurrentUser(): UserProfile | null;
   setSessionProfile(profile: UserProfile): Promise<void>;
-  findUserByEmail(email: string): Promise<UserProfile | null>;
+  listUsers(query?: string): Promise<UserProfile[]>;
+  createUser(input: CreateUserInput): Promise<UserProfile>;
+  deleteUser(userId: ID): Promise<boolean>;
 
   listMyTrips(): Promise<TripSummary[]>;
   getTrip(id: ID): Promise<Trip | null>;
@@ -285,7 +322,6 @@ export interface TriplannerApi {
   createTrip(input: CreateTripInput): Promise<Trip>;
   updateTripSettings(id: ID, input: UpdateTripSettingsInput): Promise<Trip>;
   setBudget(tripId: ID, totalBudget: number): Promise<Trip>;
-  inviteMember(tripId: ID, args: InviteMemberArgs): Promise<Trip>;
   updateMemberRole(tripId: ID, userId: ID, role: MemberRole): Promise<Trip>;
   removeMember(tripId: ID, userId: ID): Promise<Trip>;
   leaveTrip(tripId: ID, newOwnerId?: ID): Promise<Trip>;
@@ -293,8 +329,13 @@ export interface TriplannerApi {
   updateTripCover(tripId: ID, input: UpdateTripCoverInput): Promise<Trip>;
 
   sendTripInvite(tripId: ID, email: string, role?: 'viewer' | 'editor'): Promise<InviteResult>;
+  tripLocalInvite(tripId: ID, username: string, role: 'viewer' | 'editor'): Promise<LocalInviteResult>;
   getTripByCode(code: string): Promise<TripPreview | null>;
-  joinTripWithCode(code: string, email: string): Promise<Trip>;
+  joinTripWithCode(code: string, email: string, memberId?: ID): Promise<Trip>;
+  myNotifications(): Promise<Notification[]>;
+  markNotificationRead(notificationId: ID): Promise<Notification>;
+  acceptTripLocalInvite(notificationId: ID): Promise<Trip>;
+  declineTripLocalInvite(notificationId: ID): Promise<Notification>;
   getMyProfile(): Promise<UserProfile | null>;
   updateMyProfile(input: UpdateMyProfileInput): Promise<UserProfile>;
   addItemAttachment(tripId: ID, itemId: ID, input: AddItemAttachmentInput, viewerIds: ID[]): Promise<Attachment>;
@@ -305,7 +346,16 @@ export interface TriplannerApi {
   addItem(tripId: ID, input: AddItemInput): Promise<TripItem>;
   updateItem(tripId: ID, itemId: ID, input: UpdateItemInput): Promise<TripItem>;
   setItemCost(tripId: ID, itemId: ID, cost: number): Promise<TripItem>;
-  setItemReminder(itemId: ID, enabled: boolean): Promise<TripItem>;
+  setItemReminder(
+    tripId: ID,
+    itemId: ID,
+    input: {
+      enabled: boolean;
+      leadMinutes?: number;
+      recipientIds?: string[];
+      startTime?: string | null;
+    },
+  ): Promise<TripItem>;
   moveItem(tripId: ID, itemId: ID, day: AWSDate, order: number): Promise<TripItem>;
   removeItem(tripId: ID, itemId: ID): Promise<TripItem>;
 
@@ -315,6 +365,10 @@ export interface TriplannerApi {
   setMyInterests(terms: string[]): Promise<string[]>;
   getLlmSettings(): Promise<LlmSettings>;
   updateLlmSettings(input: UpdateLlmSettingsInput): Promise<LlmSettings>;
+  getEmailSettings(): Promise<EmailSettings>;
+  updateEmailSettings(input: UpdateEmailSettingsInput): Promise<EmailSettings>;
+  getLocationsSettings(): Promise<LocationsSettings>;
+  updateLocationsSettings(input: UpdateLocationsSettingsInput): Promise<LocationsSettings>;
   autoSuggest(tripId: ID, offset?: number, limit?: number): Promise<AutoSuggestResult>;
   touchPresence(input: PresenceInput): Promise<Presence>;
 
@@ -351,6 +405,35 @@ export interface UpdateLlmSettingsInput {
   apiKey?: string | null;
   model?: string | null;
   baseUrl?: string | null;
+  clearKey?: boolean | null;
+}
+
+export interface EmailSettings {
+  provider: string;
+  from: string;
+  replyTo: string;
+  hasKey: boolean;
+  ready: boolean;
+}
+
+export interface UpdateEmailSettingsInput {
+  provider: string;
+  apiKey?: string | null;
+  from?: string | null;
+  replyTo?: string | null;
+  clearKey?: boolean | null;
+}
+
+export interface LocationsSettings {
+  provider: string;
+  hasKey: boolean;
+  ready: boolean;
+  cachedPlaces: number;
+}
+
+export interface UpdateLocationsSettingsInput {
+  provider: string;
+  apiKey?: string | null;
   clearKey?: boolean | null;
 }
 

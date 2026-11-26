@@ -1,109 +1,28 @@
--- Triplanner Postgres schema (local + AWS RDS).
+-- Triplanner platform Postgres schema.
 -- Canonical DDL for the relational store. Idempotent: re-runnable.
 --
--- ARCHITECTURE (decided 2026-11-12):
---   * DynamoDB owns the `locations` catalogue (HasData results, TTL, source of truth).
---   * Postgres owns everything relational and keeps a denormalized snapshot of the
---     place fields it needs for reads (name/address/lat/lng on trips and items).
---   * No foreign keys point at locations; location_id columns are plain references.
---   * SQLite is no longer the local engine.
+-- ARCHITECTURE:
+--   * MongoDB (locations service) owns the catalogue; no FKs point at it.
+--   * The users service owns accounts and notifications, each in its own
+--     PostgreSQL database. Postgres here owns favorites, interests, chats and
+--     attachment metadata; the agent owns its own pgvector database.
+--   * Run decommission-trips.sql, decommission-users.sql and
+--     decommission-agent-vectors.sql once on databases created before those
+--     cutovers.
 
-CREATE EXTENSION IF NOT EXISTS vector;
-
--- ============================= USERS =============================
-CREATE TABLE IF NOT EXISTS users (
-  id              text PRIMARY KEY,
-  email           text NOT NULL UNIQUE,
-  display_name    text NOT NULL,
-  color           text,
-  avatar_url      text,
-  language        text NOT NULL DEFAULT 'en',
-  created_at      timestamptz NOT NULL DEFAULT now()
-);
-
--- ============================= TRIPS =============================
-CREATE TABLE IF NOT EXISTS trips (
-  id               text PRIMARY KEY,
-  name             text NOT NULL,
-  -- DynamoDB location id. No FK: the catalogue lives outside Postgres.
-  destination_id   text,
-  destination_name text,
-  destination_lat  double precision,
-  destination_lng  double precision,
-  start_date       text NOT NULL,
-  end_date         text NOT NULL,
-  total_budget     double precision NOT NULL DEFAULT 0,
-  cover_preset     text,
-  cover_photo_url  text,
-  timezone         text NOT NULL DEFAULT 'UTC',
-  owner_id         text NOT NULL REFERENCES users(id),
-  invite_code      text NOT NULL UNIQUE,
-  created_at       timestamptz NOT NULL DEFAULT now(),
-  updated_at       timestamptz NOT NULL DEFAULT now()
-);
-
-CREATE INDEX IF NOT EXISTS idx_trips_owner ON trips(owner_id);
-
--- ========================== TRIP MEMBERS ==========================
-CREATE TABLE IF NOT EXISTS trip_members (
-  trip_id   text NOT NULL REFERENCES trips(id),
-  user_id   text NOT NULL REFERENCES users(id),
-  role      text NOT NULL CHECK (role IN ('owner', 'editor', 'viewer')),
-  joined_at timestamptz NOT NULL DEFAULT now(),
-  PRIMARY KEY (trip_id, user_id)
-);
-
-CREATE INDEX IF NOT EXISTS idx_trip_members_user ON trip_members(user_id);
-
--- =========================== TRIP ITEMS ===========================
--- location_name/address/lat/lng are a snapshot taken when the item is added, so
--- rendering a trip never fans out to DynamoDB.
-CREATE TABLE IF NOT EXISTS trip_items (
-  id               text PRIMARY KEY,
-  trip_id          text NOT NULL REFERENCES trips(id),
-  location_id      text,
-  location_text    text,
-  location_name    text,
-  location_address text,
-  lat              double precision,
-  lng              double precision,
-  title            text NOT NULL,
-  category         text,
-  cost             double precision NOT NULL DEFAULT 0,
-  day              text NOT NULL,
-  "order"          integer NOT NULL DEFAULT 0,
-  start_time       text,
-  notes            text,
-  image_url        text,
-  created_by       text,
-  reminder_enabled integer NOT NULL DEFAULT 1,
-  reminder_sent    integer NOT NULL DEFAULT 0,
-  reminder_due_at  timestamptz,
-  created_at       timestamptz NOT NULL DEFAULT now()
-);
-
-CREATE INDEX IF NOT EXISTS idx_trip_items_trip ON trip_items(trip_id);
-
--- =========================== INVITATIONS ==========================
-CREATE TABLE IF NOT EXISTS invitations (
-  id          text PRIMARY KEY,
-  trip_id     text NOT NULL REFERENCES trips(id),
-  email       text NOT NULL,
-  code        text NOT NULL UNIQUE,
-  role        text NOT NULL DEFAULT 'viewer' CHECK (role IN ('owner', 'editor', 'viewer')),
-  status      text NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'revoked')),
-  created_by  text NOT NULL,
-  created_at  timestamptz NOT NULL DEFAULT now(),
-  accepted_at timestamptz
-);
-
-CREATE INDEX IF NOT EXISTS idx_invitations_trip ON invitations(trip_id);
-CREATE INDEX IF NOT EXISTS idx_invitations_email ON invitations(email);
+-- ============================ TRIPS =============================
+-- Trips, memberships, items and invitations are owned by the trips service
+-- (backend/trips-service) in its own PostgreSQL database. They are no longer
+-- created here. Run decommission-trips.sql once on an existing database.
 
 -- ======================== ITEM ATTACHMENTS ========================
+-- Attachments belong to a trip item, but the item may live in the trips
+-- service. Keep trip_id here and do NOT use a foreign key to trip_items: the
+-- trips service owns that table after the M9 cutover.
 CREATE TABLE IF NOT EXISTS item_attachments (
   id         text PRIMARY KEY,
-  item_id    text NOT NULL REFERENCES trip_items(id),
+  trip_id    text,
+  item_id    text NOT NULL,
   file_name  text NOT NULL,
   mime_type  text NOT NULL,
   size_bytes integer NOT NULL,
@@ -113,25 +32,34 @@ CREATE TABLE IF NOT EXISTS item_attachments (
   visibility text NOT NULL DEFAULT 'legacy'
 );
 
+-- Existing databases: add trip_id, drop the old FK and backfill from the
+-- legacy trip_items table while it still exists.
+ALTER TABLE item_attachments ADD COLUMN IF NOT EXISTS trip_id text;
+ALTER TABLE item_attachments DROP CONSTRAINT IF EXISTS item_attachments_item_id_fkey;
+
+DO $$
+BEGIN
+  IF to_regclass('public.trip_items') IS NOT NULL THEN
+    UPDATE item_attachments a
+       SET trip_id = i.trip_id
+      FROM trip_items i
+     WHERE a.item_id = i.id
+       AND a.trip_id IS NULL;
+  END IF;
+END $$;
+
 CREATE INDEX IF NOT EXISTS idx_item_attachments_item ON item_attachments(item_id);
+CREATE INDEX IF NOT EXISTS idx_item_attachments_trip ON item_attachments(trip_id);
 
 -- ======================= ATTACHMENT VIEWERS ========================
+-- user_id is an opaque users-service id: no cross-database FK.
 CREATE TABLE IF NOT EXISTS attachment_viewers (
   attachment_id text NOT NULL REFERENCES item_attachments(id) ON DELETE CASCADE,
-  user_id       text NOT NULL REFERENCES users(id),
+  user_id       text NOT NULL,
   PRIMARY KEY (attachment_id, user_id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_attachment_viewers_user ON attachment_viewers(user_id);
-
--- =========================== USER FAVORITES ==========================
--- location_id references the DynamoDB catalogue; deliberately no FK.
-CREATE TABLE IF NOT EXISTS user_favorites (
-  user_id     text NOT NULL REFERENCES users(id),
-  location_id text NOT NULL,
-  created_at  timestamptz NOT NULL DEFAULT now(),
-  PRIMARY KEY (user_id, location_id)
-);
 
 -- ========================== USER INTERESTS ==========================
 CREATE TABLE IF NOT EXISTS user_interests (
@@ -164,34 +92,3 @@ CREATE TABLE IF NOT EXISTS suggestion_chats (
 
 CREATE INDEX IF NOT EXISTS idx_suggestion_chats_trip_user_day
   ON suggestion_chats(trip_id, user_id, day);
-
--- ==================== AGENT VECTOR INDEX (pgvector) ====================
--- Replaces ChromaDB. One row per place, interest term or transient query.
--- Embeddings are 384-dim (all-MiniLM-L6-v2 through Chroma's ONNX EF).
-CREATE TABLE IF NOT EXISTS agent_embeddings (
-  id             text PRIMARY KEY,
-  kind           text NOT NULL CHECK (kind IN ('place', 'interest', 'query')),
-  destination_id text,
-  user_id        text,
-  session_id     text,
-  document       text NOT NULL,
-  metadata       jsonb NOT NULL DEFAULT '{}'::jsonb,
-  embedding      vector(384) NOT NULL,
-  updated_at     timestamptz NOT NULL DEFAULT now()
-);
-
-CREATE INDEX IF NOT EXISTS idx_agent_embeddings_destination
-  ON agent_embeddings(destination_id, kind);
-CREATE INDEX IF NOT EXISTS idx_agent_embeddings_user
-  ON agent_embeddings(user_id, kind);
-CREATE INDEX IF NOT EXISTS idx_agent_embeddings_session
-  ON agent_embeddings(session_id);
-CREATE INDEX IF NOT EXISTS idx_agent_embeddings_vector
-  ON agent_embeddings USING hnsw (embedding vector_cosine_ops);
-
--- Content hash per destination so re-indexing only happens when data changes.
-CREATE TABLE IF NOT EXISTS agent_index_state (
-  destination_id text PRIMARY KEY,
-  content_hash   text NOT NULL,
-  updated_at     timestamptz NOT NULL DEFAULT now()
-);

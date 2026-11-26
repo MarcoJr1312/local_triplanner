@@ -4,14 +4,14 @@
 // No email/Firebase: the second seeded identity (`demo-friend`) accepts the
 // invitation. The owner can switch to it from the wrong-account panel.
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { Compass, LogIn, AlertCircle, CheckCircle2, MapPin, Loader2, UserX } from 'lucide-react';
+import { Compass, LogIn, AlertCircle, CheckCircle2, MapPin, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { api, localizeApiError, ApiError, DEMO_FRIEND_ID } from '@/lib/api';
+import { api, localizeApiError, ApiError, DEMO_FRIEND_ID, DEMO_FRIEND_EMAIL, DEMO_PASSWORD } from '@/lib/api';
 import { useAuth } from '@/hooks/useAuth';
 import { useI18n } from '@/lib/i18n';
 import type { TripPreview } from '@/lib/types';
@@ -20,10 +20,11 @@ const CODE_RE = /^[A-Za-z0-9_-]{12}$/;
 
 export default function JoinPage() {
   const router = useRouter();
-  const { user, loading, signInDemo, signOut } = useAuth();
+  const { user, loading, signIn } = useAuth();
   const { t } = useI18n();
   const searchParams = useSearchParams();
   const codeParam = searchParams.get('code') ?? '';
+  const autoAccept = searchParams.get('auto') === '1';
 
   const [code, setCode] = useState(codeParam);
   const [preview, setPreview] = useState<TripPreview | null>(null);
@@ -31,10 +32,10 @@ export default function JoinPage() {
   const [joining, setJoining] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [joined, setJoined] = useState(false);
+  const autoJoinedRef = useRef(false);
 
-  const isFriend = user?.userId === DEMO_FRIEND_ID;
   const invitedEmail = preview?.invitedEmail ?? '';
-  const emailToUse = invitedEmail || user?.email || 'friend@triplanner.local';
+  const emailToUse = invitedEmail || user?.email || DEMO_FRIEND_EMAIL;
 
   useEffect(() => {
     let alive = true;
@@ -73,8 +74,10 @@ export default function JoinPage() {
     }
     setJoining(true);
     try {
-      if (!isFriend) await signInDemo(DEMO_FRIEND_ID);
-      const trip = await api.joinTripWithCode(code, emailToUse);
+      // Keep the current demo identity (the recruiter stays Demo). Only an
+      // unauthenticated visitor falls back to the second demo identity.
+      if (!user) await signIn('demo-friend', DEMO_PASSWORD);
+      const trip = await api.joinTripWithCode(code, emailToUse, DEMO_FRIEND_ID);
       afterJoin(trip.id);
     } catch (err) {
       const codeErr = err instanceof ApiError ? err.code : undefined;
@@ -87,14 +90,16 @@ export default function JoinPage() {
     }
   };
 
-  const handleSwitch = async () => {
-    setError(null);
-    try {
-      await signOut();
-    } catch (err) {
-      setError(localizeApiError(err, t));
-    }
-  };
+  // The email link carries `auto=1`; clicking it accepts the invitation for the
+  // signed-in demo user without switching accounts. The copyable link still
+  // shows the confirmation button.
+  useEffect(() => {
+    if (!autoAccept || !preview || !user || joined || joining || autoJoinedRef.current) return;
+    autoJoinedRef.current = true;
+    void handleJoin();
+    // The ref guards re-entry; handleJoin uses the current code/email.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoAccept, preview, user, joined, joining]);
 
   if (loading || loadingPreview) {
     return (
@@ -103,8 +108,6 @@ export default function JoinPage() {
       </div>
     );
   }
-
-  const wrongAccount = Boolean(preview && user && !isFriend);
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4 py-8">
@@ -152,13 +155,6 @@ export default function JoinPage() {
               </div>
             ) : (
               <div className="mt-4 space-y-4">
-                {wrongAccount && (
-                  <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-700 dark:border-amber-500/25 dark:bg-amber-500/10 dark:text-amber-300">
-                    <UserX className="mt-0.5 h-4 w-4 shrink-0" />
-                    <span>{t('join.wrongAccount', { email: invitedEmail })}</span>
-                  </div>
-                )}
-
                 {!preview && (
                   <div>
                     <Label htmlFor="join-code" className="mb-1 block">
@@ -179,19 +175,9 @@ export default function JoinPage() {
 
                 <Button type="button" onClick={handleJoin} disabled={joining} className="w-full">
                   <LogIn className="h-4 w-4" />
-                  {joining
-                    ? t('join.joining')
-                    : wrongAccount
-                      ? t('join.switchToFriend')
-                      : t('join.demoFriendJoin')}
+                  {joining ? t('join.joining') : t('join.acceptInvitation')}
                 </Button>
-                <p className="text-center text-xs text-muted-foreground">{t('join.demoFriendHint')}</p>
-
-                {wrongAccount && (
-                  <Button type="button" variant="outline" onClick={handleSwitch} className="w-full">
-                    {t('join.switchAccount')}
-                  </Button>
-                )}
+                <p className="text-center text-xs text-muted-foreground">{t('join.acceptHint')}</p>
 
                 <p className="text-center text-xs text-muted-foreground">
                   <button

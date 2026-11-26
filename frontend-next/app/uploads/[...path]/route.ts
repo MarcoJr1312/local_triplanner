@@ -1,17 +1,10 @@
 import type { NextRequest } from 'next/server';
+import { backendOrigin } from '@/lib/server-config';
 
-// Same-origin proxy for uploaded bytes. Runs at request time so ECS can point
-// it at the API service through Cloud Map without rebuilding the image.
+// Same-origin proxy for uploaded bytes. Runs at request time so Compose and
+// Helm can point it at the API service without rebuilding the image.
 
 export const dynamic = 'force-dynamic';
-
-function backendOrigin(): string {
-  const explicit = process.env.NEXT_PRIVATE_BACKEND_ORIGIN?.trim();
-  if (explicit) return explicit.replace(/\/+$/, '');
-  const graphql = process.env.NEXT_PRIVATE_BACKEND_URL?.trim();
-  if (graphql) return graphql.replace(/\/graphql\/?$/, '');
-  return 'http://localhost:4000';
-}
 
 export async function GET(request: NextRequest, context: { params: Promise<{ path: string[] }> }) {
   const { path } = await context.params;
@@ -22,7 +15,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ pat
   try {
     upstream = await fetch(target, { cache: 'no-store' });
   } catch {
-    return new Response('No se pudo leer el archivo.', { status: 502 });
+    return new Response('Could not read the file.', { status: 502 });
   }
 
   return new Response(upstream.body, {

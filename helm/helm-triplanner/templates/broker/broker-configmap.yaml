@@ -1,0 +1,15 @@
+{{- if .Values.broker.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: triplanner-kafka-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: triplanner-kafka
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: broker
+data:
+  SERVICE_VERSION: {{ .Chart.AppVersion | quote }}
+  BROKER_ADDR: {{ printf ":%v" .Values.broker.service.port | quote }}
+  BROKER_DB: {{ printf "%s/broker.db" (.Values.broker.persistence.mountPath | default "/data") | quote }}
+{{- end }}

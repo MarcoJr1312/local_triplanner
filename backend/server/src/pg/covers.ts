@@ -34,3 +34,14 @@ export async function writeCoverPhoto(
 export async function removeTripCoverFiles(storage: Storage, tripId: string): Promise<void> {
   await storage.deletePrefix(`covers/${tripId}`);
 }
+
+/** Deletes one stored cover by its public URL, used when replacing a photo. */
+export async function removeCoverPhoto(
+  storage: Storage,
+  publicUrl: string | null | undefined,
+): Promise<void> {
+  if (!publicUrl) return;
+  const prefix = '/uploads/';
+  const key = publicUrl.startsWith(prefix) ? publicUrl.slice(prefix.length) : publicUrl;
+  await storage.delete(key);
+}

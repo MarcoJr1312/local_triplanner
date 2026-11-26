@@ -1,0 +1,17 @@
+{{- if and .Values.agentService.enabled .Values.agentService.persistence.enabled (not .Values.agentService.persistence.existingClaim) }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: triplanner-agent-data
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: triplanner-agent
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: agent
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.agentService.persistence.size }}
+{{- end }}

@@ -1,0 +1,55 @@
+{{- if and .Values.apiService.enabled .Values.apiService.postgres.enabled .Values.networkPolicy.enabled }}
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: triplanner-api-postgres
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: triplanner-api-postgres
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: api-postgres
+spec:
+  endpointSelector:
+    matchLabels:
+      k8s:io.kubernetes.pod.namespace: {{ .Release.Namespace }}
+      k8s:app.kubernetes.io/name: triplanner-api-postgres
+      k8s:app.kubernetes.io/instance: {{ .Release.Name }}
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: {{ .Release.Namespace }}
+            k8s:app.kubernetes.io/name: triplanner-api
+            k8s:app.kubernetes.io/instance: {{ .Release.Name }}
+      toPorts:
+        - ports:
+            - port: "{{ .Values.apiService.postgres.service.port }}"
+              protocol: TCP
+    - fromEntities:
+        - host
+      toPorts:
+        - ports:
+            - port: "{{ .Values.apiService.postgres.service.port }}"
+              protocol: TCP
+    {{- with .Values.networkPolicy.probeCIDRs }}
+    - fromCIDR:
+        {{- range . }}
+        - {{ . | quote }}
+        {{- end }}
+      toPorts:
+        - ports:
+            - port: "{{ $.Values.apiService.postgres.service.port }}"
+              protocol: TCP
+    {{- end }}
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: {{ .Values.networkPolicy.dns.namespace }}
+            k8s:k8s-app: {{ .Values.networkPolicy.dns.label }}
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: ANY
+          rules:
+            dns:
+              - matchPattern: "*"
+{{- end }}

@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { api, localizeApiError } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
-import { listDays, toIsoDate } from '@/lib/format';
+import { listDays, normalizeDateRange, parseBudgetInput, toIsoDate } from '@/lib/format';
 import type { Destination, Trip } from '@/lib/types';
 import Modal from './Modal';
 import SmartImage from './SmartImage';
@@ -36,7 +36,7 @@ export default function NewTripModal({ open, onClose, onCreated }: NewTripModalP
   const [name, setName] = useState('');
   const [startDate, setStartDate] = useState(defaultStart());
   const [endDate, setEndDate] = useState(defaultEnd());
-  const [totalBudget, setTotalBudget] = useState(1000);
+  const [totalBudget, setTotalBudget] = useState('1000');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -71,11 +71,25 @@ export default function NewTripModal({ open, onClose, onCreated }: NewTripModalP
     if (dest) setName(t('trips.defaultName', { destination: dest.name }));
   };
 
+  const handleStartDate = (value: string) => {
+    const next = normalizeDateRange(value, endDate);
+    setStartDate(next.start);
+    setEndDate(next.end);
+  };
+
+  const handleEndDate = (value: string) => {
+    if (!value) {
+      setEndDate('');
+      return;
+    }
+    setEndDate(startDate && value < startDate ? startDate : value);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     if (!selected) return;
-    if (startDate > endDate) {
+    if (!startDate || !endDate || startDate > endDate) {
       setError(t('errors.invalidDateRange'));
       return;
     }
@@ -88,7 +102,7 @@ export default function NewTripModal({ open, onClose, onCreated }: NewTripModalP
         startDate,
         endDate,
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        totalBudget,
+        totalBudget: parseBudgetInput(totalBudget),
         displayName: 'Marco',
       });
       toast.success(t('trips.createdToast'));
@@ -175,7 +189,7 @@ export default function NewTripModal({ open, onClose, onCreated }: NewTripModalP
               id="start-date"
               type="date"
               value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
+              onChange={(e) => handleStartDate(e.target.value)}
               className="input"
             />
           </div>
@@ -186,7 +200,7 @@ export default function NewTripModal({ open, onClose, onCreated }: NewTripModalP
               type="date"
               value={endDate}
               min={startDate}
-              onChange={(e) => setEndDate(e.target.value)}
+              onChange={(e) => handleEndDate(e.target.value)}
               className="input"
             />
           </div>
@@ -202,7 +216,8 @@ export default function NewTripModal({ open, onClose, onCreated }: NewTripModalP
               min={0}
               step={10}
               value={totalBudget}
-              onChange={(e) => setTotalBudget(Number(e.target.value))}
+              placeholder="0"
+              onChange={(e) => setTotalBudget(e.target.value)}
               className="input"
             />
           </div>

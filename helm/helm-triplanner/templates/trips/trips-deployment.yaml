@@ -1,0 +1,143 @@
+{{- if .Values.tripsService.enabled }}
+{{- $tokenSecret := required "tripsService.internalToken.existingSecret is required" .Values.tripsService.internalToken.existingSecret }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: triplanner-trips
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: triplanner-trips
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: trips
+spec:
+  replicas: {{ .Values.tripsService.replicaCount | default 1 }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: triplanner-trips
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: triplanner-trips
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: trips
+        {{- with .Values.tripsService.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/trips/trips-configmap.yaml") . | sha256sum }}
+        {{- with .Values.tripsService.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "helm-triplanner.tripsServiceAccountName" . }}
+      automountServiceAccountToken: {{ if .Values.tripsService.rbacProxy.enabled }}true{{ else }}{{ .Values.tripsService.serviceAccount.automount }}{{ end }}
+      terminationGracePeriodSeconds: 30
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.tripsService.podSecurityContext | nindent 8 }}
+      containers:
+        - name: trips
+          image: "{{ .Values.images.trips.name }}:{{ .Values.images.trips.tag }}"
+          imagePullPolicy: {{ .Values.images.trips.pullPolicy | default "IfNotPresent" }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.tripsService.service.port }}
+              protocol: TCP
+            - name: grpc
+              containerPort: {{ .Values.tripsService.service.grpcPort }}
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: triplanner-trips-config
+          env:
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "helm-triplanner.tripsPostgresSecretName" . }}
+                  key: {{ .Values.tripsService.postgres.auth.databaseKey }}
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "helm-triplanner.tripsPostgresSecretName" . }}
+                  key: {{ .Values.tripsService.postgres.auth.usernameKey }}
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "helm-triplanner.tripsPostgresSecretName" . }}
+                  key: {{ .Values.tripsService.postgres.auth.passwordKey }}
+            - name: INTERNAL_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $tokenSecret }}
+                  key: {{ .Values.tripsService.internalToken.key }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+          livenessProbe:
+            {{- toYaml .Values.tripsService.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml .Values.tripsService.readinessProbe | nindent 12 }}
+          resources:
+            {{- toYaml .Values.tripsService.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.tripsService.securityContext | nindent 12 }}
+        {{- if .Values.tripsService.rbacProxy.enabled }}
+        - name: kube-rbac-proxy
+          image: "{{ .Values.tripsService.rbacProxy.image.repository }}:{{ .Values.tripsService.rbacProxy.image.tag }}"
+          imagePullPolicy: {{ .Values.tripsService.rbacProxy.image.pullPolicy | default "IfNotPresent" }}
+          args:
+            - --insecure-listen-address=0.0.0.0:{{ .Values.tripsService.rbacProxy.port }}
+            - --upstream=http://127.0.0.1:{{ .Values.tripsService.service.port }}/
+            - --config-file=/etc/kube-rbac-proxy/config-file.yaml
+          ports:
+            - name: rbac-proxy
+              containerPort: {{ .Values.tripsService.rbacProxy.port }}
+              protocol: TCP
+          volumeMounts:
+            - name: rbac-proxy-config
+              mountPath: /etc/kube-rbac-proxy
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+          livenessProbe:
+            tcpSocket:
+              port: rbac-proxy
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            tcpSocket:
+              port: rbac-proxy
+            initialDelaySeconds: 3
+            periodSeconds: 5
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.tripsService.rbacProxy.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.tripsService.rbacProxy.securityContext | nindent 12 }}
+        {{- end }}
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        {{- if .Values.tripsService.rbacProxy.enabled }}
+        - name: rbac-proxy-config
+          configMap:
+            name: triplanner-trips-rbac-proxy
+        {{- end }}
+      {{- with .Values.tripsService.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tripsService.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tripsService.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

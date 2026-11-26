@@ -24,6 +24,8 @@ extend type Query {
   suggestionChats(tripId: ID!, day: String): [SuggestionChat!]!
   getMyInterests: [String!]!
   getLlmSettings: LlmSettings!
+  getEmailSettings: EmailSettings!
+  getLocationsSettings: LocationsSettings!
 }
 
 type TripPreview {
@@ -36,16 +38,18 @@ type TripPreview {
 
 extend type Mutation {
   sendTripInvite(tripId: ID!, email: String!, role: String): InviteResult
-  joinTripWithCode(code: String!, email: String!): Trip
+  joinTripWithCode(code: String!, email: String!, memberId: ID): Trip
   updateMyProfile(input: UpdateMyProfileInput!): UserProfile!
   addItemAttachment(tripId: ID, itemId: ID!, input: AddItemAttachmentInput!, viewerIds: [String!]): Attachment!
   updateAttachmentViewers(attachmentId: ID!, viewerIds: [String!]): Attachment!
   removeItemAttachment(attachmentId: ID!): Attachment
   favoriteLocation(locationId: ID!, favorite: Boolean!): FavoriteResult!
   saveSuggestionChat(tripId: ID!, day: String!, messages: [ChatMessageInput!]!): SuggestionChat!
-  setItemReminder(itemId: ID!, enabled: Boolean!): TripItem!
+  setItemReminder(tripId: ID!, itemId: ID!, input: ItemReminderInput!): TripItem!
   setMyInterests(terms: [String!]!): [String!]!
   updateLlmSettings(input: UpdateLlmSettingsInput!): LlmSettings!
+  updateEmailSettings(input: UpdateEmailSettingsInput!): EmailSettings!
+  updateLocationsSettings(input: UpdateLocationsSettingsInput!): LocationsSettings!
 }
 
 extend input CreateTripInput {
@@ -107,8 +111,22 @@ extend type TripItem {
   isFavorite: Boolean!
   lat: Float
   lng: Float
-  reminderEnabled: Int!
+  reminder: ItemReminder!
   locationText: String
+}
+
+type ItemReminder {
+  enabled: Boolean!
+  leadMinutes: Int!
+  recipientIds: [ID!]!
+  canEdit: Boolean!
+}
+
+input ItemReminderInput {
+  enabled: Boolean!
+  leadMinutes: Int
+  recipientIds: [ID!]
+  startTime: String
 }
 
 extend input AddItemInput {
@@ -133,18 +151,68 @@ input UpdateMyProfileInput {
 }
 
 extend type UserProfile {
+  username: String!
   color: String
   avatarUrl: String
   language: String
 }
 
 extend type Member {
+  username: String
   color: String
   avatarUrl: String
 }
 
+input CreateUserInput {
+  username: String!
+  password: String!
+  displayName: String!
+  language: String
+}
+
+type Notification {
+  id: ID!
+  type: String!
+  tripId: ID!
+  tripName: String!
+  invitationId: ID
+  inviter: UserProfile
+  role: MemberRole
+  itemId: ID
+  itemTitle: String
+  startAt: AWSDateTime
+  leadMinutes: Int
+  status: String!
+  createdAt: AWSDateTime!
+  readAt: AWSDateTime
+}
+
+type LocalInviteResult {
+  invitationId: ID!
+  notificationId: ID!
+  user: UserProfile!
+  status: String!
+}
+
 extend type Query {
   getMyProfile: UserProfile
+  listUsers(query: String): [UserProfile!]!
+  getUserByUsername(username: String!): UserProfile
+  myNotifications: [Notification!]!
+}
+
+extend type Mutation {
+  login(username: String!, password: String!): UserProfile!
+  createUser(input: CreateUserInput!): UserProfile!
+  deleteUser(userId: ID!): Boolean!
+  tripLocalInvite(tripId: ID!, username: String!, role: MemberRole!): LocalInviteResult!
+  acceptTripLocalInvite(notificationId: ID!): Trip!
+  declineTripLocalInvite(notificationId: ID!): Notification!
+  markNotificationRead(notificationId: ID!): Notification!
+}
+
+extend type Subscription {
+  onNotification: Notification!
 }
 
 type InviteResult {
@@ -168,6 +236,35 @@ input UpdateLlmSettingsInput {
   apiKey: String
   model: String
   baseUrl: String
+  clearKey: Boolean
+}
+
+type EmailSettings {
+  provider: String!
+  from: String!
+  replyTo: String!
+  hasKey: Boolean!
+  ready: Boolean!
+}
+
+input UpdateEmailSettingsInput {
+  provider: String!
+  apiKey: String
+  from: String
+  replyTo: String
+  clearKey: Boolean
+}
+
+type LocationsSettings {
+  provider: String!
+  hasKey: Boolean!
+  ready: Boolean!
+  cachedPlaces: Int!
+}
+
+input UpdateLocationsSettingsInput {
+  provider: String!
+  apiKey: String
   clearKey: Boolean
 }
 

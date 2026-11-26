@@ -31,7 +31,7 @@ class BackendClient:
     def __init__(self, base_url: str | None = None):
         resolved = base_url or get_settings().backend_url or DEFAULT_BACKEND_URL
         self._base_url = resolved.rstrip("/")
-        self._token = get_settings().internal_token
+        self._token = get_settings().backend_internal_token
 
     def _headers(self, user_id: str | None = None, user_email: str | None = None) -> dict[str, str]:
         headers = {"X-Internal-Token": self._token}
@@ -56,15 +56,6 @@ class BackendClient:
     def get_trip_context(self, trip_id: str, user_id: str, user_email: str | None = None) -> dict[str, Any]:
         response = httpx.get(
             f"{self._base_url}/internal/trip-context/{trip_id}",
-            headers=self._headers(user_id, user_email),
-            timeout=20,
-        )
-        self._raise_for_status(response)
-        return response.json()
-
-    def get_places_cache(self, trip_id: str, user_id: str, user_email: str | None = None) -> dict[str, Any]:
-        response = httpx.get(
-            f"{self._base_url}/internal/places-cache/{trip_id}",
             headers=self._headers(user_id, user_email),
             timeout=20,
         )

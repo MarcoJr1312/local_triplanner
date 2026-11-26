@@ -1,0 +1,29 @@
+{{- if .Values.apiService.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: triplanner-api-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: triplanner-api
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: api
+data:
+  SERVICE_VERSION: {{ .Chart.AppVersion | quote }}
+  NODE_ENV: "production"
+  LOCAL_PORT: {{ .Values.apiService.service.port | quote }}
+  APP_URL: {{ default (printf "http://%s:%v" .Values.webService.gateway.host .Values.webService.gateway.port) .Values.apiService.appUrl | quote }}
+  BOOTSTRAP_LOCAL: "0"
+  AGENT_BASE_URL: {{ .Values.apiService.backend.agentUrl | quote }}
+  EMAIL_SERVICE_URL: {{ .Values.apiService.backend.emailServiceUrl | quote }}
+  LOCATIONS_URL: {{ .Values.apiService.backend.locationsUrl | quote }}
+  LOCATIONS_TRANSPORT: "grpc"
+  LOCATIONS_GRPC_URL: {{ .Values.apiService.backend.locationsGrpcUrl | quote }}
+  TRIPS_URL: {{ .Values.apiService.backend.tripsUrl | quote }}
+  TRIPS_TRANSPORT: "grpc"
+  TRIPS_GRPC_URL: {{ .Values.apiService.backend.tripsGrpcUrl | quote }}
+  USERS_URL: {{ .Values.apiService.backend.usersUrl | quote }}
+  USERS_TRANSPORT: "grpc"
+  USERS_GRPC_URL: {{ .Values.apiService.backend.usersGrpcUrl | quote }}
+  REMINDER_SWEEP_MS: {{ .Values.apiService.reminderSweepMs | quote }}
+{{- end }}

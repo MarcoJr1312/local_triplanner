@@ -1,0 +1,25 @@
+{{- if .Values.broker.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: triplanner-kafka
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: triplanner-kafka
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: broker
+spec:
+  type: {{ .Values.broker.service.type }}
+  selector:
+    app.kubernetes.io/name: triplanner-kafka
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  ports:
+    - name: http
+      port: {{ .Values.broker.service.port }}
+      targetPort: http
+    {{- if .Values.broker.rbacProxy.enabled }}
+    - name: rbac-proxy
+      port: {{ .Values.broker.rbacProxy.port }}
+      targetPort: rbac-proxy
+    {{- end }}
+{{- end }}

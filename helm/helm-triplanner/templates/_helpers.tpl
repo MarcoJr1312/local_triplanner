@@ -1,0 +1,134 @@
+{{/*
+Expand the name of the chart.
+*/}}
+{{- define "helm-triplanner.name" -}}
+{{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" }}
+{{- end }}
+
+{{/*
+Create a default fully qualified app name.
+We truncate at 63 chars because some Kubernetes name fields are limited to this (by the DNS naming spec).
+If release name contains chart name it will be used as a full name.
+*/}}
+{{- define "helm-triplanner.fullname" -}}
+{{- if .Values.fullnameOverride }}
+{{- .Values.fullnameOverride | trunc 63 | trimSuffix "-" }}
+{{- else }}
+{{- $name := default .Chart.Name .Values.nameOverride }}
+{{- if contains $name .Release.Name }}
+{{- .Release.Name | trunc 63 | trimSuffix "-" }}
+{{- else }}
+{{- printf "%s-%s" .Release.Name $name | trunc 63 | trimSuffix "-" }}
+{{- end }}
+{{- end }}
+{{- end }}
+
+{{/*
+Create chart name and version as used by the chart label.
+*/}}
+{{- define "helm-triplanner.chart" -}}
+{{- printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" }}
+{{- end }}
+
+{{/*
+Common labels
+*/}}
+{{- define "helm-triplanner.labels" -}}
+helm.sh/chart: {{ include "helm-triplanner.chart" . }}
+{{ include "helm-triplanner.selectorLabels" . }}
+{{- if .Chart.AppVersion }}
+app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
+{{- end }}
+app.kubernetes.io/managed-by: {{ .Release.Service }}
+{{- end }}
+
+{{/*
+Selector labels
+*/}}
+{{- define "helm-triplanner.selectorLabels" -}}
+app.kubernetes.io/name: {{ include "helm-triplanner.name" . }}
+app.kubernetes.io/instance: {{ .Release.Name }}
+{{- end }}
+
+{{/*
+Broker and email service accounts. Each service owns its identity; neither
+needs Kubernetes API permissions in the current design.
+*/}}
+{{- define "helm-triplanner.brokerServiceAccountName" -}}
+{{- default (printf "%s-broker" (include "helm-triplanner.fullname" .)) .Values.broker.serviceAccount.name }}
+{{- end }}
+
+{{- define "helm-triplanner.emailServiceAccountName" -}}
+{{- default (printf "%s-email" (include "helm-triplanner.fullname" .)) .Values.emailService.serviceAccount.name }}
+{{- end }}
+
+{{- define "helm-triplanner.locationsServiceAccountName" -}}
+{{- default (printf "%s-locations" (include "helm-triplanner.fullname" .)) .Values.locationsService.serviceAccount.name }}
+{{- end }}
+
+{{- define "helm-triplanner.tripsServiceAccountName" -}}
+{{- default (printf "%s-trips" (include "helm-triplanner.fullname" .)) .Values.tripsService.serviceAccount.name }}
+{{- end }}
+
+{{- define "helm-triplanner.usersServiceAccountName" -}}
+{{- default (printf "%s-users" (include "helm-triplanner.fullname" .)) .Values.usersService.serviceAccount.name }}
+{{- end }}
+
+{{- define "helm-triplanner.webServiceAccountName" -}}
+{{- default (printf "%s-web" (include "helm-triplanner.fullname" .)) .Values.webService.serviceAccount.name }}
+{{- end }}
+
+{{- define "helm-triplanner.mongoSecretName" -}}
+{{- default "triplanner-mongo-credentials" .Values.mongo.auth.existingSecret }}
+{{- end }}
+
+{{- define "helm-triplanner.tripsPostgresSecretName" -}}
+{{- default "triplanner-trips-postgres-credentials" .Values.tripsService.postgres.auth.existingSecret }}
+{{- end }}
+
+{{- define "helm-triplanner.usersPostgresSecretName" -}}
+{{- default "triplanner-users-postgres-credentials" .Values.usersService.postgres.auth.existingSecret }}
+{{- end }}
+
+{{- define "helm-triplanner.agentServiceAccountName" -}}
+{{- default (printf "%s-agent" (include "helm-triplanner.fullname" .)) .Values.agentService.serviceAccount.name }}
+{{- end }}
+
+{{- define "helm-triplanner.agentPostgresSecretName" -}}
+{{- default "triplanner-agent-postgres-credentials" .Values.agentService.postgres.auth.existingSecret }}
+{{- end }}
+
+{{- define "helm-triplanner.apiServiceAccountName" -}}
+{{- default (printf "%s-api" (include "helm-triplanner.fullname" .)) .Values.apiService.serviceAccount.name }}
+{{- end }}
+
+{{- define "helm-triplanner.apiPostgresSecretName" -}}
+{{- default "triplanner-api-postgres-credentials" .Values.apiService.postgres.auth.existingSecret }}
+{{- end }}
+
+{{- define "helm-triplanner.apiUploadsClaimName" -}}
+{{- default "triplanner-api-uploads" .Values.apiService.uploads.persistence.existingClaim }}
+{{- end }}
+
+{{- define "helm-triplanner.apiAttachmentSecretName" -}}
+{{- default "triplanner-api-attachments" .Values.apiService.attachments.existingSecret }}
+{{- end }}
+
+{{- define "helm-triplanner.monitoringIngress" -}}
+{{- if .root.Values.networkPolicy.monitoring.namespace }}
+- fromEndpoints:
+    - matchLabels:
+        k8s:io.kubernetes.pod.namespace: {{ .root.Values.networkPolicy.monitoring.namespace }}
+        {{- range $key, $value := .root.Values.networkPolicy.monitoring.podLabels }}
+        k8s:{{ $key }}: {{ $value | quote }}
+        {{- end }}
+  toPorts:
+    - ports:
+        - port: "{{ .port }}"
+          protocol: TCP
+      rules:
+        http:
+          - method: GET
+            path: {{ .root.Values.metrics.path | quote }}
+{{- end }}
+{{- end }}

@@ -1,0 +1,21 @@
+{{- if and .Values.usersService.enabled .Values.usersService.rbacProxy.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: triplanner-users-rbac-proxy
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: triplanner-users
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: users
+data:
+  config-file.yaml: |
+    authorization:
+      resourceAttributes:
+        namespace: {{ .Release.Namespace }}
+        apiVersion: {{ .Values.usersService.rbacProxy.config.apiVersion }}
+        resource: {{ .Values.usersService.rbacProxy.config.resource }}
+        subresource: {{ .Values.usersService.rbacProxy.config.subresource }}
+        name: {{ .Values.usersService.rbacProxy.config.name }}
+        verb: get
+{{- end }}

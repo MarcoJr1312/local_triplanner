@@ -1,0 +1,31 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: triplanner
+  namespace: triplanner-agrocd
+spec:
+  project: triplanner
+  sources:
+    - repoURL: https://github.com/MarcoJr1312/local_triplanner
+      # Pre-merge: track the delivery branch. After PR #1 is merged, set this
+      # to HEAD so Argo CD follows main and the CI-updated chart values.
+      targetRevision: refactor/helm
+      path: helm/helm-triplanner
+      helm:
+        releaseName: triplanner
+        valueFiles:
+          - $values/deploy/kind/triplanner-values.yaml
+    - repoURL: https://github.com/MarcoJr1312/local_triplanner
+      targetRevision: refactor/helm
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: triplanner
+  syncPolicy:
+    automated:
+      prune: false
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false
+      - ApplyOutOfSyncOnly=true
+  revisionHistoryLimit: 5

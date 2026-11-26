@@ -1,4 +1,5 @@
-// Invitation helpers. Persistence lives in pg/invitations.
+// Invitation helpers. Persistence is owned by the trips service; the API only
+// validates codes and matches emails before/after calling it.
 
 import { randomBytes } from 'node:crypto';
 import type { InvitationRow } from './schema-types.ts';
@@ -17,5 +18,6 @@ export function isInviteCodeValid(code: unknown): code is string {
 
 // Case-insensitive match between the invitation email and the caller email.
 export function isEmailMatch(invitation: InvitationRow, email: string): boolean {
+  if (!invitation.email) return false;
   return invitation.email.toLowerCase() === email.trim().toLowerCase();
 }

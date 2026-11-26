@@ -1,0 +1,41 @@
+# prometheus-community/prometheus-mongodb-exporter for the locations catalogue.
+fullnameOverride: triplanner-mongodb
+
+existingSecret:
+  name: triplanner-mongodb-exporter
+  key: mongodb-uri
+
+# The Triplanner chart creates this ServiceAccount with
+# automountServiceAccountToken: false; the exporter needs no Kubernetes API.
+serviceAccount:
+  create: false
+  name: triplanner-mongodb
+
+serviceMonitor:
+  enabled: true
+  interval: 30s
+  scrapeTimeout: 10s
+  additionalLabels:
+    release: prometheus
+
+resources:
+  requests:
+    cpu: 20m
+    memory: 32Mi
+  limits:
+    cpu: 100m
+    memory: 64Mi
+
+podSecurityContext:
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: true
+  runAsGroup: 10000
+  runAsNonRoot: true
+  runAsUser: 10000

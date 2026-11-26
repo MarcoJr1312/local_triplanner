@@ -1,0 +1,147 @@
+{{- if and .Values.locationsService.enabled .Values.networkPolicy.enabled }}
+{{- $hasdataHost := (urlParse .Values.locationsService.hasdata.apiBase).host }}
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: triplanner-locations
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: triplanner-locations
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: locations
+spec:
+  endpointSelector:
+    matchLabels:
+      k8s:io.kubernetes.pod.namespace: {{ .Release.Namespace }}
+      k8s:app.kubernetes.io/name: triplanner-locations
+      k8s:app.kubernetes.io/instance: {{ .Release.Name }}
+  ingress:
+    {{- include "helm-triplanner.monitoringIngress" (dict "root" . "port" .Values.locationsService.service.port) | nindent 4 }}
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: {{ .Release.Namespace }}
+            k8s:app.kubernetes.io/name: triplanner-api
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: {{ .Release.Namespace }}
+            k8s:app.kubernetes.io/name: triplanner-agent
+            k8s:app.kubernetes.io/instance: {{ .Release.Name }}
+      toPorts:
+        - ports:
+            - port: "{{ .Values.locationsService.service.port }}"
+              protocol: TCP
+            - port: "{{ .Values.locationsService.service.grpcPort }}"
+              protocol: TCP
+    - fromEntities:
+        - host
+      toPorts:
+        - ports:
+            - port: "{{ .Values.locationsService.service.port }}"
+              protocol: TCP
+            - port: "{{ .Values.locationsService.service.grpcPort }}"
+              protocol: TCP
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: {{ .Release.Namespace }}
+            k8s:app.kubernetes.io/name: {{ .Chart.Name }}
+            k8s:app.kubernetes.io/instance: {{ .Release.Name }}
+      toPorts:
+        - ports:
+            - port: "{{ .Values.locationsService.service.port }}"
+              protocol: TCP
+    {{- if .Values.locationsService.rbacProxy.enabled }}
+    - fromEntities:
+        - host
+      toPorts:
+        - ports:
+            - port: "{{ .Values.locationsService.rbacProxy.port }}"
+              protocol: TCP
+    {{- end }}
+    {{ with .Values.networkPolicy.probeCIDRs }}
+    - fromCIDR:
+        {{ range . }}
+        - {{ . | quote }}
+        {{ end }}
+      toPorts:
+        - ports:
+            - port: "3000"
+              protocol: TCP
+            - port: "4100"
+              protocol: TCP
+            - port: "4200"
+              protocol: TCP
+            - port: "4300"
+              protocol: TCP
+            - port: "4400"
+              protocol: TCP
+            - port: "4500"
+              protocol: TCP
+            - port: "50051"
+              protocol: TCP
+            - port: "50052"
+              protocol: TCP
+            - port: "50053"
+              protocol: TCP
+            - port: "5432"
+              protocol: TCP
+            - port: "8080"
+              protocol: TCP
+            - port: "8443"
+              protocol: TCP
+            - port: "27017"
+              protocol: TCP
+    {{ end }}
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: {{ .Release.Namespace }}
+            k8s:app.kubernetes.io/name: triplanner-mongo
+            k8s:app.kubernetes.io/instance: {{ .Release.Name }}
+      toPorts:
+        - ports:
+            - port: "{{ .Values.mongo.service.port }}"
+              protocol: TCP
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: {{ .Release.Namespace }}
+            k8s:app.kubernetes.io/name: triplanner-kafka
+            k8s:app.kubernetes.io/instance: {{ .Release.Name }}
+      toPorts:
+        - ports:
+            - port: "{{ .Values.broker.service.port }}"
+              protocol: TCP
+    {{- if $hasdataHost }}
+    - toFQDNs:
+        - matchName: {{ $hasdataHost | quote }}
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+    {{- end }}
+    {{- range .Values.networkPolicy.locations.extraFQDNs }}
+    - toFQDNs:
+        - matchName: {{ . | quote }}
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+    {{- end }}
+    {{- if .Values.locationsService.rbacProxy.enabled }}
+    - toEntities:
+        - kube-apiserver
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+    {{- end }}
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: {{ .Values.networkPolicy.dns.namespace }}
+            k8s:k8s-app: {{ .Values.networkPolicy.dns.label }}
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: ANY
+          rules:
+            dns:
+              - matchPattern: "*"
+{{- end }}

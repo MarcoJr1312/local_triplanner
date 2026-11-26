@@ -1,92 +1,144 @@
-// Reminder time math. Persistence and the sweep live in pg/reminders.
-// The wall-clock -> UTC conversion uses Intl only (no dependencies).
+// In-app activity reminder dispatcher. Trips owns the schedule/recipients;
+// this facade creates the users-service inbox rows and publishes the live
+// notification. One API replica runs the sweep in the local demo.
 
-export interface ReminderEmailInput {
-  to: string;
-  language?: string | null;
-  tripName: string;
-  itemTitle: string;
-  day: string;
-  startTime: string;
+import type { PubSub } from './resolvers.ts';
+import { toNotificationGql } from './resolvers.ts';
+import type { TripsStore } from './trips/types.ts';
+import type { UsersStore } from './users/types.ts';
+
+export const REMINDER_GRACE_MS = 15 * 60_000;
+
+export interface ReminderSweepDeps {
+  trips: TripsStore;
+  users: UsersStore;
+  pubsub: PubSub;
+  now?: () => Date;
+  log?: (message: string) => void;
 }
 
-const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
-
-// Instant (ms) the wall clock in timeZone would have if read as UTC. Subtracting
-// it from the real instant gives the zone offset.
-function wallClockAsUtcMs(instantMs: number, timeZone: string): number {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone,
-    hourCycle: 'h23',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  }).formatToParts(new Date(instantMs));
-  const value = (type: string): number => {
-    const part = parts.find((p) => p.type === type);
-    return part ? Number(part.value) : NaN;
-  };
-  return Date.UTC(value('year'), value('month') - 1, value('day'), value('hour'), value('minute'), value('second'));
-}
-
-/**
- * Converts a trip wall time (day 'YYYY-MM-DD' + hhmm 'HH:MM') to a UTC ISO
- * instant, resolving the offset with Intl and refining once for DST edges.
- */
-export function wallTimeToUtcIso(dateStr: string, hhmm: string, timeZone: string): string {
-  if (!DATE_RE.test(dateStr)) throw new Error(`Fecha inválida: ${dateStr}`);
-  if (!TIME_RE.test(hhmm)) throw new Error(`Hora inválida: ${hhmm}`);
-  const tz = timeZone?.trim() || 'UTC';
-  const naiveMs = Date.parse(`${dateStr}T${hhmm}:00Z`);
-  if (!Number.isFinite(naiveMs)) throw new Error(`Fecha/hora inválida: ${dateStr} ${hhmm}`);
-
-  const offset = wallClockAsUtcMs(naiveMs, tz) - naiveMs;
-  let instantMs = naiveMs - offset;
-  const refinedOffset = wallClockAsUtcMs(instantMs, tz) - instantMs;
-  if (refinedOffset !== offset) instantMs = naiveMs - refinedOffset;
-  return new Date(instantMs).toISOString();
-}
-
-export type ReminderComputation =
-  | { skip: true; startAt: string }
-  | { skip: false; dueAt: string; startAt: string };
-
-/** due_at = start - 60 min. If less than an hour remains, skip (never send late). */
-export function computeReminderDueAt(
-  dateStr: string,
-  hhmm: string,
-  timeZone: string,
-  now: Date | string = new Date(),
-): ReminderComputation {
-  const startAt = wallTimeToUtcIso(dateStr, hhmm, timeZone);
-  const startMs = Date.parse(startAt);
-  const nowMs = typeof now === 'string' ? Date.parse(now) : now.getTime();
-  const dueAt = new Date(startMs - 60 * 60_000).toISOString();
-  if (!Number.isFinite(nowMs) || Date.parse(dueAt) <= nowMs) return { skip: true, startAt };
-  return { skip: false, dueAt, startAt };
-}
-
-/** Send window: [dueAt, startAt) -> send; >= startAt -> missed. */
-export function shouldSendReminder(dueAt: string, startAt: string, nowIso: string): 'send' | 'missed' | 'wait' {
-  const dueMs = Date.parse(dueAt);
-  const startMs = Date.parse(startAt);
-  const nowMs = Date.parse(nowIso);
-  if (!Number.isFinite(dueMs) || !Number.isFinite(startMs) || !Number.isFinite(nowMs)) return 'wait';
-  if (nowMs >= startMs) return 'missed';
-  if (nowMs >= dueMs) return 'send';
-  return 'wait';
-}
-
-export type ReminderSender = (input: ReminderEmailInput) => Promise<unknown> | unknown;
-
-export interface SweepResult {
-  scanned: number;
-  sent: number;
-  missed: number;
-  skipped: number;
+export interface ReminderSweepResult {
+  due: number;
+  created: number;
+  alreadyPresent: number;
+  expired: number;
   failed: number;
+}
+
+export function reminderDedupeKey(
+  itemId: string,
+  userId: string,
+  dueAt: string,
+): string {
+  return `activity_reminder:${itemId}:${userId}:${dueAt}`;
+}
+
+export async function runReminderSweep(
+  deps: ReminderSweepDeps,
+): Promise<ReminderSweepResult> {
+  const now = deps.now?.() ?? new Date();
+  const log = deps.log ?? ((message: string) => console.warn(message));
+  const result: ReminderSweepResult = {
+    due: 0,
+    created: 0,
+    alreadyPresent: 0,
+    expired: 0,
+    failed: 0,
+  };
+
+  const due = await deps.trips.dueReminders(now.toISOString());
+  result.due = due.length;
+
+  for (const reminder of due) {
+    const dueMs = Date.parse(reminder.due_at);
+    if (!Number.isFinite(dueMs)) continue;
+
+    // Too late: do not send a stale reminder, but stop retrying it.
+    if (now.getTime() - dueMs > REMINDER_GRACE_MS) {
+      await deps.trips.markRemindersSent(reminder.item_id, reminder.recipient_ids);
+      result.expired += reminder.recipient_ids.length;
+      continue;
+    }
+
+    const sent: string[] = [];
+    for (const userId of reminder.recipient_ids) {
+      try {
+        const notification = await deps.users.createReminderNotification({
+          userId,
+          tripId: reminder.trip_id,
+          tripName: reminder.trip_name,
+          itemId: reminder.item_id,
+          itemTitle: reminder.item_title,
+          startAt: reminder.start_at,
+          leadMinutes: reminder.lead_minutes,
+          dedupeKey: reminderDedupeKey(reminder.item_id, userId, reminder.due_at),
+        });
+        if (notification.created) {
+          result.created += 1;
+          deps.pubsub.publish(`notify:${userId}`, {
+            onNotification: toNotificationGql(notification.notification, null),
+          });
+        } else {
+          result.alreadyPresent += 1;
+        }
+        // Mark even when the dedupe row already existed: it was delivered.
+        sent.push(userId);
+      } catch (error) {
+        result.failed += 1;
+        log(
+          `[reminders] could not notify ${userId} for ${reminder.item_id}: ` +
+            (error instanceof Error ? error.message : String(error)),
+        );
+      }
+    }
+
+    if (sent.length > 0) {
+      await deps.trips.markRemindersSent(reminder.item_id, sent);
+    }
+  }
+
+  return result;
+}
+
+export interface ReminderScheduler {
+  stop: () => void;
+  runOnce: () => Promise<ReminderSweepResult | null>;
+}
+
+export function startReminderScheduler(
+  deps: ReminderSweepDeps,
+  intervalMs: number,
+): ReminderScheduler {
+  let running = false;
+  let stopped = false;
+
+  const runOnce = async (): Promise<ReminderSweepResult | null> => {
+    if (running || stopped) return null;
+    running = true;
+    try {
+      return await runReminderSweep(deps);
+    } catch (error) {
+      (deps.log ?? console.warn)(
+        '[reminders] sweep failed: ' +
+          (error instanceof Error ? error.message : String(error)),
+      );
+      return null;
+    } finally {
+      running = false;
+    }
+  };
+
+  const timer = setInterval(() => {
+    void runOnce();
+  }, Math.max(1_000, intervalMs));
+  timer.unref?.();
+  void runOnce();
+
+  return {
+    stop: () => {
+      stopped = true;
+      clearInterval(timer);
+    },
+    runOnce,
+  };
 }

@@ -20,10 +20,10 @@ interface LocationDetailModalProps {
   canEdit?: boolean;
   onClose: () => void;
   onEdit: (item: TripItem) => void;
-  onToggleReminder?: () => void;
+  onOpenReminder?: () => void;
 }
 
-export default function LocationDetailModal({ open, item, tripId, members, canEdit = false, onClose, onEdit, onToggleReminder }: LocationDetailModalProps) {
+export default function LocationDetailModal({ open, item, tripId, members, canEdit = false, onClose, onEdit, onOpenReminder }: LocationDetailModalProps) {
   const { t } = useI18n();
   const [loc, setLoc] = useState<Location | null>(null);
   const [loading, setLoading] = useState(false);
@@ -62,13 +62,10 @@ export default function LocationDetailModal({ open, item, tripId, members, canEd
         : undefined,
   };
   const uberAutoHref = buildUberLink(uberOptions);
-  const reminderOn = item?.reminderEnabled === 1;
-  const reminderDisabled = !item?.startTime || !item?.day;
-  const reminderLabel = reminderDisabled
-    ? t('items.reminderNoTime')
-    : reminderOn
-      ? t('items.reminderAriaOn')
-      : t('items.reminderAriaOff');
+  const reminderOn = Boolean(item?.reminder?.enabled);
+  const reminderLabel = reminderOn
+    ? t('items.reminderAriaOn')
+    : t('items.reminderAriaOff');
 
   const copyAddress = async () => {
     const text = [loc?.name ?? item?.title ?? '', loc?.address ?? ''].filter(Boolean).join('\n');
@@ -207,11 +204,10 @@ export default function LocationDetailModal({ open, item, tripId, members, canEd
       </div>
       <div className="mt-5 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-4">
         <div className="flex flex-wrap items-center gap-2">
-          {item && canEdit && (
+          {item && canEdit && onOpenReminder && (
             <button
               type="button"
-              onClick={onToggleReminder}
-              disabled={reminderDisabled}
+              onClick={onOpenReminder}
               aria-label={reminderLabel}
               title={reminderLabel}
               className={`inline-flex items-center justify-center rounded-xl border border-input p-2 transition duration-150 hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent max-sm:min-h-11 max-sm:min-w-11 ${reminderOn ? 'text-brand-600' : 'text-muted-foreground'}`}

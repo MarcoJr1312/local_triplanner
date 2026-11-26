@@ -1,0 +1,85 @@
+{{- if and .Values.locationsService.enabled .Values.locationsService.rbac.create }}
+{{- if and .Values.locationsService.rbacProxy.enabled (ne .Values.locationsService.rbac.kind "ClusterRole") }}
+{{- fail "locationsService.rbac.kind must be ClusterRole when locationsService.rbacProxy.enabled" }}
+{{- end }}
+{{- $name := include "helm-triplanner.locationsServiceAccountName" . }}
+{{- if eq .Values.locationsService.rbac.kind "ClusterRole" }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ $name }}
+  labels:
+    app.kubernetes.io/name: triplanner-locations
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: locations
+rules:
+{{- if .Values.locationsService.rbacProxy.enabled }}
+  - apiGroups: ["authentication.k8s.io"]
+    resources: ["tokenreviews"]
+    verbs: ["create"]
+  - apiGroups: ["authorization.k8s.io"]
+    resources: ["subjectaccessreviews"]
+    verbs: ["create"]
+{{- end }}
+{{- with .Values.locationsService.rbac.rules }}
+  {{- toYaml . | nindent 2 }}
+{{- end }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ $name }}
+  labels:
+    app.kubernetes.io/name: triplanner-locations
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: locations
+subjects:
+  - kind: ServiceAccount
+    name: {{ $name }}
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ $name }}
+{{- else }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: triplanner-locations
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: locations
+rules:
+{{- if .Values.locationsService.rbacProxy.enabled }}
+  - apiGroups: ["authentication.k8s.io"]
+    resources: ["tokenreviews"]
+    verbs: ["create"]
+  - apiGroups: ["authorization.k8s.io"]
+    resources: ["subjectaccessreviews"]
+    verbs: ["create"]
+{{- end }}
+{{- with .Values.locationsService.rbac.rules }}
+  {{- toYaml . | nindent 2 }}
+{{- end }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: triplanner-locations
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: locations
+subjects:
+  - kind: ServiceAccount
+    name: {{ $name }}
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ $name }}
+{{- end }}
+{{- end }}

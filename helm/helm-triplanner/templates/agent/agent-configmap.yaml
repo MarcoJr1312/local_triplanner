@@ -1,0 +1,27 @@
+{{- if .Values.agentService.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: triplanner-agent-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: triplanner-agent
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: agent
+data:
+  SERVICE_VERSION: {{ .Chart.AppVersion | quote }}
+  POSTGRES_HOST: "triplanner-agent-postgres"
+  POSTGRES_PORT: {{ .Values.agentService.postgres.service.port | quote }}
+  BACKEND_URL: {{ .Values.agentService.backend.url | quote }}
+  LOCATIONS_URL: {{ .Values.agentService.locations.url | quote }}
+  LOCATIONS_TIMEOUT_MS: {{ .Values.agentService.locations.timeoutMs | quote }}
+  BROKER_URL: {{ .Values.agentService.broker.url | quote }}
+  BROKER_TOPIC: {{ .Values.agentService.broker.topic | quote }}
+  BROKER_CONSUMER: {{ .Values.agentService.broker.consumer | quote }}
+  SYNC_INTERVAL_MS: {{ .Values.agentService.sync.intervalMs | quote }}
+  AGENT_MATCH_THRESHOLD: {{ .Values.agentService.sync.matchThreshold | quote }}
+  AGENT_ENRICH_LIMIT: {{ .Values.agentService.sync.enrichLimit | quote }}
+  LLM_PROVIDER: {{ .Values.agentService.llm.provider | quote }}
+  LLM_MODEL: {{ .Values.agentService.llm.model | quote }}
+  LLM_BASE_URL: {{ .Values.agentService.llm.baseUrl | quote }}
+{{- end }}

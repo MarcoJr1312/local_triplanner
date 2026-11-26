@@ -43,12 +43,18 @@ os.environ["DATABASE_URL"] = TEST_URL
 
 from tripsuggest.agent import build_system_prompt  # noqa: E402
 from tripsuggest.auto_suggest import NoInterestsError, build_auto_suggest  # noqa: E402
+from tripsuggest.enrichment import best_score, should_enrich  # noqa: E402
 from tripsuggest.interests import interest_id, mean_vector, normalize_terms  # noqa: E402
 from tripsuggest.vector_store import (  # noqa: E402
     DestinationIndex,
+    apply_snapshot,
+    count_places,
+    delete_location,
     embed_query,
     ensure_indexed,
+    ensure_schema,
     get_pool,
+    get_sync_state,
     get_user_interest_entries,
     get_user_interest_terms,
     interest_boost_places,
@@ -56,6 +62,7 @@ from tripsuggest.vector_store import (  # noqa: E402
     reset_pool,
     set_embedder_for_tests,
     sync_user_interests,
+    upsert_locations,
     user_interest_vector,
 )
 
@@ -73,15 +80,13 @@ def _fake_embedder(texts: Sequence[str]) -> list[list[float]]:
 
 
 def _apply_schema() -> None:
-    sql = SCHEMA_PATH.read_text(encoding="utf-8")
-    with psycopg.connect(TEST_URL, autocommit=True) as conn:
-        conn.execute(sql, prepare=False)
+    ensure_schema()
 
 
 def _reset() -> None:
     with get_pool().connection() as conn:
         conn.execute("DELETE FROM agent_embeddings")
-        conn.execute("DELETE FROM agent_index_state")
+        conn.execute("DELETE FROM agent_sync_state")
 
 
 def _seed_places(count: int = 15) -> list[dict[str, Any]]:
@@ -200,7 +205,7 @@ def test_auto_suggest_pages_scores_and_has_more() -> None:
     destination = ensure_indexed("dest1", _seed_places(15), "hash-15")
     sync_user_interests("u1", ["playa", "surf", "museo"])
 
-    first = build_auto_suggest("u1", destination, 0, 10)
+    first = build_auto_suggest("u1", destination.destination_id, 0, 10)
     assert len(first["items"]) == 10, first
     assert first["hasMore"] is True
     scores = [item["score"] for item in first["items"]]
@@ -208,7 +213,7 @@ def test_auto_suggest_pages_scores_and_has_more() -> None:
     assert all(isinstance(score, int) and 0 <= score <= 100 for score in scores)
     assert all(set(item) == {"placeId", "title", "category", "cost", "score"} for item in first["items"])
 
-    second = build_auto_suggest("u1", destination, 10, 5)
+    second = build_auto_suggest("u1", destination.destination_id, 10, 5)
     assert len(second["items"]) == 5
     assert second["hasMore"] is False
     assert second["items"][0]["score"] <= first["items"][-1]["score"]
@@ -218,7 +223,7 @@ def test_auto_suggest_pages_scores_and_has_more() -> None:
     assert not (first_ids & second_ids)
     assert len(first_ids | second_ids) == 15
 
-    beyond = build_auto_suggest("u1", destination, 15, 5)
+    beyond = build_auto_suggest("u1", destination.destination_id, 15, 5)
     assert beyond == {"items": [], "hasMore": False, "offset": 15}
 
 
@@ -226,7 +231,7 @@ def test_auto_suggest_without_interests_raises() -> None:
     _reset()
     destination = ensure_indexed("dest1", _seed_places(3), "hash-3")
     try:
-        build_auto_suggest("nobody", destination, 0, 10)
+        build_auto_suggest("nobody", destination.destination_id, 0, 10)
     except NoInterestsError:
         pass
     else:  # pragma: no cover - explicit failure path
@@ -270,6 +275,56 @@ def test_destination_index_shape() -> None:
     assert isinstance(index, DestinationIndex)
     assert index.destination_id == "dest1"
     assert index.content_hash == "hash-3"
+
+
+def test_snapshot_sync_versions_and_tombstones() -> None:
+    _reset()
+    places = _seed_places(3)
+    for place in places:
+        place["version"] = 1
+    apply_snapshot(places)
+    assert count_places() == 3
+    assert get_sync_state("bootstrap_complete") == "true"
+
+    # One update, one drop.
+    places[0]["version"] = 2
+    places[0]["name"] = "Updated place"
+    apply_snapshot(places[:2])
+    assert count_places() == 2
+
+    # A stale copy of the dropped row must not resurrect it.
+    stale = dict(places[2])
+    stale["version"] = 1
+    upsert_locations([stale])
+    assert count_places() == 2
+
+    # Delete tombstones; stale upserts are ignored, newer versions resurrect.
+    delete_location(places[0]["id"], 3)
+    assert count_places() == 1
+    upsert_locations([{**places[0], "version": 2}])
+    assert count_places() == 1
+    upsert_locations([{**places[0], "version": 4, "name": "Back again"}])
+    assert count_places() == 2
+
+
+def test_weak_match_enrichment_threshold() -> None:
+    assert best_score([]) == 0
+    assert should_enrich([], 5) is True
+    strong = [{"distance": 0.1} for _ in range(5)]
+    assert best_score(strong) == 90
+    assert should_enrich(strong, 5) is False
+    weak = [{"distance": 0.8} for _ in range(5)]
+    assert should_enrich(weak, 5) is True
+
+
+def test_clearing_interests_removes_all_terms() -> None:
+    _reset()
+    set_embedder_for_tests(_fake_embedder)
+    sync_user_interests("u-empty", ["food", "museums"])
+    assert get_user_interest_terms("u-empty") == ["food", "museums"]
+    sync_user_interests("u-empty", [])
+    assert get_user_interest_terms("u-empty") == []
+    set_embedder_for_tests(None)
 
 
 def test_demo_mode_returns_actionable_blocks() -> None:
@@ -317,6 +372,9 @@ TESTS: list[Callable[[], None]] = [
     test_suggestions_prompt_includes_interests,
     test_reindex_only_when_hash_changes,
     test_destination_index_shape,
+    test_snapshot_sync_versions_and_tombstones,
+    test_weak_match_enrichment_threshold,
+    test_clearing_interests_removes_all_terms,
     test_demo_mode_returns_actionable_blocks,
 ]
 

@@ -1,0 +1,24 @@
+{{- if and .Values.metrics.enabled .Values.metrics.dashboards.enabled }}
+{{- $root := . }}
+{{- range $name := list "overview" "api" "users" "trips" "locations" "agent" "email" "broker" "web" "postgres" "mongodb" }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: triplanner-{{ $name }}-dashboard
+  namespace: {{ $root.Release.Namespace }}
+  labels:
+    grafana_dashboard: "1"
+    app.kubernetes.io/name: triplanner-{{ $name }}
+    app.kubernetes.io/instance: {{ $root.Release.Name }}
+    app.kubernetes.io/component: monitoring
+    {{- with $root.Values.metrics.dashboards.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  annotations:
+    grafana_folder: {{ $root.Values.metrics.dashboards.folder | quote }}
+data:
+  {{ $name }}.json: |-
+    {{ $root.Files.Get (printf "dashboards/%s.json" $name) | nindent 4 }}
+{{- end }}
+{{- end }}

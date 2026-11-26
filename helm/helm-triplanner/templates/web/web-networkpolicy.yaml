@@ -1,0 +1,109 @@
+{{- if and .Values.webService.enabled .Values.networkPolicy.enabled }}
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: triplanner-web
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: triplanner-web
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: web
+spec:
+  endpointSelector:
+    matchLabels:
+      k8s:io.kubernetes.pod.namespace: {{ .Release.Namespace }}
+      k8s:app.kubernetes.io/name: triplanner-web
+      k8s:app.kubernetes.io/instance: {{ .Release.Name }}
+  ingress:
+    {{- include "helm-triplanner.monitoringIngress" (dict "root" . "port" .Values.webService.service.port) | nindent 4 }}
+    # Cilium Gateway traffic carries the special "ingress" identity; host
+    # covers kubelet probes and the kube-rbac-proxy port-forward path.
+    - fromEntities:
+        - ingress
+        - host
+      toPorts:
+        - ports:
+            - port: "{{ .Values.webService.service.port }}"
+              protocol: TCP
+    {{- range .Values.webService.networkPolicy.probeCIDRs }}
+    - fromCIDR:
+        - {{ . | quote }}
+      toPorts:
+        - ports:
+            - port: "{{ .Values.webService.service.port }}"
+              protocol: TCP
+    {{- end }}
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: {{ .Release.Namespace }}
+            k8s:app.kubernetes.io/name: {{ .Chart.Name }}
+            k8s:app.kubernetes.io/instance: {{ .Release.Name }}
+      toPorts:
+        - ports:
+            - port: "{{ .Values.webService.service.port }}"
+              protocol: TCP
+    {{ with .Values.networkPolicy.probeCIDRs }}
+    - fromCIDR:
+        {{ range . }}
+        - {{ . | quote }}
+        {{ end }}
+      toPorts:
+        - ports:
+            - port: "3000"
+              protocol: TCP
+            - port: "4100"
+              protocol: TCP
+            - port: "4200"
+              protocol: TCP
+            - port: "4300"
+              protocol: TCP
+            - port: "4400"
+              protocol: TCP
+            - port: "4500"
+              protocol: TCP
+            - port: "50051"
+              protocol: TCP
+            - port: "50052"
+              protocol: TCP
+            - port: "50053"
+              protocol: TCP
+            - port: "5432"
+              protocol: TCP
+            - port: "8080"
+              protocol: TCP
+            - port: "8443"
+              protocol: TCP
+            - port: "27017"
+              protocol: TCP
+    {{ end }}
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: {{ .Release.Namespace }}
+            k8s:app.kubernetes.io/name: triplanner-api
+            k8s:app.kubernetes.io/instance: {{ .Release.Name }}
+      toPorts:
+        - ports:
+            - port: "{{ .Values.apiService.service.port }}"
+              protocol: TCP
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: {{ .Release.Namespace }}
+            k8s:app.kubernetes.io/name: triplanner-agent
+            k8s:app.kubernetes.io/instance: {{ .Release.Name }}
+      toPorts:
+        - ports:
+            - port: "{{ .Values.agentService.service.port }}"
+              protocol: TCP
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: {{ .Values.networkPolicy.dns.namespace }}
+            k8s:k8s-app: {{ .Values.networkPolicy.dns.label }}
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: ANY
+          rules:
+            dns:
+              - matchPattern: "*"
+{{- end }}

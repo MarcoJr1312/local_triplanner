@@ -1,0 +1,28 @@
+{{- if .Values.tripsService.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: triplanner-trips-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: triplanner-trips
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: trips
+data:
+  SERVICE_VERSION: {{ .Chart.AppVersion | quote }}
+  PORT: {{ .Values.tripsService.service.port | quote }}
+  GRPC_PORT: {{ .Values.tripsService.service.grpcPort | quote }}
+  POSTGRES_HOST: "triplanner-trips-postgres"
+  POSTGRES_PORT: {{ .Values.tripsService.postgres.service.port | quote }}
+  DB_CONNECT_ATTEMPTS: "60"
+  DB_CONNECT_DELAY_MS: "500"
+  LOCATIONS_URL: {{ .Values.tripsService.locations.url | quote }}
+  LOCATIONS_TIMEOUT_MS: {{ .Values.tripsService.locations.timeoutMs | quote }}
+  BROKER_URL: {{ .Values.tripsService.broker.url | quote }}
+  BROKER_TOPIC: {{ .Values.tripsService.broker.topic | quote }}
+  BROKER_TIMEOUT_MS: {{ .Values.tripsService.broker.timeoutMs | quote }}
+  OUTBOX_INTERVAL_MS: {{ .Values.tripsService.outbox.intervalMs | quote }}
+  OUTBOX_BATCH_SIZE: {{ .Values.tripsService.outbox.batchSize | quote }}
+  OUTBOX_MAX_ATTEMPTS: {{ .Values.tripsService.outbox.maxAttempts | quote }}
+  SEED_DEMO: {{ .Values.tripsService.seedDemo | quote }}
+{{- end }}

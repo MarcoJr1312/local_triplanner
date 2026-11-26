@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { AlertTriangle, Check, ImagePlus, LogOut, Trash2 } from 'lucide-react';
 import { api, localizeApiError } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
+import { normalizeDateRange } from '@/lib/format';
 import { useAuth } from '@/hooks/useAuth';
 import type { Trip } from '@/lib/types';
 import { cn } from '@/lib/utils';
@@ -53,10 +54,24 @@ export default function SettingsModal({ open, trip, onClose }: SettingsModalProp
 
   const isOwner = user?.userId === trip.ownerId;
 
+  const handleStartDate = (value: string) => {
+    const next = normalizeDateRange(value, endDate);
+    setStartDate(next.start);
+    setEndDate(next.end);
+  };
+
+  const handleEndDate = (value: string) => {
+    if (!value) {
+      setEndDate('');
+      return;
+    }
+    setEndDate(startDate && value < startDate ? startDate : value);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    if (startDate > endDate) {
+    if (!startDate || !endDate || startDate > endDate) {
       setError(t('errors.invalidDateRange'));
       return;
     }
@@ -187,7 +202,7 @@ export default function SettingsModal({ open, trip, onClose }: SettingsModalProp
                 id="settings-start"
                 type="date"
                 value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
+                onChange={(e) => handleStartDate(e.target.value)}
                 className="h-11 w-full appearance-none rounded-xl border border-input bg-background px-3.5 text-base outline-none md:text-sm transition duration-150 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
               />
             </div>
@@ -199,7 +214,8 @@ export default function SettingsModal({ open, trip, onClose }: SettingsModalProp
                 id="settings-end"
                 type="date"
                 value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
+                min={startDate}
+                onChange={(e) => handleEndDate(e.target.value)}
                 className="h-11 w-full appearance-none rounded-xl border border-input bg-background px-3.5 text-base outline-none md:text-sm transition duration-150 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
               />
             </div>

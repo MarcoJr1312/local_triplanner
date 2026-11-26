@@ -1,0 +1,17 @@
+{{- if and .Values.emailService.enabled .Values.emailService.persistence.enabled (not .Values.emailService.persistence.existingClaim) }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: triplanner-email-settings
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: triplanner-email
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: email
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.emailService.persistence.size }}
+{{- end }}

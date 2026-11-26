@@ -2,8 +2,8 @@
 # Usage: powershell -ExecutionPolicy Bypass -File scripts/smoke.ps1
 $ErrorActionPreference = 'Stop'
 $Base = if ($env:WEB_URL) { $env:WEB_URL.TrimEnd('/') } else { 'http://localhost:3000' }
-$HeadersUser = @{ 'x-user-id' = 'demo-user'; 'Content-Type' = 'application/json' }
-$HeadersFriend = @{ 'x-user-id' = 'demo-friend'; 'Content-Type' = 'application/json' }
+$HeadersUser = @{ 'x-user-id' = '11111111-1111-4111-8111-111111111111'; 'Content-Type' = 'application/json' }
+$HeadersFriend = @{ 'x-user-id' = '22222222-2222-4222-8222-222222222222'; 'Content-Type' = 'application/json' }
 
 function Fail([string]$Message) {
   Write-Host "FAIL: $Message" -ForegroundColor Red
@@ -16,7 +16,7 @@ function Pass([string]$Message) {
 
 Write-Host "Smoke test against $Base"
 
-foreach ($svc in @('postgres', 'mongo', 'api', 'agent', 'web')) {
+foreach ($svc in @('postgres', 'trips-postgres', 'users-postgres', 'mongo', 'locations', 'trips', 'users', 'api', 'agent', 'web')) {
   $name = "local_triplanner-$svc"
   $status = docker inspect --format '{{.State.Health.Status}}' $name 2>$null
   if ($status -ne 'healthy') { Fail "$name is '$status'" }
@@ -26,16 +26,34 @@ $login = Invoke-WebRequest -Uri "$Base/login" -UseBasicParsing
 if ($login.StatusCode -ne 200) { Fail "GET /login -> $($login.StatusCode)" }
 Pass "web /login"
 
-$profileBody = @{ query = 'query { getMyProfile { userId email displayName } }' } | ConvertTo-Json
+$profileBody = @{ query = 'query { getMyProfile { userId username email displayName } }' } | ConvertTo-Json
 $profile = Invoke-RestMethod -Uri "$Base/api/graphql" -Method Post -Headers $HeadersFriend -Body $profileBody
-if ($profile.data.getMyProfile.userId -ne 'demo-friend') { Fail "demo-friend profile" }
+if ($profile.data.getMyProfile.userId -ne '22222222-2222-4222-8222-222222222222') { Fail "demo-friend profile" }
 Pass "GraphQL profile via web proxy"
 
-$searchBody = @{ query = 'query { searchLocations(q: "CN Tower") { id name imageUrl } }' } | ConvertTo-Json
+$loginBody = @{ query = 'mutation { login(username: "demo", password: "demo123") { userId username } }' } | ConvertTo-Json
+$login = Invoke-RestMethod -Uri "$Base/api/graphql" -Method Post -Headers $HeadersUser -Body $loginBody
+if ($login.data.login.userId -ne '11111111-1111-4111-8111-111111111111') { Fail "users login" }
+Pass "users service login via web proxy"
+
+$searchBody = @{ query = 'query { searchLocations(q: "CN Tower") { id name placeId imageUrl } }' } | ConvertTo-Json
 $search = Invoke-RestMethod -Uri "$Base/api/graphql" -Method Post -Headers $HeadersUser -Body $searchBody
 $items = @($search.data.searchLocations)
 if ($items.Count -lt 1) { Fail "search returned no places" }
 Pass "Toronto place search ($($items.Count) results)"
+
+$activitiesBody = @{ query = 'query { listActivities(destSlug: "toronto", category: "food") { id name } }' } | ConvertTo-Json
+$activities = Invoke-RestMethod -Uri "$Base/api/graphql" -Method Post -Headers $HeadersUser -Body $activitiesBody
+if (@($activities.data.listActivities).Count -lt 1) { Fail "activities returned no places" }
+Pass "Toronto activities"
+
+$placeId = ($items | Where-Object { $_.placeId } | Select-Object -First 1).placeId
+if ($placeId) {
+  $detailsBody = @{ query = "query { locationDetails(placeId: `"$placeId`") { id name } }" } | ConvertTo-Json
+  $details = Invoke-RestMethod -Uri "$Base/api/graphql" -Method Post -Headers $HeadersUser -Body $detailsBody
+  if (-not $details.data.locationDetails.id) { Fail "location details empty" }
+  Pass "location details"
+}
 
 $imageItem = $items | Where-Object { $_.imageUrl } | Select-Object -First 1
 if ($imageItem) {

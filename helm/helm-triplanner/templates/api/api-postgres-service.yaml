@@ -1,0 +1,21 @@
+{{- if and .Values.apiService.enabled .Values.apiService.postgres.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: triplanner-api-postgres
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: triplanner-api-postgres
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: api-postgres
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: triplanner-api-postgres
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  ports:
+    - name: postgres
+      port: {{ .Values.apiService.postgres.service.port }}
+      targetPort: postgres
+      protocol: TCP
+{{- end }}

@@ -9,34 +9,15 @@ export type { AsyncDb as Db } from './pg/db.ts';
 
 export interface UserRow {
   id: string;
-  email: string;
+  username?: string | null;
+  email: string | null;
+  password_hash?: string | null;
   display_name: string;
   color: string | null;
   avatar_url: string | null;
   language: string;
   created_at: string;
-}
-
-export interface TripRow {
-  id: string;
-  name: string;
-  description: string | null;
-  start_date: string | null;
-  end_date: string | null;
-  cover_image_url: string | null;
-  cover_preset: string | null;
-  cover_photo_url: string | null;
-  created_at: string;
-  updated_at: string;
-  owner_id: string;
-  status: string;
-  currency: string;
-  destination_id: string | null;
-  destination_name?: string | null;
-  destination_lat?: number | null;
-  destination_lng?: number | null;
-  total_budget: number | null;
-  timezone: string;
+  deleted_at?: string | null;
 }
 
 export interface LocationRow {
@@ -70,70 +51,31 @@ export interface LocationRow {
   expires_at?: number | null;
 }
 
-export interface TripItemRow {
-  id: string;
-  trip_id: string;
-  title: string;
-  category: string;
-  start_time: string | null;
-  end_time: string | null;
-  location_id: string | null;
-  location_text: string | null;
-  location_name: string | null;
-  location_address: string | null;
-  cost: number | null;
-  notes: string | null;
-  day_number: number | null;
-  reminder_enabled: number;
-  reminder_sent: number;
-  reminder_due_at: string | null;
-  created_at: string;
-}
-
-export interface TripMemberRow {
-  trip_id: string;
-  user_id: string;
-  role: string;
-  joined_at: string | null;
-}
-
-export interface PresenceRow {
-  trip_id: string;
-  user_id: string;
-  last_seen_at: string;
-}
-
-export interface SuggestionRow {
-  id: string;
-  trip_id: string;
-  title: string;
-  category: string;
-  reason: string;
-  price_level: number | null;
-  created_at: string;
-}
-
 export interface InvitationRow {
   id: string;
   trip_id: string;
-  email: string;
-  code: string;
+  email: string | null;
+  code: string | null;
   role: 'owner' | 'editor' | 'viewer';
-  status: 'pending' | 'accepted' | 'revoked';
+  status: 'pending' | 'accepted' | 'declined' | 'revoked';
   created_by: string;
   created_at: string;
   accepted_at: string | null;
+  channel: 'email' | 'local';
+  invitee_user_id: string | null;
 }
 
 // ---- Tipos GraphQL (camelCase, lo que devuelven los resolvers) ----
 
 export interface Profile {
   userId: string;
-  email: string;
+  username: string;
+  email: string | null;
   displayName: string;
   color?: string | null;
   avatarUrl?: string | null;
   language?: string | null;
+  deletedAt?: string | null;
 }
 
 export interface Destination {
@@ -160,7 +102,6 @@ export interface TripItem {
   cost: number | null;
   notes: string | null;
   dayNumber: number | null;
-  reminderEnabled?: number;
   createdAt: string;
 }
 
@@ -168,6 +109,7 @@ export interface TripMember {
   userId: string;
   displayName: string | null;
   email: string | null;
+  invitedEmail: string | null;
   role: string;
 }
 

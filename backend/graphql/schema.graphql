@@ -10,15 +10,12 @@ type Query {
   listDestinations: [Destination!]!
   listActivities(destSlug: String!, category: String): [Activity!]!
   listPresence(tripId: ID!): [Presence!]!
-  findUserByEmail(email: String!): UserProfile
 }
 
 type Mutation {
-  registerUser(input: RegisterUserInput!): UserProfile!
   createTrip(input: CreateTripInput!): Trip!
   updateTripSettings(id: ID!, input: UpdateTripSettingsInput!): Trip!
   setBudget(tripId: ID!, totalBudget: Float!): Trip!
-  inviteMember(tripId: ID!, userId: String!, email: String!, displayName: String!, role: MemberRole!): Trip!
   updateMemberRole(tripId: ID!, userId: String!, role: MemberRole!): Trip!
   removeMember(tripId: ID!, userId: String!): Trip!
   leaveTrip(tripId: ID!, newOwnerId: ID): Trip!
@@ -78,7 +75,8 @@ type TripSummary {
 type Member {
   userId: ID!
   displayName: String!
-  email: String!
+  email: String
+  invitedEmail: String
   role: MemberRole!
   joinedAt: AWSDateTime!
 }
@@ -128,8 +126,9 @@ type Activity {
 
 type UserProfile {
   userId: ID!
-  email: String!
+  email: String
   displayName: String!
+  deletedAt: AWSDateTime
 }
 
 type Presence {
@@ -159,10 +158,6 @@ type TripEvent {
   mutationType: String!
   entity: AWSJSON!
   actorId: String!
-}
-
-input RegisterUserInput {
-  displayName: String!
 }
 
 input CreateTripInput {

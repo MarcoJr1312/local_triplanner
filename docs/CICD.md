@@ -6,9 +6,12 @@ Each service has its own workflow and test command.
 
 | Workflow | Service | Tests | Docker image |
 |---|---|---|---|
-| `web.yml` | Next.js frontend | `bun audit` + `bun test` (`geolocation`, `uberLink`) | `triplanner-web` |
+| `web.yml` | Next.js frontend | `bun audit` + `bun test` | `triplanner-web` |
 | `api.yml` | Bun GraphQL API | `bun audit` + all `backend/server/test/*.test.ts` (Postgres + MongoDB) | `triplanner-api` |
 | `agent.yml` | FastAPI agent | `pip-audit` + `tests/test_m2.py` + `tests/test_settings.py` (Postgres + pgvector) | `triplanner-agent` |
+| `locations.yml` | Locations service | `bun audit` + `bun test` (MongoDB) | `triplanner-locations` |
+| `trips.yml` | Trips service | `bun audit` + `bun test` (PostgreSQL) | `triplanner-trips` |
+| `users.yml` | Users service | `bun audit` + `bun test` (PostgreSQL, including the UUID migration) | `triplanner-users` |
 | `compose-smoke.yml` | Full stack | builds all images, boots Compose, runs `scripts/smoke.sh` | no push |
 
 Every test job audits its dependencies before running the tests:
@@ -37,6 +40,10 @@ Path filters keep each workflow scoped to its service files.
   - `marcojr13/triplanner-web`
   - `marcojr13/triplanner-api`
   - `marcojr13/triplanner-agent`
+  - `marcojr13/triplanner-locations`
+  - `marcojr13/triplanner-trips`
+  - `marcojr13/triplanner-users` (new: first publish is M10.14)
+  - `marcojr13/triplanner-email`
 - Published tags: `latest` (current `main`), `1.2`, `1.2.2`, `sha-3e15bed`
   and `sha-4e009c3` (plus the older release tags).
 - Architectures: `linux/amd64`, `linux/arm64`.
@@ -94,7 +101,7 @@ All published images are multi-arch: `linux/amd64` and `linux/arm64`.
 ## Run the published images
 
 ```bash
-docker compose -f docker-compose.hub.yml up -d
+docker compose -f deploy/docker-compose.hub.yml up -d
 ```
 
 The file defaults to `DOCKERHUB_USERNAME=marcojr13` and `IMAGE_TAG=latest`.
@@ -102,7 +109,7 @@ Override them for a fork or a pinned version:
 
 ```bash
 DOCKERHUB_USERNAME=youruser IMAGE_TAG=1.2.2 \
-  docker compose -f docker-compose.hub.yml up -d
+  docker compose -f deploy/docker-compose.hub.yml up -d
 ```
 
 Open http://localhost:3000/login.
@@ -122,7 +129,7 @@ The API container runs migrations and the idempotent seed on every start, so a
 fresh volume is ready in one command.
 
 > Container names are fixed (`local_triplanner-*`). Stop the source-build stack
-> (`docker compose down`) before starting the Docker Hub stack.
+> (`docker compose -f deploy/docker-compose.yml down`) before starting the Docker Hub stack.
 
 ## Release flow
 

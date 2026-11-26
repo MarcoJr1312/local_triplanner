@@ -1,0 +1,286 @@
+# Run the published Docker Hub images (no local build):
+#   DOCKERHUB_USERNAME=youruser IMAGE_TAG=latest docker compose -f deploy/docker-compose.hub.yml up -d
+# The source-build stack lives in deploy/docker-compose.yml.
+name: local_triplanner
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    container_name: local_triplanner-postgres
+    environment:
+      POSTGRES_USER: triplanner
+      POSTGRES_PASSWORD: triplanner
+      POSTGRES_DB: triplanner
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U triplanner -d triplanner"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  trips-postgres:
+    image: postgres:17
+    container_name: local_triplanner-trips-postgres
+    environment:
+      POSTGRES_USER: ${TRIPS_POSTGRES_USER:-trips}
+      POSTGRES_PASSWORD: ${TRIPS_POSTGRES_PASSWORD:-trips}
+      POSTGRES_DB: ${TRIPS_POSTGRES_DB:-trips}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - tripspgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${TRIPS_POSTGRES_USER:-trips} -d ${TRIPS_POSTGRES_DB:-trips}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  users-postgres:
+    image: postgres:17
+    container_name: local_triplanner-users-postgres
+    environment:
+      POSTGRES_USER: ${USERS_POSTGRES_USER:-users}
+      POSTGRES_PASSWORD: ${USERS_POSTGRES_PASSWORD:-users}
+      POSTGRES_DB: ${USERS_POSTGRES_DB:-users}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - userspgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${USERS_POSTGRES_USER:-users} -d ${USERS_POSTGRES_DB:-users}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  mongo:
+    image: mongo:7
+    container_name: local_triplanner-mongo
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USERNAME:-triplanner}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-triplanner}
+    ports:
+      - "127.0.0.1:${MONGO_PORT:-27017}:27017"
+    volumes:
+      - mongodata:/data/db
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet -u \"$$MONGO_INITDB_ROOT_USERNAME\" -p \"$$MONGO_INITDB_ROOT_PASSWORD\" --authenticationDatabase admin --eval 'db.adminCommand({ping:1}).ok'"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  kafka:
+    image: ${DOCKERHUB_USERNAME:-marcojr13}/triplanner-kafka:${KAFKA_IMAGE_TAG:-0.1.0}
+    container_name: local_triplanner-kafka
+    pull_policy: always
+    environment:
+      BROKER_ADDR: ":8080"
+      BROKER_DB: /data/broker.db
+    volumes:
+      - kafkadata:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/health >/dev/null"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  agent-postgres:
+    image: pgvector/pgvector:pg17
+    container_name: local_triplanner-agent-postgres
+    environment:
+      POSTGRES_USER: ${AGENT_POSTGRES_USER:-agent}
+      POSTGRES_PASSWORD: ${AGENT_POSTGRES_PASSWORD:-agent}
+      POSTGRES_DB: ${AGENT_POSTGRES_DB:-agent}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - agentpgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${AGENT_POSTGRES_USER:-agent} -d ${AGENT_POSTGRES_DB:-agent}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  locations:
+    image: ${DOCKERHUB_USERNAME:-marcojr13}/triplanner-locations:${LOCATIONS_IMAGE_TAG:-1.7.0}
+    container_name: local_triplanner-locations
+    pull_policy: always
+    environment:
+      NODE_ENV: production
+      PORT: "4300"
+      MONGODB_HOST: mongo:27017
+      MONGODB_DB: triplanner
+      MONGODB_COLLECTION: locations
+      MONGODB_USERNAME: ${MONGO_USERNAME:-triplanner}
+      MONGODB_PASSWORD: ${MONGO_PASSWORD:-triplanner}
+      MONGODB_AUTH_SOURCE: admin
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:-dev-internal-token}
+      SEED_CATALOGUE: "true"
+      SETTINGS_FILE: /app/.data/locations.json
+      HASDATA_CACHE_TTL_HOURS: "120"
+      BROKER_URL: http://kafka:8080
+      BROKER_TOPIC: LocationChanged
+      OUTBOX_INTERVAL_MS: "1000"
+      OUTBOX_BATCH_SIZE: "50"
+    volumes:
+      - locationsdata:/app/.data
+    depends_on:
+      kafka:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+    restart: unless-stopped
+
+  trips:
+    image: ${DOCKERHUB_USERNAME:-marcojr13}/triplanner-trips:${IMAGE_TAG:-latest}
+    container_name: local_triplanner-trips
+    pull_policy: always
+    environment:
+      NODE_ENV: production
+      PORT: "4400"
+      POSTGRES_HOST: trips-postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: ${TRIPS_POSTGRES_DB:-trips}
+      POSTGRES_USER: ${TRIPS_POSTGRES_USER:-trips}
+      POSTGRES_PASSWORD: ${TRIPS_POSTGRES_PASSWORD:-trips}
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:-dev-internal-token}
+      LOCATIONS_URL: http://locations:4300
+      BROKER_URL: http://kafka:8080
+      BROKER_TOPIC: TripInvitation
+      OUTBOX_INTERVAL_MS: "1000"
+      SEED_DEMO: "true"
+    depends_on:
+      trips-postgres:
+        condition: service_healthy
+      locations:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    restart: unless-stopped
+
+  api:
+    image: ${DOCKERHUB_USERNAME:-marcojr13}/triplanner-api:${IMAGE_TAG:-latest}
+    container_name: local_triplanner-api
+    pull_policy: always
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgres://triplanner:triplanner@postgres:5432/triplanner
+      LOCATIONS_URL: http://locations:4300
+      APP_URL: http://localhost:${WEB_PORT:-3000}
+      LOCAL_PORT: "4000"
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:-dev-internal-token}
+      AGENT_BASE_URL: http://agent:4100
+      BOOTSTRAP_LOCAL: "1"
+      TRIPS_URL: http://trips:4400
+      TRIPS_TIMEOUT_MS: "5000"
+      USERS_URL: http://users:4500
+      USERS_TIMEOUT_MS: "3000"
+      BROKER_URL: http://kafka:8080
+      BROKER_TOPIC: TripInvitation
+    volumes:
+      - uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      locations:
+        condition: service_healthy
+      trips:
+        condition: service_healthy
+      users:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    command: ["sh", "-c", "bun run db:migrate && bun run db:seed && bun src/index.ts"]
+    restart: unless-stopped
+
+  users:
+    image: ${DOCKERHUB_USERNAME:-marcojr13}/triplanner-users:${USERS_IMAGE_TAG:-1.7.0}
+    container_name: local_triplanner-users
+    pull_policy: always
+    environment:
+      NODE_ENV: production
+      PORT: "4500"
+      POSTGRES_HOST: users-postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: ${USERS_POSTGRES_DB:-users}
+      POSTGRES_USER: ${USERS_POSTGRES_USER:-users}
+      POSTGRES_PASSWORD: ${USERS_POSTGRES_PASSWORD:-users}
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:-dev-internal-token}
+      SEED_DEMO: "true"
+    depends_on:
+      users-postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  agent:
+    image: ${DOCKERHUB_USERNAME:-marcojr13}/triplanner-agent:${IMAGE_TAG:-latest}
+    container_name: local_triplanner-agent
+    pull_policy: always
+    environment:
+      POSTGRES_HOST: agent-postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: ${AGENT_POSTGRES_DB:-agent}
+      POSTGRES_USER: ${AGENT_POSTGRES_USER:-agent}
+      POSTGRES_PASSWORD: ${AGENT_POSTGRES_PASSWORD:-agent}
+      BACKEND_URL: http://api:4000
+      LOCATIONS_URL: http://locations:4300
+      LOCATIONS_TIMEOUT_MS: "8000"
+      BROKER_URL: http://kafka:8080
+      BROKER_TOPIC: LocationChanged
+      BROKER_CONSUMER: agent-locations
+      SYNC_INTERVAL_MS: "300000"
+      AGENT_MATCH_THRESHOLD: "60"
+      AGENT_ENRICH_LIMIT: "20"
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:-dev-internal-token}
+      LLM_PROVIDER: ${LLM_PROVIDER:-none}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_MODEL: ${LLM_MODEL:-}
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+    volumes:
+      - agentdata:/app/.data
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      agent-postgres:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+      locations:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    restart: unless-stopped
+
+  web:
+    image: ${DOCKERHUB_USERNAME:-marcojr13}/triplanner-web:${IMAGE_TAG:-latest}
+    container_name: local_triplanner-web
+    pull_policy: always
+    environment:
+      NEXT_PRIVATE_BACKEND_URL: http://api:4000/graphql
+      NEXT_PRIVATE_BACKEND_ORIGIN: http://api:4000
+      NEXT_PRIVATE_AGENT_URL: http://agent:4100
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+      agent:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  tripspgdata:
+  userspgdata:
+  agentpgdata:
+  kafkadata:
+  mongodata:
+  uploads:
+  agentdata:
+  locationsdata:

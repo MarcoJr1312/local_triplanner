@@ -1,0 +1,127 @@
+{{- if .Values.broker.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: triplanner-kafka
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: triplanner-kafka
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: broker
+spec:
+  replicas: {{ .Values.broker.replicaCount | default 1 }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: triplanner-kafka
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: triplanner-kafka
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: broker
+        {{- with .Values.broker.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/broker/broker-configmap.yaml") . | sha256sum }}
+        {{- with .Values.broker.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "helm-triplanner.brokerServiceAccountName" . }}
+      automountServiceAccountToken: {{ if .Values.broker.rbacProxy.enabled }}true{{ else }}{{ .Values.broker.serviceAccount.automount }}{{ end }}
+      terminationGracePeriodSeconds: 30
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.broker.podSecurityContext | nindent 8 }}
+      containers:
+        - name: broker
+          image: "{{ required "images.broker.name is required" .Values.images.broker.name }}:{{ required "images.broker.tag is required" .Values.images.broker.tag }}"
+          imagePullPolicy: {{ .Values.images.broker.pullPolicy | default "IfNotPresent" }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.broker.service.port }}
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: triplanner-kafka-config
+          volumeMounts:
+            - name: broker-data
+              mountPath: {{ .Values.broker.persistence.mountPath | default "/data" }}
+            - name: tmp
+              mountPath: /tmp
+          livenessProbe:
+            {{- toYaml .Values.broker.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml .Values.broker.readinessProbe | nindent 12 }}
+          resources:
+            {{- toYaml .Values.broker.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.broker.securityContext | nindent 12 }}
+        {{- if .Values.broker.rbacProxy.enabled }}
+        - name: kube-rbac-proxy
+          image: "{{ .Values.broker.rbacProxy.image.repository }}:{{ .Values.broker.rbacProxy.image.tag }}"
+          imagePullPolicy: {{ .Values.broker.rbacProxy.image.pullPolicy | default "IfNotPresent" }}
+          args:
+            - --insecure-listen-address=0.0.0.0:{{ .Values.broker.rbacProxy.port }}
+            - --upstream=http://127.0.0.1:{{ .Values.broker.service.port }}/
+            - --config-file=/etc/kube-rbac-proxy/config-file.yaml
+          ports:
+            - name: rbac-proxy
+              containerPort: {{ .Values.broker.rbacProxy.port }}
+              protocol: TCP
+          volumeMounts:
+            - name: rbac-proxy-config
+              mountPath: /etc/kube-rbac-proxy
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+          livenessProbe:
+            tcpSocket:
+              port: rbac-proxy
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            tcpSocket:
+              port: rbac-proxy
+            initialDelaySeconds: 3
+            periodSeconds: 5
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.broker.rbacProxy.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.broker.rbacProxy.securityContext | nindent 12 }}
+        {{- end }}
+      volumes:
+        - name: broker-data
+          {{- if .Values.broker.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ .Values.broker.persistence.existingClaim | default "triplanner-kafka-data" }}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        - name: tmp
+          emptyDir: {}
+        {{- if .Values.broker.rbacProxy.enabled }}
+        - name: rbac-proxy-config
+          configMap:
+            name: triplanner-kafka-rbac-proxy
+        {{- end }}
+      {{- with .Values.broker.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.broker.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.broker.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

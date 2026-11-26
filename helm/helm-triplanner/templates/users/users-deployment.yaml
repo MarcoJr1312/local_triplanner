@@ -1,0 +1,143 @@
+{{- if .Values.usersService.enabled }}
+{{- $tokenSecret := required "usersService.internalToken.existingSecret is required" .Values.usersService.internalToken.existingSecret }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: triplanner-users
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: triplanner-users
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: users
+spec:
+  replicas: {{ .Values.usersService.replicaCount | default 1 }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: triplanner-users
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: triplanner-users
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: users
+        {{- with .Values.usersService.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/users/users-configmap.yaml") . | sha256sum }}
+        {{- with .Values.usersService.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "helm-triplanner.usersServiceAccountName" . }}
+      automountServiceAccountToken: {{ if .Values.usersService.rbacProxy.enabled }}true{{ else }}{{ .Values.usersService.serviceAccount.automount }}{{ end }}
+      terminationGracePeriodSeconds: 30
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.usersService.podSecurityContext | nindent 8 }}
+      containers:
+        - name: users
+          image: "{{ .Values.images.users.name }}:{{ .Values.images.users.tag }}"
+          imagePullPolicy: {{ .Values.images.users.pullPolicy | default "IfNotPresent" }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.usersService.service.port }}
+              protocol: TCP
+            - name: grpc
+              containerPort: {{ .Values.usersService.service.grpcPort }}
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: triplanner-users-config
+          env:
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "helm-triplanner.usersPostgresSecretName" . }}
+                  key: {{ .Values.usersService.postgres.auth.databaseKey }}
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "helm-triplanner.usersPostgresSecretName" . }}
+                  key: {{ .Values.usersService.postgres.auth.usernameKey }}
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "helm-triplanner.usersPostgresSecretName" . }}
+                  key: {{ .Values.usersService.postgres.auth.passwordKey }}
+            - name: INTERNAL_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $tokenSecret }}
+                  key: {{ .Values.usersService.internalToken.key }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+          livenessProbe:
+            {{- toYaml .Values.usersService.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml .Values.usersService.readinessProbe | nindent 12 }}
+          resources:
+            {{- toYaml .Values.usersService.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.usersService.securityContext | nindent 12 }}
+        {{- if .Values.usersService.rbacProxy.enabled }}
+        - name: kube-rbac-proxy
+          image: "{{ .Values.usersService.rbacProxy.image.repository }}:{{ .Values.usersService.rbacProxy.image.tag }}"
+          imagePullPolicy: {{ .Values.usersService.rbacProxy.image.pullPolicy | default "IfNotPresent" }}
+          args:
+            - --insecure-listen-address=0.0.0.0:{{ .Values.usersService.rbacProxy.port }}
+            - --upstream=http://127.0.0.1:{{ .Values.usersService.service.port }}/
+            - --config-file=/etc/kube-rbac-proxy/config-file.yaml
+          ports:
+            - name: rbac-proxy
+              containerPort: {{ .Values.usersService.rbacProxy.port }}
+              protocol: TCP
+          volumeMounts:
+            - name: rbac-proxy-config
+              mountPath: /etc/kube-rbac-proxy
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+          livenessProbe:
+            tcpSocket:
+              port: rbac-proxy
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            tcpSocket:
+              port: rbac-proxy
+            initialDelaySeconds: 3
+            periodSeconds: 5
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.usersService.rbacProxy.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.usersService.rbacProxy.securityContext | nindent 12 }}
+        {{- end }}
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        {{- if .Values.usersService.rbacProxy.enabled }}
+        - name: rbac-proxy-config
+          configMap:
+            name: triplanner-users-rbac-proxy
+        {{- end }}
+      {{- with .Values.usersService.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.usersService.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.usersService.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

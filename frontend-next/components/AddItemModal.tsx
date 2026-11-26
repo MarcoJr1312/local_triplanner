@@ -294,10 +294,11 @@ export default function AddItemModal({ open, tripId, destinationId, day, onClose
     setActivities((prev) => prev.map((a) => (a.id === id ? { ...a, isFavorite: next } : a)));
     try {
       await api.favoriteLocation(id, next);
-    } catch {
-      // rollback silencioso: el proximo refresh del backend corrige el estado
+    } catch (err) {
+      // rollback: el proximo refresh del backend corrige el estado
       setSearchResults((prev) => prev.map((l) => (l.id === id ? { ...l, isFavorite: current } : l)));
       setActivities((prev) => prev.map((a) => (a.id === id ? { ...a, isFavorite: current } : a)));
+      toast.error(localizeApiError(err, t));
     }
   };
 
@@ -374,22 +375,20 @@ export default function AddItemModal({ open, tripId, destinationId, day, onClose
 
   return (
     <Modal open={open} onClose={onClose} title={t('items.addTitle')} size="lg">
-      <div className="mb-4 flex rounded-xl bg-muted p-1">
+      <div className="mb-4 grid grid-cols-2 gap-1 rounded-xl bg-muted/50 p-1">
         <button
           type="button"
           onClick={() => setMode('catalog')}
-          className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium transition duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40 ${
-            mode === 'catalog' ? 'bg-card text-brand-700 shadow-sm' : 'text-muted-foreground hover:text-foreground'
-          }`}
+          aria-pressed={mode === 'catalog'}
+          className={`btn btn-sm justify-center ${mode === 'catalog' ? 'btn-primary' : 'btn-ghost'}`}
         >
           <List className="h-4 w-4" /> {t('items.catalog')}
         </button>
         <button
           type="button"
           onClick={() => setMode('manual')}
-          className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium transition duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40 ${
-            mode === 'manual' ? 'bg-card text-brand-700 shadow-sm' : 'text-muted-foreground hover:text-foreground'
-          }`}
+          aria-pressed={mode === 'manual'}
+          className={`btn btn-sm justify-center ${mode === 'manual' ? 'btn-primary' : 'btn-ghost'}`}
         >
           <Plus className="h-4 w-4" /> {t('items.manual')}
         </button>

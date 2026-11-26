@@ -17,6 +17,8 @@ build/
 # Uploads locales (avatares)
 backend/server/uploads/
 backend/agent-service/.data/
+backend/email-service/.data/
+backend/locations-service/.data/
 
 # OS
 .DS_Store
@@ -26,5 +28,7 @@ Thumbs.db
 # Build de producción (distDir separado)
 frontend-next/.next-prod/
 
-# Local Orkai project config (machine-specific category id). AGENTS.md stays tracked.
-.orkai.yaml
+# Local OpenCode/Orkai agent state and project instructions; never commit.
+/.opencode/
+/AGENTS.md
+/.orkai.yaml

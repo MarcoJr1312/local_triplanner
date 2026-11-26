@@ -1,0 +1,20 @@
+{{- if .Values.usersService.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: triplanner-users-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: triplanner-users
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: users
+data:
+  SERVICE_VERSION: {{ .Chart.AppVersion | quote }}
+  PORT: {{ .Values.usersService.service.port | quote }}
+  GRPC_PORT: {{ .Values.usersService.service.grpcPort | quote }}
+  POSTGRES_HOST: "triplanner-users-postgres"
+  POSTGRES_PORT: {{ .Values.usersService.postgres.service.port | quote }}
+  DB_CONNECT_ATTEMPTS: "60"
+  DB_CONNECT_DELAY_MS: "500"
+  SEED_DEMO: {{ .Values.usersService.seedDemo | quote }}
+{{- end }}

@@ -1,0 +1,21 @@
+{{- if and .Values.emailService.enabled .Values.emailService.rbacProxy.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: triplanner-email-rbac-proxy
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: triplanner-email
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: email
+data:
+  config-file.yaml: |
+    authorization:
+      resourceAttributes:
+        namespace: {{ .Release.Namespace }}
+        apiVersion: {{ .Values.emailService.rbacProxy.config.apiVersion }}
+        resource: {{ .Values.emailService.rbacProxy.config.resource }}
+        subresource: {{ .Values.emailService.rbacProxy.config.subresource }}
+        name: {{ .Values.emailService.rbacProxy.config.name }}
+        verb: get
+{{- end }}

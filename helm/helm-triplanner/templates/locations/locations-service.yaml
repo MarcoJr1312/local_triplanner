@@ -1,0 +1,29 @@
+{{- if .Values.locationsService.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: triplanner-locations
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: triplanner-locations
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: locations
+spec:
+  type: {{ .Values.locationsService.service.type | default "ClusterIP" }}
+  selector:
+    app.kubernetes.io/name: triplanner-locations
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  ports:
+    - name: http
+      port: {{ .Values.locationsService.service.port }}
+      targetPort: http
+    - name: grpc
+      port: {{ .Values.locationsService.service.grpcPort }}
+      targetPort: grpc
+      appProtocol: grpc
+    {{- if .Values.locationsService.rbacProxy.enabled }}
+    - name: rbac-proxy
+      port: {{ .Values.locationsService.rbacProxy.port }}
+      targetPort: rbac-proxy
+    {{- end }}
+{{- end }}

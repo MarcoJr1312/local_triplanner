@@ -28,7 +28,7 @@ def main() -> int:
     response = client.post(
         "/api/agent/day-plan",
         json={"tripId": TRIP_ID, "locale": LOCALE},
-        headers={"X-User-Id": "demo-user"},
+        headers={"X-User-Id": "11111111-1111-4111-8111-111111111111"},
     )
     print("status:", response.status_code)
     payload = response.json()

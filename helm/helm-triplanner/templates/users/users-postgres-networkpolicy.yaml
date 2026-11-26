@@ -1,0 +1,79 @@
+{{- if and .Values.usersService.enabled .Values.usersService.postgres.enabled .Values.networkPolicy.enabled }}
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: triplanner-users-postgres
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: triplanner-users-postgres
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: users-postgres
+spec:
+  endpointSelector:
+    matchLabels:
+      k8s:io.kubernetes.pod.namespace: {{ .Release.Namespace }}
+      k8s:app.kubernetes.io/name: triplanner-users-postgres
+      k8s:app.kubernetes.io/instance: {{ .Release.Name }}
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: {{ .Release.Namespace }}
+            k8s:app.kubernetes.io/name: triplanner-users
+            k8s:app.kubernetes.io/instance: {{ .Release.Name }}
+      toPorts:
+        - ports:
+            - port: "{{ .Values.usersService.postgres.service.port }}"
+              protocol: TCP
+    - fromEntities:
+        - host
+      toPorts:
+        - ports:
+            - port: "{{ .Values.usersService.postgres.service.port }}"
+              protocol: TCP
+    {{ with .Values.networkPolicy.probeCIDRs }}
+    - fromCIDR:
+        {{ range . }}
+        - {{ . | quote }}
+        {{ end }}
+      toPorts:
+        - ports:
+            - port: "3000"
+              protocol: TCP
+            - port: "4100"
+              protocol: TCP
+            - port: "4200"
+              protocol: TCP
+            - port: "4300"
+              protocol: TCP
+            - port: "4400"
+              protocol: TCP
+            - port: "4500"
+              protocol: TCP
+            - port: "50051"
+              protocol: TCP
+            - port: "50052"
+              protocol: TCP
+            - port: "50053"
+              protocol: TCP
+            - port: "5432"
+              protocol: TCP
+            - port: "8080"
+              protocol: TCP
+            - port: "8443"
+              protocol: TCP
+            - port: "27017"
+              protocol: TCP
+    {{ end }}
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: {{ .Values.networkPolicy.dns.namespace }}
+            k8s:k8s-app: {{ .Values.networkPolicy.dns.label }}
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: ANY
+          rules:
+            dns:
+              - matchPattern: "*"
+{{- end }}

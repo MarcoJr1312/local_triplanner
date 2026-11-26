@@ -17,6 +17,7 @@ from __future__ import annotations
 import asyncio
 import hmac
 import logging
+from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import FastAPI, Header, Request
@@ -24,13 +25,15 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from tripsuggest.agent import run_agent, run_day_plan_agent
+from tripsuggest.agent_sync import AgentSync
 from tripsuggest.auth import resolve_demo_user
 from tripsuggest.auto_suggest import NoInterestsError, auto_suggest
 from tripsuggest.backend import BackendClient, BackendError
+from tripsuggest.enrichment import search_with_enrichment
 from tripsuggest.provider import effective_model_name, is_demo_provider
 from tripsuggest.vector_store import (
-    embed_query,
-    ensure_indexed,
+    DestinationIndex,
+    ensure_schema,
     get_user_interest_terms,
     interest_boost_places,
     new_session_id,
@@ -38,12 +41,30 @@ from tripsuggest.vector_store import (
     sync_user_interests,
 )
 from tripsuggest.interests import normalize_terms
+from tripsuggest.metrics import install_metrics
 from tripsuggest.plan import parse_plan_block
 from tripsuggest.settings import get_settings, update_override
 
 logger = logging.getLogger("tripsuggest")
 
-app = FastAPI(title="Tripsuggest agent service", version="0.3.0")
+_sync: AgentSync | None = None
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    global _sync
+    ensure_schema()
+    _sync = AgentSync()
+    _sync.start()
+    try:
+        yield
+    finally:
+        _sync.stop()
+        _sync = None
+
+
+app = FastAPI(title="Tripsuggest agent service", version="0.4.0", lifespan=lifespan)
+install_metrics(app)
 
 AGENT_TIMEOUT_S = 90
 
@@ -121,15 +142,21 @@ def _merge_places(
 
 
 def _user_interest_terms(user_id: str, context: dict[str, Any]) -> list[str]:
-    """Interests for the prompt/boost: pgvector first, backend context fallback."""
+    """Keep the agent DB interests aligned with the API context."""
+    context_terms = normalize_terms(context.get("interests") or [])
     try:
-        terms = get_user_interest_terms(user_id)
+        agent_terms = get_user_interest_terms(user_id)
     except Exception:
         logger.exception("failed to load user interests from pgvector")
-        terms = []
-    if terms:
-        return terms
-    return normalize_terms(context.get("interests") or [])
+        agent_terms = []
+    # An explicit empty list in the API context means "clear my interests".
+    if "interests" in context and set(context_terms) != set(agent_terms):
+        try:
+            sync_user_interests(user_id, context_terms)
+            return context_terms
+        except Exception:
+            logger.exception("failed to sync interests from the API context")
+    return agent_terms or context_terms
 
 
 def _internal_token_ok(provided: str | None) -> bool:
@@ -161,20 +188,24 @@ def _run_pipeline(
 
     interest_terms = _user_interest_terms(resolved_user_id, context)
 
-    cache = client.get_places_cache(body.tripId, resolved_user_id, user_email)
-    places = cache.get("places") or []
-    content_hash = cache.get("contentHash") or ""
-
     destination_id = (context.get("trip") or {}).get("destinationId")
+    lat = (context.get("trip") or {}).get("lat")
+    lng = (context.get("trip") or {}).get("lng")
 
     index = None
     session_id = new_session_id()
     vector_places: list[dict[str, Any]] = []
     if destination_id:
-        index = ensure_indexed(destination_id, places, content_hash)
+        index = DestinationIndex(destination_id, "")
         query_text = _last_user_query(body.messages)
         if query_text:
-            vector_places = embed_query(index, query_text, session_id)
+            vector_places = search_with_enrichment(
+                destination_id,
+                query_text,
+                session_id,
+                lat=lat,
+                lng=lng,
+            )
         if interest_terms:
             try:
                 boost = interest_boost_places(index, interest_terms)
@@ -231,21 +262,25 @@ def _run_day_plan_pipeline(
     context = client.get_trip_context(body.tripId, user_id, user_email)
     resolved_user_id = str(context.get("userId") or user_id)
 
-    cache = client.get_places_cache(body.tripId, resolved_user_id, user_email)
-    places = cache.get("places") or []
-    content_hash = cache.get("contentHash") or ""
-
     destination_id = (context.get("trip") or {}).get("destinationId")
+    lat = (context.get("trip") or {}).get("lat")
+    lng = (context.get("trip") or {}).get("lng")
 
     index = None
     session_id = new_session_id()
     vector_places: list[dict[str, Any]] = []
     if destination_id:
-        index = ensure_indexed(destination_id, places, content_hash)
+        index = DestinationIndex(destination_id, "")
         # Sin query del usuario, sembramos la búsqueda vectorial con el destino.
         query_text = (context.get("trip") or {}).get("destinationName") or "lugares recomendados"
         if query_text:
-            vector_places = embed_query(index, query_text, session_id)
+            vector_places = search_with_enrichment(
+                destination_id,
+                query_text,
+                session_id,
+                lat=lat,
+                lng=lng,
+            )
 
     answer = ""
     try:
@@ -274,6 +309,20 @@ def _run_day_plan_pipeline(
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/ready")
+def ready() -> JSONResponse:
+    if _sync is None:
+        return JSONResponse(
+            status_code=503,
+            content={"status": "not_ready", "db": "starting", "bootstrap_complete": False},
+        )
+    payload = _sync.ready()
+    return JSONResponse(
+        status_code=200 if payload["status"] == "ready" else 503,
+        content=payload,
+    )
 
 
 def _public_llm_config() -> dict[str, Any]:

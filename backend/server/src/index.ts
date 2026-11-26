@@ -7,32 +7,67 @@ import { resolvers, type Ctx, type PubSub } from './resolvers.ts';
 import { PgDb } from './pg/db.ts';
 import { migrate } from './db/migrate.ts';
 import { resolveDatabaseUrl } from './pg/config.ts';
-import { ensureDemoUsers, getCurrentUserId } from './pg/auth.ts';
+import { getCurrentUserId } from './pg/auth.ts';
 import { createCatalogue } from './catalogue/index.ts';
+import { guardCatalogue } from './catalogue/guard.ts';
 import { defaultStorage } from './storage.ts';
 import {
   PORT,
   INTERNAL_TOKEN,
   isUsingDefaultInternalToken,
   BOOTSTRAP_LOCAL,
+  TRIPS_URL,
+  TRIPS_TIMEOUT_MS,
+  USERS_URL,
+  USERS_TIMEOUT_MS,
+  USERS_TRANSPORT,
+  USERS_GRPC_URL,
+  TRIPS_TRANSPORT,
+  TRIPS_GRPC_URL,
+  REMINDER_SWEEP_MS,
 } from './env.ts';
 import { createInternalRouter } from './internal.ts';
 import { serveUploads } from './uploads.ts';
+import { createTripsStore } from './trips/index.ts';
+import { createUsersStore } from './users/index.ts';
+import { startReminderScheduler } from './reminders.ts';
+import { instrumentNodeRequest, renderMetrics } from './metrics.ts';
 
 const databaseUrl = await resolveDatabaseUrl();
 const db = await PgDb.connect(databaseUrl);
 
-// Local bootstrapping: schema and demo identities must exist before serving.
+// Local bootstrapping: schema must exist before serving.
 if (BOOTSTRAP_LOCAL) {
   await migrate(databaseUrl);
 }
-await ensureDemoUsers(db);
+
+const users = createUsersStore({
+  baseUrl: USERS_URL,
+  grpcUrl: USERS_GRPC_URL,
+  transport: USERS_TRANSPORT,
+  internalToken: INTERNAL_TOKEN,
+  timeoutMs: USERS_TIMEOUT_MS,
+});
 
 const catalogue = await createCatalogue();
+const gqlCatalogue = guardCatalogue(catalogue);
 const storage = defaultStorage();
 const pubsub = createPubSub() as unknown as PubSub;
 
-const internalRouter = createInternalRouter({ db, catalogue, internalToken: INTERNAL_TOKEN });
+const trips = createTripsStore({
+  baseUrl: TRIPS_URL,
+  grpcUrl: TRIPS_GRPC_URL,
+  transport: TRIPS_TRANSPORT,
+  internalToken: INTERNAL_TOKEN,
+  timeoutMs: TRIPS_TIMEOUT_MS,
+});
+
+const internalRouter = createInternalRouter({ db, catalogue, internalToken: INTERNAL_TOKEN, trips, users });
+
+const reminderScheduler = startReminderScheduler(
+  { trips, users, pubsub },
+  REMINDER_SWEEP_MS,
+);
 
 const schema = createSchema({
   typeDefs: loadTypeDefs(),
@@ -43,15 +78,34 @@ const yoga = createYoga({
   schema,
   context: async ({ request }: { request: Request }): Promise<Ctx> => ({
     db,
-    catalogue,
+    catalogue: gqlCatalogue,
     storage,
     pubsub,
+    trips,
+    users,
     currentUserId: getCurrentUserId(request),
   }),
   graphiql: true,
 });
 
 const server = createServer((req, res) => {
+  instrumentNodeRequest(req, res);
+  const url = new URL(req.url ?? '/', 'http://localhost');
+  if (req.method === 'GET' && url.pathname === '/metrics') {
+    void renderMetrics()
+      .then(({ body, contentType }) => {
+        res.writeHead(200, {
+          'Content-Type': contentType,
+          'Cache-Control': 'no-store',
+        });
+        res.end(body);
+      })
+      .catch((err) => {
+        console.error('[metrics] error:', err instanceof Error ? err.message : err);
+        if (!res.headersSent) res.writeHead(500).end('Internal error');
+      });
+    return;
+  }
   if (req.method === 'GET' && req.url === '/health') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ status: 'ok' }));
@@ -70,6 +124,8 @@ const server = createServer((req, res) => {
 
 server.listen(PORT, () => {
   console.log(`[triplanner-local] GraphQL en http://localhost:${PORT}/graphql`);
+  console.log(`[triplanner-local] trips url=${TRIPS_URL}`);
+  console.log(`[triplanner-local] users url=${USERS_URL}`);
   if (isUsingDefaultInternalToken()) {
     console.warn(
       '[triplanner-local] INTERNAL_TOKEN no definido: usando default de desarrollo (define INTERNAL_TOKEN en backend/.env)',
@@ -79,3 +135,10 @@ server.listen(PORT, () => {
 
 // Reminder emails are intentionally disabled in the local demo: there is no
 // email provider. The recruiter tests invitations through the copyable link.
+
+const shutdown = () => {
+  reminderScheduler.stop();
+  server.close(() => process.exit(0));
+};
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);

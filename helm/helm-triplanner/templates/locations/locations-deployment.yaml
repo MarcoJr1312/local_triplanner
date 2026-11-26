@@ -1,0 +1,148 @@
+{{- if .Values.locationsService.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: triplanner-locations
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: triplanner-locations
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: locations
+spec:
+  replicas: {{ .Values.locationsService.replicaCount | default 1 }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: triplanner-locations
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: triplanner-locations
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: locations
+        {{- with .Values.locationsService.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/locations/locations-configmap.yaml") . | sha256sum }}
+        {{- with .Values.locationsService.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "helm-triplanner.locationsServiceAccountName" . }}
+      automountServiceAccountToken: {{ if .Values.locationsService.rbacProxy.enabled }}true{{ else }}{{ .Values.locationsService.serviceAccount.automount }}{{ end }}
+      terminationGracePeriodSeconds: 30
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.locationsService.podSecurityContext | nindent 8 }}
+      containers:
+        - name: locations
+          image: "{{ .Values.images.locations.name }}:{{ .Values.images.locations.tag }}"
+          imagePullPolicy: {{ .Values.images.locations.pullPolicy | default "IfNotPresent" }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.locationsService.service.port }}
+              protocol: TCP
+            - name: grpc
+              containerPort: {{ .Values.locationsService.service.grpcPort }}
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: triplanner-locations-config
+          env:
+            {{- if and (not .Values.locationsService.mongo.url) .Values.mongo.auth.enabled }}
+            - name: MONGODB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "helm-triplanner.mongoSecretName" . }}
+                  key: {{ .Values.mongo.auth.usernameKey }}
+            - name: MONGODB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "helm-triplanner.mongoSecretName" . }}
+                  key: {{ .Values.mongo.auth.passwordKey }}
+            {{- end }}
+            - name: INTERNAL_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.locationsService.internalToken.existingSecret }}
+                  key: {{ .Values.locationsService.internalToken.key }}
+          volumeMounts:
+            - name: locations-settings
+              mountPath: {{ .Values.locationsService.persistence.mountPath }}
+            - name: tmp
+              mountPath: /tmp
+          livenessProbe:
+            {{- toYaml .Values.locationsService.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml .Values.locationsService.readinessProbe | nindent 12 }}
+          resources:
+            {{- toYaml .Values.locationsService.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.locationsService.securityContext | nindent 12 }}
+        {{- if .Values.locationsService.rbacProxy.enabled }}
+        - name: kube-rbac-proxy
+          image: "{{ .Values.locationsService.rbacProxy.image.repository }}:{{ .Values.locationsService.rbacProxy.image.tag }}"
+          imagePullPolicy: {{ .Values.locationsService.rbacProxy.image.pullPolicy | default "IfNotPresent" }}
+          args:
+            - --insecure-listen-address=0.0.0.0:{{ .Values.locationsService.rbacProxy.port }}
+            - --upstream=http://127.0.0.1:{{ .Values.locationsService.service.port }}/
+            - --config-file=/etc/kube-rbac-proxy/config-file.yaml
+          ports:
+            - name: rbac-proxy
+              containerPort: {{ .Values.locationsService.rbacProxy.port }}
+              protocol: TCP
+          volumeMounts:
+            - name: rbac-proxy-config
+              mountPath: /etc/kube-rbac-proxy
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+          livenessProbe:
+            tcpSocket:
+              port: rbac-proxy
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            tcpSocket:
+              port: rbac-proxy
+            initialDelaySeconds: 3
+            periodSeconds: 5
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.locationsService.rbacProxy.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.locationsService.rbacProxy.securityContext | nindent 12 }}
+        {{- end }}
+      volumes:
+        - name: locations-settings
+          {{- if .Values.locationsService.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ .Values.locationsService.persistence.existingClaim | default "triplanner-locations-settings" }}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        - name: tmp
+          emptyDir: {}
+        {{- if .Values.locationsService.rbacProxy.enabled }}
+        - name: rbac-proxy-config
+          configMap:
+            name: triplanner-locations-rbac-proxy
+        {{- end }}
+      {{- with .Values.locationsService.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.locationsService.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.locationsService.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

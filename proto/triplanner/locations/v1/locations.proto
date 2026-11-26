@@ -1,0 +1,69 @@
+syntax = "proto3";
+
+package triplanner.locations.v1;
+
+message Location {
+  string id = 1;
+  optional string source = 2;
+  optional string place_id = 3;
+  optional string data_id = 4;
+  optional string slug = 5;
+  string name = 6;
+  optional string category = 7;
+  optional string raw_type = 8;
+  optional string country = 9;
+  optional string description = 10;
+  optional double lat = 11;
+  optional double lng = 12;
+  optional string address = 13;
+  optional double rating = 14;
+  optional int32 rating_count = 15;
+  optional string hours_json = 16;
+  optional string website_url = 17;
+  optional string social_links_json = 18;
+  optional string phone = 19;
+  optional int32 price_level = 20;
+  optional string image_url = 21;
+  optional double cost = 22;
+  optional string tags_json = 23;
+  optional double duration_hours = 24;
+  optional string parent_id = 25;
+  optional string last_updated = 26;
+  int32 version = 27;
+  string content_hash = 28;
+  optional string created_at = 29;
+  optional string expires_at = 30;
+}
+
+message GetByIdRequest { string id = 1; }
+message GetByPlaceIdRequest { string place_id = 1; }
+message GetByDataIdRequest { string data_id = 1; }
+
+message SearchRequest {
+  string q = 1;
+  int32 limit = 2;
+  optional double lat = 3;
+  optional double lng = 4;
+}
+
+message ListDestinationsRequest {}
+
+message ListByParentRequest {
+  string parent_id = 1;
+  int32 limit = 2;
+}
+
+message ListPlacesRequest {}
+
+message LocationResponse { Location item = 1; }
+message LocationsResponse { repeated Location items = 1; }
+
+service LocationsService {
+  rpc GetById(GetByIdRequest) returns (LocationResponse);
+  rpc GetByPlaceId(GetByPlaceIdRequest) returns (LocationResponse);
+  rpc GetByDataId(GetByDataIdRequest) returns (LocationResponse);
+  rpc Search(SearchRequest) returns (LocationsResponse);
+  rpc ListDestinations(ListDestinationsRequest) returns (LocationsResponse);
+  rpc ListByParent(ListByParentRequest) returns (LocationsResponse);
+  rpc ListPlaces(ListPlacesRequest) returns (LocationsResponse);
+}

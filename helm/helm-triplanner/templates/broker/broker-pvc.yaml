@@ -1,0 +1,17 @@
+{{- if and .Values.broker.enabled .Values.broker.persistence.enabled (not .Values.broker.persistence.existingClaim) }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: triplanner-kafka-data
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: triplanner-kafka
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: broker
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.broker.persistence.size }}
+{{- end }}

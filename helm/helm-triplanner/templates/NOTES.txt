@@ -1,0 +1,134 @@
+Triplanner demo services installed.
+
+Namespace: {{ .Release.Namespace }}
+Create it before installing:
+  kubectl create namespace {{ .Release.Namespace }}
+
+Components:
+  - triplanner-kafka: Go HTTP broker (topic/offset/ack, SQLite)
+  - triplanner-email: email consumer + BYOK settings
+  - triplanner-locations: destinations/activities catalogue (REST, :{{ .Values.locationsService.service.port }})
+  - triplanner-trips: trips, members, items and invitations (REST, :{{ .Values.tripsService.service.port }})
+  - triplanner-users: accounts, password login and notifications (REST, :{{ .Values.usersService.service.port }})
+  - triplanner-agent: suggestions + pgvector index (REST, :{{ .Values.agentService.service.port }})
+  - triplanner-api: GraphQL facade + platform Postgres + uploads (REST, :{{ .Values.apiService.service.port }})
+  - triplanner-web: Next.js UI (REST, :{{ .Values.webService.service.port }}, Cilium Gateway)
+  - triplanner-mongo: single-node MongoDB StatefulSet
+  - triplanner-trips-postgres: single-node PostgreSQL StatefulSet
+  - triplanner-users-postgres: single-node PostgreSQL StatefulSet
+  - triplanner-agent-postgres: single-node pgvector PostgreSQL StatefulSet
+  - triplanner-api-postgres: single-node platform PostgreSQL StatefulSet
+
+RBAC:
+  - per-service ServiceAccount
+  - ClusterRole + ClusterRoleBinding for TokenReview/SAR
+  - kube-rbac-proxy sidecar on HTTP 8443 (local demo only)
+  - main app ports remain 8080 (broker) / 4200 (email) / {{ .Values.locationsService.service.port }} (locations) / {{ .Values.tripsService.service.port }} (trips) / {{ .Values.usersService.service.port }} (users) / {{ .Values.agentService.service.port }} (agent) / {{ .Values.apiService.service.port }} (api) / {{ .Values.webService.service.port }} (web)
+  - web is exposed through a Cilium Gateway + HTTPRoute; no kube-rbac-proxy sidecar
+  - port-forward 8443; do not expose it outside the cluster
+
+1. Check the rollouts:
+   kubectl -n {{ .Release.Namespace }} rollout status deployment/triplanner-kafka
+   kubectl -n {{ .Release.Namespace }} rollout status deployment/triplanner-email
+   kubectl -n {{ .Release.Namespace }} rollout status deployment/triplanner-locations
+   kubectl -n {{ .Release.Namespace }} rollout status deployment/triplanner-trips
+   kubectl -n {{ .Release.Namespace }} rollout status deployment/triplanner-users
+   kubectl -n {{ .Release.Namespace }} rollout status deployment/triplanner-agent
+   kubectl -n {{ .Release.Namespace }} rollout status deployment/triplanner-api
+   kubectl -n {{ .Release.Namespace }} rollout status deployment/triplanner-web
+   kubectl -n {{ .Release.Namespace }} rollout status statefulset/triplanner-mongo
+   kubectl -n {{ .Release.Namespace }} rollout status statefulset/triplanner-trips-postgres
+   kubectl -n {{ .Release.Namespace }} rollout status statefulset/triplanner-users-postgres
+   kubectl -n {{ .Release.Namespace }} rollout status statefulset/triplanner-agent-postgres
+   kubectl -n {{ .Release.Namespace }} rollout status statefulset/triplanner-api-postgres
+
+2. Check the probes:
+   kubectl -n {{ .Release.Namespace }} port-forward svc/triplanner-email 4200:{{ .Values.emailService.service.port }}
+   curl http://localhost:4200/health
+   curl http://localhost:4200/ready
+
+3. Check the broker:
+   kubectl -n {{ .Release.Namespace }} port-forward svc/triplanner-kafka 8080:{{ .Values.broker.service.port }}
+   curl http://localhost:8080/health
+   curl http://localhost:8080/ready
+
+4. Check the catalogue:
+   kubectl -n {{ .Release.Namespace }} port-forward svc/triplanner-locations {{ .Values.locationsService.service.port }}:{{ .Values.locationsService.service.port }}
+   curl http://localhost:{{ .Values.locationsService.service.port }}/health
+   curl http://localhost:{{ .Values.locationsService.service.port }}/ready
+
+5. Check trips:
+   kubectl -n {{ .Release.Namespace }} port-forward svc/triplanner-trips {{ .Values.tripsService.service.port }}:{{ .Values.tripsService.service.port }}
+   curl http://localhost:{{ .Values.tripsService.service.port }}/health
+   curl http://localhost:{{ .Values.tripsService.service.port }}/ready
+
+6. Check users:
+   kubectl -n {{ .Release.Namespace }} port-forward svc/triplanner-users {{ .Values.usersService.service.port }}:{{ .Values.usersService.service.port }}
+   curl http://localhost:{{ .Values.usersService.service.port }}/health
+   curl http://localhost:{{ .Values.usersService.service.port }}/ready
+
+7. Check the agent:
+   kubectl -n {{ .Release.Namespace }} port-forward svc/triplanner-agent {{ .Values.agentService.service.port }}:{{ .Values.agentService.service.port }}
+   curl http://localhost:{{ .Values.agentService.service.port }}/health
+   curl http://localhost:{{ .Values.agentService.service.port }}/ready
+
+8. Open the web app:
+   http://{{ .Values.webService.gateway.host }}:{{ .Values.webService.gateway.port }}
+   curl -H "Host: {{ .Values.webService.gateway.host }}" http://127.0.0.1:{{ .Values.webService.gateway.port }}/api/health
+   # /api/ready stays 200 during an API outage and reports {"backend":"down"}.
+
+9. Metrics:
+   Every service exposes GET /metrics on its HTTP port. Example:
+     kubectl -n {{ .Release.Namespace }} exec deploy/triplanner-api -- \
+       curl -fsS http://localhost:{{ .Values.apiService.service.port }}/metrics
+   The web /metrics path redirects to / at the Gateway; Prometheus scrapes the
+   Service directly. ServiceMonitors are disabled by default. With a
+   kube-prometheus-stack release named `prometheus`:
+     helm upgrade triplanner ./helm/helm-triplanner -n {{ .Release.Namespace }} \
+       --set metrics.serviceMonitor.enabled=true \
+       --set metrics.serviceMonitor.labels.release=prometheus
+   The chart ships 9 Grafana dashboards as ConfigMaps labeled
+   grafana_dashboard=1 (8 services + overview).
+
+10. BYOK:
+   The email service starts with provider={{ .Values.emailService.provider }}.
+   Open the app Profile -> Email delivery to add a Resend key.
+   No Resend Secret is required for the recruiter demo.
+
+   Places data starts with the committed catalogue. Add a HasData key in
+   Settings -> Places data to use live search; results are cached in MongoDB
+   for 5 days.
+
+Required Secret:
+   triplanner-internal / {{ .Values.emailService.internalToken.key }}
+   {{- if and .Values.mongo.auth.enabled (not .Values.mongo.auth.existingSecret) }}
+   {{ include "helm-triplanner.mongoSecretName" . }} (demo Mongo credentials;
+   use existingSecret with Vault/External Secrets in production)
+   {{- else if .Values.mongo.auth.enabled }}
+   {{ include "helm-triplanner.mongoSecretName" . }} (existing Secret)
+   {{- end }}
+   {{- if and .Values.tripsService.postgres.auth.enabled (not .Values.tripsService.postgres.auth.existingSecret) }}
+   {{ include "helm-triplanner.tripsPostgresSecretName" . }} (demo trips Postgres credentials;
+   use existingSecret with Vault/External Secrets in production)
+   {{- else if .Values.tripsService.postgres.auth.enabled }}
+   {{ include "helm-triplanner.tripsPostgresSecretName" . }} (existing Secret)
+   {{- end }}
+   {{- if and .Values.usersService.postgres.auth.enabled (not .Values.usersService.postgres.auth.existingSecret) }}
+   {{ include "helm-triplanner.usersPostgresSecretName" . }} (demo users Postgres credentials;
+   use existingSecret with Vault/External Secrets in production)
+   {{- else if .Values.usersService.postgres.auth.enabled }}
+   {{ include "helm-triplanner.usersPostgresSecretName" . }} (existing Secret)
+   {{- end }}
+   {{- if and .Values.apiService.postgres.auth.enabled (not .Values.apiService.postgres.auth.existingSecret) }}
+   {{ include "helm-triplanner.apiPostgresSecretName" . }} (demo API Postgres credentials;
+   use existingSecret with Vault/External Secrets in production)
+   {{- else if .Values.apiService.postgres.auth.enabled }}
+   {{ include "helm-triplanner.apiPostgresSecretName" . }} (existing Secret)
+   {{- end }}
+
+Broker topic:
+   {{ .Values.emailService.broker.topic }} (DLQ: {{ .Values.emailService.broker.dlqTopic }})
+
+Trips outbox:
+   invite + member-joined events go to {{ .Values.tripsService.broker.topic }}.
+   /ready reports outbox_pending; replay by id with db:replay-outbox.
