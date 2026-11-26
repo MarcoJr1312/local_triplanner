@@ -1,0 +1,85 @@
+# Argo CD for the local Triplanner kind cluster.
+# Installed with:
+#   helm upgrade --install argocd argo/argo-cd --version 10.20.0 \
+#     -n triplanner-agrocd --create-namespace -f deploy/argocd/values.yaml
+crds:
+  install: true
+  keep: true
+
+global:
+  # Local kind cluster: the chart's NetworkPolicies do not allow host probe
+  # traffic to the repo-server health port, so kubelet kills the pod.
+  networkPolicy:
+    create: false
+
+configs:
+  cm:
+    # Keep Argo CD's tracking label separate from the chart's
+    # app.kubernetes.io/instance selectors.
+    application.instanceLabelKey: argocd.argoproj.io/instance
+    timeout.reconciliation: 120s
+    timeout.reconciliation.jitter: 30s
+  params:
+    # Keep the UI on HTTPS; access is via kubectl port-forward.
+    server.insecure: false
+
+# The demo uses the local admin account, not SSO or notifications.
+dex:
+  enabled: false
+notifications:
+  enabled: false
+
+server:
+  service:
+    type: ClusterIP
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+controller:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+repoServer:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
+  readinessProbe:
+    timeoutSeconds: 5
+    failureThreshold: 6
+  livenessProbe:
+    timeoutSeconds: 5
+    failureThreshold: 6
+    initialDelaySeconds: 30
+
+redis:
+  resources:
+    requests:
+      cpu: 25m
+      memory: 32Mi
+    limits:
+      cpu: 100m
+      memory: 128Mi
+
+applicationSet:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 25m
+      memory: 32Mi
+    limits:
+      cpu: 100m
+      memory: 128Mi

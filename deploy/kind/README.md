@@ -57,6 +57,24 @@ curl.exe -H "Host: triplanner.localhost" http://127.0.0.1:9080/api/ready
 `/api/ready` should report `{"status":"ready","backend":"ok"}`. The
 `HTTPRoute` should show `Accepted=True` and `ResolvedRefs=True`.
 
+## Pod egress (Docker Desktop WSL2)
+
+Cilium's iptables NAT chain can remain empty on the Docker Desktop WSL2 kernel,
+which blocks pod egress to GitHub and other external services. The setup and
+deploy scripts add an idempotent masquerade rule for `10.244.0.0/24`. If a pod
+cannot reach GitHub after a Docker Desktop restart, re-run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File deploy/kind/deploy-demo.ps1
+```
+
+The Argo CD repo-server depends on this egress.
+
+## GitOps
+
+Argo CD runs in `triplanner-agrocd` and watches `helm/helm-triplanner` on the
+`refactor/helm` branch. See [`deploy/argocd/README.md`](../argocd/README.md).
+
 ## Metrics
 
 Every service exposes `GET /metrics` on its internal HTTP port. Check all

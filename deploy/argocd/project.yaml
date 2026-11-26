@@ -1,0 +1,20 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: triplanner
+  namespace: triplanner-agrocd
+spec:
+  description: Triplanner local demo
+  sourceRepos:
+    - https://github.com/MarcoJr1312/local_triplanner
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: triplanner
+  namespaceResourceWhitelist:
+    - group: "*"
+      kind: "*"
+  clusterResourceWhitelist:
+    - group: rbac.authorization.k8s.io
+      kind: ClusterRole
+    - group: rbac.authorization.k8s.io
+      kind: ClusterRoleBinding

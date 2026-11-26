@@ -46,6 +46,11 @@ helm upgrade --install cilium cilium/cilium \
 echo "Waiting for nodes..."
 kubectl wait --for=condition=Ready nodes --all --timeout=300s >/dev/null
 
+# Docker Desktop WSL2: Cilium's iptables NAT chain can remain empty, which
+# breaks pod egress. Add an idempotent masquerade rule for the pod CIDR.
+echo "Ensuring pod egress masquerade..."
+docker exec "$NODE" sh -c 'iptables-nft -t nat -C POSTROUTING -s 10.244.0.0/24 ! -d 10.244.0.0/24 -j MASQUERADE 2>/dev/null || iptables-nft -t nat -A POSTROUTING -s 10.244.0.0/24 ! -d 10.244.0.0/24 -j MASQUERADE'
+
 kubectl get gatewayclass
 kubectl -n kube-system get pods -l k8s-app=cilium
 echo

@@ -3,28 +3,28 @@
 images:
   broker:
     name: triplanner-local/kafka
-    tag: kind-0.19.0
+    tag: sha-5247619
   email:
     name: triplanner-local/email
-    tag: kind-0.19.0
+    tag: sha-5247619
   locations:
     name: triplanner-local/locations
-    tag: kind-0.19.0
+    tag: sha-5247619
   trips:
     name: triplanner-local/trips
-    tag: kind-0.19.0
+    tag: sha-5247619
   users:
     name: triplanner-local/users
-    tag: kind-0.19.0
+    tag: sha-5247619
   agent:
     name: triplanner-local/agent
-    tag: kind-0.19.0
+    tag: sha-5247619
   api:
     name: triplanner-local/api
-    tag: kind-0.19.0
+    tag: sha-5247619
   web:
     name: triplanner-local/web
-    tag: kind-0.19.0
+    tag: sha-5247619
 
 # The kube-prometheus-stack release `prometheus` selects ServiceMonitors from
 # all namespaces with `release: prometheus`. Dashboards are picked up by the

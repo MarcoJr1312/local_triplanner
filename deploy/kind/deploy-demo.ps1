@@ -8,7 +8,7 @@ $ErrorActionPreference = 'Stop'
 $Cluster = 'triplanner-cilium'
 $Release = 'triplanner'
 $Namespace = 'triplanner'
-$ImageTag = 'kind-0.19.0'
+$ImageTag = 'sha-5247619'
 
 function Require-Image([string]$Name) {
   docker image inspect $Name *> $null
@@ -37,6 +37,13 @@ kind load docker-image --name $Cluster $targets
 if ($LASTEXITCODE -ne 0) { throw 'kind load docker-image failed.' }
 
 kubectl config use-context "kind-$Cluster" | Out-Null
+
+# Restore pod egress after a Docker Desktop restart. Cilium's iptables NAT
+# chain can be empty on WSL2; the setup script applies the same idempotent rule.
+$node = "$Cluster-control-plane"
+docker exec $node sh -c 'iptables-nft -t nat -C POSTROUTING -s 10.244.0.0/24 ! -d 10.244.0.0/24 -j MASQUERADE 2>/dev/null || iptables-nft -t nat -A POSTROUTING -s 10.244.0.0/24 ! -d 10.244.0.0/24 -j MASQUERADE'
+if ($LASTEXITCODE -ne 0) { throw 'Could not install the pod egress masquerade rule.' }
+
 $ns = kubectl get namespace $Namespace --ignore-not-found -o name 2>$null
 if (-not $ns) {
   kubectl create namespace $Namespace | Out-Null

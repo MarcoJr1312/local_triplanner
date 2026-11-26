@@ -51,6 +51,12 @@ Write-Host 'Waiting for nodes...'
 kubectl wait --for=condition=Ready nodes --all --timeout=300s | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'Nodes did not become Ready.' }
 
+# Docker Desktop WSL2: Cilium's iptables NAT chain can remain empty, which
+# breaks pod egress. Add an idempotent masquerade rule for the pod CIDR.
+Write-Host 'Ensuring pod egress masquerade...'
+docker exec $node sh -c 'iptables-nft -t nat -C POSTROUTING -s 10.244.0.0/24 ! -d 10.244.0.0/24 -j MASQUERADE 2>/dev/null || iptables-nft -t nat -A POSTROUTING -s 10.244.0.0/24 ! -d 10.244.0.0/24 -j MASQUERADE'
+if ($LASTEXITCODE -ne 0) { throw 'Could not install the pod egress masquerade rule.' }
+
 kubectl get gatewayclass
 kubectl -n kube-system get pods -l k8s-app=cilium
 Write-Host ''

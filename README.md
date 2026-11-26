@@ -17,8 +17,8 @@ profile settings.
 > Release tagging and image publication are deferred. The Compose stack remains
 > the recruiter quickstart; the Helm/Cilium stack is the advanced local path.
 > Four PostgreSQL exporters, one MongoDB exporter and 11 Grafana dashboards are
-> live. The Argo CD GitOps slice is planned in
-> [`docs/migrations/0032-argocd-gitops-plan.md`](docs/migrations/0032-argocd-gitops-plan.md).
+> live. Argo CD GitOps is live in `triplanner-agrocd`; the application images
+> are pinned to `sha-5247619`.
 
 ## Documentation
 
@@ -99,7 +99,7 @@ Compose stack below keeps the shared `postgres` database for the API and agent.
 | Users (`backend/users-service/`) | TypeScript on Bun, internal REST v1, PostgreSQL (`pg`), Argon2id (`Bun.password`) |
 | Agent (`backend/agent-service/`) | Python 3.12, uv, FastAPI, Agno, pgvector |
 | Observability | Prometheus `/metrics`, kube-prometheus-stack, Grafana, `prometheus-postgres-exporter`, `prometheus-mongodb-exporter` |
-| GitOps (planned) | Argo CD `argo/argo-cd` 10.20.0, Application for `helm/helm-triplanner` |
+| GitOps | Argo CD `argo/argo-cd` 10.20.0, Application `triplanner`, automated sync + selfHeal |
 | Data (`backend/db/`) | Postgres `pg/schema.sql` + idempotent seed; Toronto catalogue JSON |
 | Local infra | Docker Compose: web, api, locations, trips, users, agent, PostgreSQL 17 + pgvector, two service PostgreSQL databases, MongoDB 7 |
 
@@ -231,19 +231,31 @@ powershell -ExecutionPolicy Bypass -File scripts/deploy-exporters.ps1
 Evidence and operational notes:
 [database exporters](docs/migrations/0031-database-exporters.md).
 
-### GitOps (planned)
+### GitOps
 
-The next slice puts `helm/helm-triplanner` under Argo CD:
+Argo CD runs in namespace `triplanner-agrocd` and owns the application after
+the first sync:
 
-- `argo/argo-cd` **10.20.0** in namespace `triplanner-agrocd`.
+- `argo/argo-cd` **10.20.0** (app v3.6.3), ClusterIP-only UI.
 - Application `triplanner` watches
   `https://github.com/MarcoJr1312/local_triplanner`, revision `refactor/helm`,
   path `helm/helm-triplanner`, with automated sync and `selfHeal`.
-- The existing kind values are supplied through a multi-source `$values`
-  reference to `deploy/kind/triplanner-values.yaml`.
-- The UI stays ClusterIP-only and is reached with `kubectl port-forward`.
+- The kind values are supplied through a multi-source `$values` reference to
+  `deploy/kind/triplanner-values.yaml`.
+- Application images are pinned to the commit SHA `sha-5247619`, not a mutable
+  tag.
+- `prune` is disabled so PVCs and Secrets are not deleted by a sync.
+- Helm upgrades are frozen for `triplanner`; changes go through Git.
 
-Plan: [`docs/migrations/0032-argocd-gitops-plan.md`](docs/migrations/0032-argocd-gitops-plan.md).
+Open the UI:
+
+```powershell
+kubectl -n triplanner-agrocd port-forward svc/argocd-server 8080:443
+# https://localhost:8080
+```
+
+Runbook: [`deploy/argocd/README.md`](deploy/argocd/README.md). Plan and
+evidence: [`docs/migrations/0032-argocd-gitops-plan.md`](docs/migrations/0032-argocd-gitops-plan.md).
 
 
 ### What to try
@@ -406,8 +418,8 @@ without building:
 docker compose -f deploy/docker-compose.hub.yml up -d
 ```
 
-> **Current local delivery:** the current Helm images are built as
-> `kind-0.19.0` and loaded into the kind node. Publishing the `1.8.0` service
+> **Current local delivery:** the current Helm images are tagged
+> `sha-5247619` and loaded into the kind node. Publishing the `1.8.0` service
 > images and tagging the release are deferred; the published `1.2.2` images
 > above are historical.
 

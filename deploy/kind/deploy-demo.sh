@@ -9,7 +9,7 @@ set -euo pipefail
 CLUSTER="${CLUSTER:-triplanner-cilium}"
 RELEASE="${RELEASE:-triplanner}"
 NAMESPACE="${NAMESPACE:-triplanner}"
-IMAGE_TAG="${IMAGE_TAG:-kind-0.19.0}"
+IMAGE_TAG="${IMAGE_TAG:-sha-5247619}"
 
 images=(
   "local_triplanner-kafka:latest|triplanner-local/kafka:$IMAGE_TAG"
@@ -38,6 +38,11 @@ echo "Loading application images into kind..."
 kind load docker-image --name "$CLUSTER" "${load[@]}"
 
 kubectl config use-context "kind-$CLUSTER" >/dev/null
+
+# Restore pod egress after a Docker Desktop restart. Cilium's iptables NAT
+# chain can be empty on WSL2; the setup script applies the same idempotent rule.
+docker exec "${CLUSTER}-control-plane" sh -c 'iptables-nft -t nat -C POSTROUTING -s 10.244.0.0/24 ! -d 10.244.0.0/24 -j MASQUERADE 2>/dev/null || iptables-nft -t nat -A POSTROUTING -s 10.244.0.0/24 ! -d 10.244.0.0/24 -j MASQUERADE'
+
 kubectl create namespace "$NAMESPACE" >/dev/null 2>&1 || true
 
 if ! kubectl -n "$NAMESPACE" get secret triplanner-internal >/dev/null 2>&1; then
