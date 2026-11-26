@@ -51,16 +51,34 @@ Path filters keep each workflow scoped to its service files for branch pushes.
   - `marcojr13/triplanner-users` (new: first publish is M10.14)
   - `marcojr13/triplanner-kafka`
   - `marcojr13/triplanner-email`
-- Published tags: `1.8.0` and `1.8` (release `v1.8.0`), `latest` (current
-  `main`), `sha-e377c12` for the six application services and `sha-714d97a`
-  for broker/email, plus the older release tags.
+- Published tags: `1.8.0`, `1.8` and `sha-fd17a80` (release `v1.8.0`), `latest`
+  (current `main`), `sha-e377c12` for the six application services and
+  `sha-714d97a` for broker/email, plus the older release tags.
 - Architectures: `linux/amd64`, `linux/arm64`.
-- Verification: the eight service workflows publish on `main` and on `v*` tags;
-  the `v1.8.0` tag triggers all eight plus the Compose smoke. The kind stack
-  runs the published SHA pins: Argo CD Synced/Healthy, `/api/ready` reports
-  `backend: ok`, Prometheus scrapes 13/13 targets and Grafana provisions 11
-  dashboards. The historical `v1.2.2` run published 8/8 and its stack passed
-  the smoke test with 0 critical container CVEs.
+- Verification: tag `v1.8.0` published all eight images as `1.8.0`, `1.8` and
+  `sha-fd17a80`; the eight service workflows and the Compose smoke passed. The
+  kind stack runs the published SHA pins: Argo CD Synced/Healthy at `fd17a80`,
+  `/api/ready` reports `backend: ok`, Prometheus scrapes 13/13 targets and
+  Grafana provisions 11 dashboards. The historical `v1.2.2` run published 8/8
+  and its stack passed the smoke test with 0 critical container CVEs.
+
+### `v1.8.0` tag runs
+
+| Workflow | Run | Result |
+|---|---|---|
+| Web — test and publish | `45852622251` | success |
+| API — test and publish | `45852622946` | success |
+| Users service — test and publish | `45852622270` | success |
+| Trips service — test and publish | `45852622350` | success |
+| Locations service — test and publish | `45852622497` | success |
+| Agent — test and publish | `45852622255` | success |
+| Broker — test and publish | `45852622392` | success |
+| Email — test and publish | `45852622253` | success |
+| Compose smoke | `45852622490` | success |
+
+The `GitOps image tags` `workflow_run` jobs were skipped for the tag, as
+intended; the chart keeps the tested SHA pins instead of moving to the release
+branch ref.
 
 ## Docker Hub setup
 
