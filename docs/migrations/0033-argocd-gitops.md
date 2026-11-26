@@ -8,7 +8,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **Implemented and verified locally (2026-11-26); Gate 2 pending** |
+| Status | **Gate 2 approved locally (2026-11-26); release deferred** |
 | Cycle | Kubernetes Manifest Delivery |
 | Slice | M28 — Argo CD and GitOps |
 | Argo CD chart | `argo/argo-cd` 10.20.0 (app v3.6.3) |
@@ -167,5 +167,5 @@ off. Do not run `helm upgrade/uninstall` for `triplanner`.
 
 ## 9. Gate 2 decision
 
-Pending. The deployment is local-only; no image publication or release tag was
-created.
+**Approved locally on 2026-11-26: accept M28 and hold the release.** The
+automatic `workflow_run` residual is accepted; no release tag was created.

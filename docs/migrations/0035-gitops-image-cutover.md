@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **Merged and verified locally (2026-11-26); Gate 2 pending** |
+| Status | **Gate 2 approved locally (2026-11-26); release deferred** |
 | Cycle | Kubernetes Manifest Delivery |
 | Slice | M29.2 — published SHA images, HEAD tracking |
 | Chart | `helm-triplanner` 0.21.0 |
@@ -95,5 +95,6 @@ added by the setup/deploy scripts.
 
 ## 5. Gate
 
-Ready for Gate 2. Local acceptance is complete; the live app is on the
-published SHA images for six services and local broker/email images.
+**Approved locally on 2026-11-26: accept M29.2 and hold the release.** Local
+acceptance is complete; the live app runs the published SHA images for six
+services and local broker/email images.
