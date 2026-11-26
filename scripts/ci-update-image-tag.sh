@@ -12,7 +12,8 @@ VALUES="helm/helm-triplanner/values.yaml"
 git config user.name "github-actions[bot]"
 git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-docker run --rm -v "$PWD:/work" -w /work mikefarah/yq:4.45.1 \
+docker run --rm --user "$(id -u):$(id -g)" \
+  -v "$PWD:/work" -w /work mikefarah/yq:4.45.1 \
   -i ".images.${SERVICE}.tag = \"${IMAGE_TAG}\"" "$VALUES"
 
 if git diff --quiet -- "$VALUES"; then
