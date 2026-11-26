@@ -63,7 +63,7 @@ Migrations:
   PostgreSQL and MongoDB exporter plan; Gate 1 approved
 - [`0031-database-exporters.md`](./0031-database-exporters.md) — five
   exporters, read-only roles, two dashboards and cluster evidence; Gate 2
-  pending
+  approved locally
 
 ## Branching (local only)
 

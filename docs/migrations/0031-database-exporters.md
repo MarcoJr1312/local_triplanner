@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **Implemented and verified locally (2026-11-25); Gate 2 pending** |
+| Status | **Gate 2 approved locally (2026-11-25); release deferred** |
 | Cycle | Kubernetes Manifest Delivery |
 | Slice | M27 — database exporters and dashboards |
 | Chart | `helm-triplanner` 0.21.0, revision 29 |
@@ -176,4 +176,7 @@ helm upgrade triplanner helm/helm-triplanner -n triplanner \
 
 ## 9. Gate 2 decision
 
-Pending. The implementation is local-only; nothing was pushed or published.
+**Approved locally on 2026-11-25: accept M27 and hold the release.**
+The five exporters, read-only identities, NetworkPolicy templates and two
+dashboards are accepted on the local kind stack. `git push`, image publication
+and release tagging remain deferred.

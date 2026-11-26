@@ -244,7 +244,7 @@ auth and Dockerfiles.
   CNPs and two dashboards (`triplanner-postgres`, `triplanner-mongodb`).
   Chart 0.21.0 revision 29, images unchanged at `kind-0.19.0`; Prometheus
   targets 13/13, `pg_up` 4/4, `mongodb_up` 1. Failure and uninstall/reinstall
-  drills passed. Gate 2 pending. Evidence:
+  drills passed. Gate 2 approved locally; release deferred. Evidence:
   `docs/migrations/0031-database-exporters.md`.
 - M15 done (`feature/grpc-api`): native gRPC between the API facade and the
   users/trips/locations services, with `x-internal-token`/`x-actor-id`
