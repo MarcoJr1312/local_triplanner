@@ -1,0 +1,58 @@
+name: GitOps image tags
+
+# Runs after a service image is published on main and updates the chart's
+# image tag to the immutable sha-<short> that was just pushed to Docker Hub.
+# The Argo CD Application tracks HEAD/main after the PR merge.
+on:
+  workflow_run:
+    workflows:
+      - Agent - test and publish
+      - API - test and publish
+      - Locations service - test and publish
+      - Trips service - test and publish
+      - Users service - test and publish
+      - Web - test and publish
+    types: [completed]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: gitops-image-tags
+  cancel-in-progress: false
+
+jobs:
+  update:
+    name: Update values.yaml image tag
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Update the published image tag
+        env:
+          WORKFLOW_NAME: ${{ github.event.workflow_run.name }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          case "$WORKFLOW_NAME" in
+            "Agent - test and publish") SERVICE=agent ;;
+            "API - test and publish") SERVICE=api ;;
+            "Locations service - test and publish") SERVICE=locations ;;
+            "Trips service - test and publish") SERVICE=trips ;;
+            "Users service - test and publish") SERVICE=users ;;
+            "Web - test and publish") SERVICE=web ;;
+            *)
+              echo "No GitOps mapping for workflow: $WORKFLOW_NAME" >&2
+              exit 1
+              ;;
+          esac
+          IMAGE_TAG="sha-${HEAD_SHA::7}"
+          echo "Updating images.${SERVICE}.tag to ${IMAGE_TAG}"
+          ./scripts/ci-update-image-tag.sh "$SERVICE" "$IMAGE_TAG"

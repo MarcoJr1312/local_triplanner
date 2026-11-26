@@ -26,6 +26,7 @@ profile settings.
 - [Database exporters and dashboards](docs/migrations/0031-database-exporters.md)
 - [Argo CD GitOps plan](docs/migrations/0032-argocd-gitops-plan.md)
 - [Argo CD implementation evidence](docs/migrations/0033-argocd-gitops.md)
+- [CI image-tag automation](docs/migrations/0034-ci-image-tags.md)
 - [10-minute demo tour](docs/DEMO_TOUR.md)
 - [Troubleshooting](docs/TROUBLESHOOTING.md)
 - [Security notes](docs/SECURITY.md)
@@ -247,6 +248,9 @@ the first sync:
   mutable tag.
 - `prune` is disabled so PVCs and Secrets are not deleted by a sync.
 - Helm upgrades are frozen for `triplanner`; changes go through Git.
+- CI publishes `sha-<short>` images on `main` and the `GitOps image tags`
+  workflow updates `helm/helm-triplanner/values.yaml` after each service
+  publish. The kind overlay keeps local image overrides until PR #1 is merged.
 
 Open the UI:
 

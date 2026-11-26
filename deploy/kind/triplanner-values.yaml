@@ -1,5 +1,10 @@
 # Values for the isolated Cilium kind cluster. Images are loaded from the local
 # Docker daemon by deploy/kind/deploy-demo.ps1 / deploy-demo.sh.
+#
+# Pre-merge: these overrides keep the app on locally built images. After PR #1
+# is merged and the GitOps workflow has updated helm/helm-triplanner/values.yaml,
+# remove the agent/api/locations/trips/users/web overrides (keep broker/email)
+# and switch the Argo CD Application targetRevision to HEAD.
 images:
   broker:
     name: triplanner-local/kafka
