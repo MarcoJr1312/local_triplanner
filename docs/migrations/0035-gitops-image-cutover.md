@@ -1,5 +1,11 @@
 # 0035 — GitOps image cutover
 
+> **Update 2026-11-26:** broker/email now have publish workflows and all eight
+> services use published SHA tags: six `sha-e377c12`, broker/email
+> `sha-714d97a`. See
+> [`0036-broker-email-ci.md`](./0036-broker-email-ci.md). The broker/email
+> local rows below are the pre-broker/email-CI snapshot.
+
 | Field | Value |
 |---|---|
 | Status | **Gate 2 approved locally (2026-11-26); release deferred** |

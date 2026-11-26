@@ -28,6 +28,7 @@ profile settings.
 - [Argo CD implementation evidence](docs/migrations/0033-argocd-gitops.md)
 - [CI image-tag automation](docs/migrations/0034-ci-image-tags.md)
 - [Argo CD image cutover](docs/migrations/0035-gitops-image-cutover.md)
+- [Broker and email CI coverage](docs/migrations/0036-broker-email-ci.md)
 - [10-minute demo tour](docs/DEMO_TOUR.md)
 - [Troubleshooting](docs/TROUBLESHOOTING.md)
 - [Security notes](docs/SECURITY.md)

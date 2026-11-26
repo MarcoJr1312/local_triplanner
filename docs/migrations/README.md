@@ -75,6 +75,8 @@ Migrations:
 - [`0035-gitops-image-cutover.md`](./0035-gitops-image-cutover.md) — six
   published `sha-e377c12` images, HEAD tracking and local broker/email; merged
   and verified
+- [`0036-broker-email-ci.md`](./0036-broker-email-ci.md) — broker/email
+  publish workflows, `sha-714d97a` images and the final all-published cutover
 
 ## Branching (local only)
 

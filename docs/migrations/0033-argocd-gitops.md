@@ -1,10 +1,10 @@
 # 0033 — Argo CD GitOps
 
-> **Update 2026-11-26:** the image cutover is complete. Six services now use
-> `marcojr13/triplanner-*:sha-e377c12`; broker/email remain local
-> `triplanner-local/*:sha-5247619`. See
-> [`0035-gitops-image-cutover.md`](./0035-gitops-image-cutover.md). The image
-> table below records the pre-cutover adoption snapshot.
+> **Update 2026-11-26:** broker/email now have publish workflows; all eight
+> services use published SHA tags (six `sha-e377c12`, broker/email
+> `sha-714d97a`). See
+> [`0036-broker-email-ci.md`](./0036-broker-email-ci.md). The image table below
+> records the pre-broker/email-CI adoption snapshot.
 
 | Field | Value |
 |---|---|

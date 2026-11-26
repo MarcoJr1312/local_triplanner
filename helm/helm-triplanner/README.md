@@ -352,16 +352,15 @@ Prerequisites:
   (see [`deploy/kind`](../../deploy/kind) for the local kind setup).
 - The `triplanner-internal` Secret with `INTERNAL_TOKEN`.
 - Images referenced by the chart (override `images.*`):
-  `marcojr13/triplanner-kafka:0.2.0`,
-  `marcojr13/triplanner-email:0.2.0`,
-  `marcojr13/triplanner-locations:1.8.0`,
-  `marcojr13/triplanner-trips:1.8.0`,
-  `marcojr13/triplanner-users:1.8.0`,
-  `marcojr13/triplanner-agent:1.8.0`,
-  `marcojr13/triplanner-api:1.8.0` and
-  `marcojr13/triplanner-web:1.8.0`. The `1.8.0` tags are published by the
-  per-service workflows when the `v1.8.0` tag is pushed; override the tags for
-  a local pre-release acceptance run.
+  `marcojr13/triplanner-kafka:sha-714d97a`,
+  `marcojr13/triplanner-email:sha-714d97a`,
+  `marcojr13/triplanner-locations:sha-e377c12`,
+  `marcojr13/triplanner-trips:sha-e377c12`,
+  `marcojr13/triplanner-users:sha-e377c12`,
+  `marcojr13/triplanner-agent:sha-e377c12`,
+  `marcojr13/triplanner-api:sha-e377c12` and
+  `marcojr13/triplanner-web:sha-e377c12`. The tags are pinned to the published
+  image build SHAs; override them for a local pre-release acceptance run.
 - For the local kind values, `kube-prometheus-stack` in `monitoring` (or set
   `metrics.serviceMonitor.enabled=false`). See
   [`deploy/kind`](../../deploy/kind/README.md#monitoring).
