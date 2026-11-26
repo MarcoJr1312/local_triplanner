@@ -51,20 +51,15 @@ is never committed.
 
 ## Images
 
-Argo CD renders the chart but does not build or load images. The six
-CI-published services use the chart defaults:
+Argo CD renders the chart but does not build or load images. The chart defaults
+are pinned to the published SHA tags:
 
-```yaml
-images:
-  web:
-    tag: sha-e377c12
-```
+- six services: `marcojr13/triplanner-*:sha-e377c12`
+- broker/email: `marcojr13/triplanner-{kafka,email}:sha-714d97a`
 
-`broker` and `email` have no publish workflows yet, so
-`deploy/kind/triplanner-values.yaml` keeps them on local
-`triplanner-local/*:sha-5247619` images. `deploy/kind/deploy-demo.ps1` and
-`.sh` also pass `deploy/kind/triplanner-local-images.yaml` for a full local
-source build.
+`deploy/kind/deploy-demo.ps1` and `.sh` also pass
+`deploy/kind/triplanner-local-images.yaml` for a full local source build; Argo
+CD does not use that overlay.
 
 The chart source revision is the Git commit Argo CD synced; the image SHA is
 the service-image build commit and can be older when only docs/chart files
@@ -82,10 +77,11 @@ fails with `context deadline exceeded`.
 
 PR #1 is merged and the Application tracks `HEAD` (the default branch).
 
-- Six services: `marcojr13/triplanner-*:sha-e377c12`, pulled from Docker Hub.
-- Broker/email: local `triplanner-local/*:sha-5247619`.
+- All eight services: `marcojr13/triplanner-*` published SHA tags.
+- No local image overrides remain in `deploy/kind/triplanner-values.yaml`.
 - The `GitOps image tags` workflow has `workflow_dispatch` as a manual fallback;
-  its first `workflow_run` was not observed for the merge commit.
+  it was used for the broker/email tags. Automatic `workflow_run` remains
+  unobserved.
 - The kind node has egress after the NAT fix.
 
 ## Operating rules
