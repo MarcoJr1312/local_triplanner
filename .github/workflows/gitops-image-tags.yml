@@ -8,6 +8,8 @@ on:
     workflows:
       - Agent - test and publish
       - API - test and publish
+      - Broker - test and publish
+      - Email - test and publish
       - Locations service - test and publish
       - Trips service - test and publish
       - Users service - test and publish
@@ -22,6 +24,8 @@ on:
         options:
           - agent
           - api
+          - broker
+          - email
           - locations
           - trips
           - users
@@ -68,6 +72,8 @@ jobs:
             case "$WORKFLOW_NAME" in
               "Agent - test and publish") SERVICE=agent ;;
               "API - test and publish") SERVICE=api ;;
+              "Broker - test and publish") SERVICE=broker ;;
+              "Email - test and publish") SERVICE=email ;;
               "Locations service - test and publish") SERVICE=locations ;;
               "Trips service - test and publish") SERVICE=trips ;;
               "Users service - test and publish") SERVICE=users ;;

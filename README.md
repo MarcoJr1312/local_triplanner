@@ -408,6 +408,9 @@ Each service has its own GitHub Actions workflow and test suite:
 | `trips.yml` | `backend/trips-service/test/*.test.ts` | `triplanner-trips` |
 | `locations.yml` | `backend/locations-service/test/*.test.ts` | `triplanner-locations` |
 | `agent.yml` | `backend/agent-service/tests/test_m2.py` + `tests/test_settings.py` | `triplanner-agent` |
+| `broker.yml` | `backend/kafka` Go tests | `triplanner-kafka` |
+| `email.yml` | `backend/email-service` Bun tests | `triplanner-email` |
+| `gitops-image-tags.yml` | no app tests | updates chart image tags |
 | `compose-smoke.yml` | full Compose + `scripts/smoke.sh` | no push |
 
 Add `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` (Read & Write token) to the
