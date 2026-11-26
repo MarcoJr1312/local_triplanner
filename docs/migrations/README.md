@@ -71,12 +71,18 @@ Migrations:
   locally
 - [`0034-ci-image-tags.md`](./0034-ci-image-tags.md) — CI publishes SHA tags
   and updates the Helm values after main; `workflow_dispatch` verified,
-  automatic run pending
+  automatic run accepted as residual
 - [`0035-gitops-image-cutover.md`](./0035-gitops-image-cutover.md) — six
   published `sha-e377c12` images, HEAD tracking and local broker/email; merged
   and verified
 - [`0036-broker-email-ci.md`](./0036-broker-email-ci.md) — broker/email
-  publish workflows, `sha-714d97a` images and the final all-published cutover
+  publish workflows, `sha-714d97a` images and the final all-published cutover;
+  Gate 2 approved
+
+Releases:
+
+- [`RELEASE_NOTES_v1.8.0.md`](../RELEASE_NOTES_v1.8.0.md) — Argo CD GitOps,
+  CI image tags, monitoring and the all-published image cutover
 
 ## Branching (local only)
 

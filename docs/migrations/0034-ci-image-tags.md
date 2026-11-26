@@ -1,14 +1,19 @@
 # 0034 — CI image-tag GitOps update
 
+> **Update 2026-11-26:** broker/email now have publish workflows and published
+> `sha-714d97a` images, so all eight services use published SHA tags. The
+> automatic `workflow_run` residual below still stands; `workflow_dispatch`
+> remains the verified fallback. Released in `v1.8.0`.
+
 | Field | Value |
 |---|---|
-| Status | **Gate 2 approved locally (2026-11-26); automatic `workflow_run` residual accepted; release deferred** |
+| Status | **Gate 2 approved locally (2026-11-26); `workflow_run` residual accepted; released in `v1.8.0`** |
 | Cycle | Kubernetes Manifest Delivery |
 | Slice | M29 — CI publishes SHA tags and updates chart values |
 | Workflow | `.github/workflows/gitops-image-tags.yml` |
 | Script | `scripts/ci-update-image-tag.sh` |
 | Values target | `helm/helm-triplanner/values.yaml` |
-| Argo CD | **`HEAD` (main)**; six published `sha-e377c12`, broker/email local |
+| Argo CD | **`HEAD` (main)**; all eight services published (six `sha-e377c12`, broker/email `sha-714d97a`) |
 
 ## 1. Merge status
 
