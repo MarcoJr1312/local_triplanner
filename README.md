@@ -23,6 +23,8 @@ profile settings.
 ## Documentation
 
 - [Migration evidence and delivery log](docs/migrations/README.md)
+- [Docker Compose setup](docs/setup/docker-compose/README.md)
+- [Helm setup](docs/setup/helm/README.md)
 - [Database exporters and dashboards](docs/migrations/0031-database-exporters.md)
 - [Argo CD GitOps plan](docs/migrations/0032-argocd-gitops-plan.md)
 - [Argo CD implementation evidence](docs/migrations/0033-argocd-gitops.md)
@@ -52,9 +54,9 @@ profile settings.
   sent.
 - **Users service** — accounts, Argon2id password login and the notification
   inbox live in `triplanner-users` with its own PostgreSQL.
-- **Async email** — `TripInvitation` messages flow from the API through the Go
-  demo broker to the email service; members show the invited email with a demo
-  badge.
+- **Async email** — in the Helm deployment, `TripInvitation` messages flow from
+  the API through the Go demo broker to the email service; members show the
+  invited email with a demo badge. Compose uses the bell and copyable join link.
 - **Places** - catalogue-first search over the seeded Toronto data in MongoDB.
   Add a HasData key in Settings → Places data to use live results; they are
   cached in MongoDB and expire after 5 days.
@@ -91,7 +93,8 @@ the client.
 The Helm stack splits the API facade into its own PostgreSQL database and adds
 four service PostgreSQL instances (users, trips, API, agent), MongoDB, five
 database exporters, Prometheus ServiceMonitors and 11 Grafana dashboards. The
-Compose stack below keeps the shared `postgres` database for the API and agent.
+Compose stack keeps the platform `postgres` database for the API and gives the
+agent its own `agent-postgres`; the email consumer runs only in the Helm stack.
 
 ## Tech stack
 
@@ -106,195 +109,42 @@ Compose stack below keeps the shared `postgres` database for the API and agent.
 | Observability | Prometheus `/metrics`, kube-prometheus-stack, Grafana, `prometheus-postgres-exporter`, `prometheus-mongodb-exporter` |
 | GitOps | Argo CD `argo/argo-cd` 10.20.0, Application `triplanner`, automated sync + selfHeal |
 | Data (`backend/db/`) | Postgres `pg/schema.sql` + idempotent seed; Toronto catalogue JSON |
-| Local infra | Docker Compose: web, api, locations, trips, users, agent, PostgreSQL 17 + pgvector, two service PostgreSQL databases, MongoDB 7 |
+| Local infra | Docker Compose: web, api, users, trips, locations, agent, broker, platform PostgreSQL 17 + pgvector, three service PostgreSQL databases, MongoDB 7 |
 
-## Repository layout
+## Project structure
 
 ```
 .
-├── frontend-next/          Next.js app (App Router, shadcn/ui, i18n)
+├── frontend-next/               Next.js 15 app (App Router, shadcn/ui, i18n)
 ├── backend/
-│   ├── server/             GraphQL API, demo auth, uploads
-│   ├── locations-service/  MongoDB catalogue + activity search (:4300)
-│   ├── agent-service/      FastAPI suggestion agent (pgvector)
-│   ├── db/                 Postgres schema + seed data + Toronto catalogue JSON
-│   ├── graphql/            base schema
-│   └── .env.example        backend configuration template
+│   ├── server/                  GraphQL API facade, demo auth, uploads
+│   ├── users-service/           accounts, login, notifications (PostgreSQL)
+│   ├── trips-service/           trips, members, items, invitations (PostgreSQL)
+│   ├── locations-service/       Toronto catalogue and activity search (MongoDB)
+│   ├── agent-service/           FastAPI suggestion agent (pgvector)
+│   ├── kafka/                   Go HTTP demo broker (SQLite)
+│   ├── email-service/           invitation email consumer (Resend/sink)
+│   ├── db/                      Postgres schema, seed data, Toronto catalogue
+│   └── graphql/                 base GraphQL schema
 ├── deploy/
-│   ├── docker-compose.yml        source-build stack
-│   ├── docker-compose.hub.yml    published images
-│   ├── exporters/                PostgreSQL/MongoDB exporter values
-│   └── kind/                     Cilium kind cluster, values and deploy scripts
-├── helm/
-│   └── helm-triplanner/          chart, dashboards and templates
-├── scripts/                      bootstrap, deploy, QA and smoke helpers
-└── docs/                         migration evidence, security and runbooks
+│   ├── docker-compose.yml       source-build Compose stack
+│   ├── docker-compose.hub.yml   published-image Compose stack
+│   ├── kind/                    kind + Cilium cluster scripts and values
+│   ├── argocd/                  Argo CD install, project and Application
+│   └── exporters/               Prometheus exporter values
+├── docs/
+│   ├── setup/docker-compose/    Docker Compose setup guide
+│   ├── setup/helm/              Helm and GitOps setup guide
+│   └── ...                      migration evidence, QA and runbooks
+├── helm/helm-triplanner/        chart, templates and Grafana dashboards
+├── scripts/                     smoke, QA, port-forward and deploy helpers
+└── .github/workflows/           per-service CI and release workflows
 ```
 
-## Quickstart (recruiter)
-
-**Prerequisite:** Docker Desktop (4 GB RAM recommended).
-
-```bash
-git clone https://github.com/MarcoJr1312/local_triplanner.git
-cd local_triplanner
-docker compose -f deploy/docker-compose.yml up --build
-```
-
-Open http://localhost:3000/login and sign in with **`demo` / `demo123`** (or
-**`demo-friend` / `demo123`**).
-
-The first build takes a few minutes. All services become healthy:
-
-```bash
-docker compose -f deploy/docker-compose.yml ps
-```
-
-| Service | Purpose |
-|---|---|
-| `web` | Next.js UI on http://localhost:3000 |
-| `api` | GraphQL API (internal) |
-| `locations` | Destinations/activities catalogue (internal, owns MongoDB) |
-| `trips` | Trips, members, items and invitations (internal, owns its PostgreSQL) |
-| `users` | Accounts, password login and notifications (internal, owns its PostgreSQL) |
-| `agent` | FastAPI suggestions (internal) |
-| `postgres` | Relational data + pgvector |
-| `trips-postgres` | Trips service database |
-| `users-postgres` | Users service database |
-| `mongo` | Toronto location catalogue |
-
-Useful commands:
-
-```bash
-docker compose down       # stop, keep data
-docker compose down -v    # reset data, re-seed on next start
-docker compose logs -f api
-```
-
-### Cluster demo (optional)
-
-The chart in `helm/helm-triplanner` runs the Next.js web app behind a Cilium
-Gateway + HTTPRoute, plus the broker, email, locations, trips, users and their
-PostgreSQL databases and MongoDB on a local cluster. See the
-[chart README](helm/helm-triplanner/README.md) and the
-[Cilium kind setup](deploy/kind/README.md), then forward the services with one
-command:
-
-```bash
-powershell -ExecutionPolicy Bypass -File scripts/port-forward.ps1 -Proxy
-# or
-bash scripts/port-forward.sh --proxy
-```
-
-The Helm web is at `http://triplanner.localhost:9080` through the Cilium
-Gateway. The chart is self-contained: web, API facade, users, trips, locations,
-agent, broker, email and their databases all run in the cluster. The Compose
-stack remains a separate recruiter quickstart.
-
-### Metrics
-
-Every service exposes Prometheus text at `GET /metrics` on its existing HTTP
-port. The endpoints are ClusterIP-only and never query a database. The Helm
-web `/metrics` path redirects to `/` at the Cilium Gateway; Prometheus scrapes
-the web Service directly.
-
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts/metrics-smoke.ps1 -Target all
-```
-
-ServiceMonitors are disabled by default in the chart. The local
-`prometheus` release in `kind-triplanner-cilium/monitoring` enables them and
-scrapes **13 targets**: the 8 application runtimes plus 4 PostgreSQL exporters
-and 1 MongoDB exporter. Grafana provisions **11 dashboards**: 8 per-service
-dashboards, a Triplanner overview, PostgreSQL and MongoDB. Application metrics
-include gRPC server counters for users, trips and locations, plus p50/p95
-latency. Grafana and Prometheus stay ClusterIP-only:
-
-```powershell
-kubectl -n monitoring port-forward svc/prometheus-grafana 3001:80
-# http://localhost:3001
-```
-
-See the [chart README](helm/helm-triplanner/README.md#metrics) and the
-[Cilium kind guide](deploy/kind/README.md#monitoring).
-
-### Database exporters
-
-The Helm stack runs four `prometheus-postgres-exporter` releases (users, trips,
-API and agent) and one `prometheus-mongodb-exporter` release. They use dedicated
-read-only database users, ClusterIP-only Services and the upstream
-prometheus-community charts.
-
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts/bootstrap-exporters.ps1
-powershell -ExecutionPolicy Bypass -File scripts/deploy-exporters.ps1
-```
-
-Evidence and operational notes:
-[database exporters](docs/migrations/0031-database-exporters.md).
-
-### GitOps
-
-Argo CD runs in namespace `triplanner-agrocd` and owns the application after
-the first sync:
-
-- `argo/argo-cd` **10.20.0** (app v3.6.3), ClusterIP-only UI.
-- Application `triplanner` watches
-  `https://github.com/MarcoJr1312/local_triplanner`, revision `HEAD` (default
-  branch), path `helm/helm-triplanner`, with automated sync and `selfHeal`.
-- The kind values are supplied through a multi-source `$values` reference to
-  `deploy/kind/triplanner-values.yaml`.
-- All eight services run CI-published SHA images: six `sha-e377c12` and
-  broker/email `sha-714d97a`. `deploy/kind/triplanner-local-images.yaml` is
-  used only for local source builds.
-- `prune` is disabled so PVCs and Secrets are not deleted by a sync.
-- Helm upgrades are frozen for `triplanner`; changes go through Git.
-- CI publishes `sha-<short>` images on `main` and the `GitOps image tags`
-  workflow updates `helm/helm-triplanner/values.yaml`; `workflow_dispatch`
-  is available as a manual fallback.
-
-Open the UI:
-
-```powershell
-kubectl -n triplanner-agrocd port-forward svc/argocd-server 8080:443
-# https://localhost:8080
-```
-
-Runbook: [`deploy/argocd/README.md`](deploy/argocd/README.md). Plan and
-evidence: [`docs/migrations/0032-argocd-gitops-plan.md`](docs/migrations/0032-argocd-gitops-plan.md).
-
-
-### What to try
-
-1. Open the seeded Toronto trip (Dec 4–6, 2026).
-2. Search for **CN Tower**, **ROM** or a restaurant.
-3. Invite **`demo-friend`** from the trip's **Invitar → Por usuario** tab, then
-   sign in as `demo-friend` / `demo123` and accept from the bell.
-4. Upload an avatar or an activity attachment.
-5. Ask the AI agent for suggestions.
-
-## Development mode (optional)
-
-Requires Bun, uv/Python 3.12 and Docker for the data stores.
-
-```bash
-docker compose -f deploy/docker-compose.yml up -d postgres mongo
-cp backend/.env.example backend/.env
-cp backend/locations-service/.env.example backend/locations-service/.env
-
-# Locations :4300 (owns MongoDB and seeds the catalogue)
-cd backend/locations-service && bun install && bun run dev
-
-# API :4000 (LOCATIONS_URL defaults to http://127.0.0.1:4300)
-cd backend/server && bun install && bun run db:migrate && bun run db:seed && bun run dev
-
-# Web :3000
-cd frontend-next && bun install && bun run dev
-
-# Agent :4100
-cd backend/agent-service && uv sync
-uv run uvicorn tripsuggest.main:app --host 127.0.0.1 --port 4100
-```
+The two supported deployment paths live under `docs/setup/`:
+`docker-compose/` for the one-command recruiter demo and `helm/` for the
+Kubernetes/Cilium deployment with Argo CD. The chart and its value reference are
+in `helm/helm-triplanner/`.
 
 ## Invitations
 
@@ -434,13 +284,9 @@ docker compose -f deploy/docker-compose.hub.yml up -d
 > `1.8.0`/`1.8` images for all eight services; the chart keeps the tested SHA
 > pins, and the published `1.2.2` images above are historical.
 
-The file defaults to `DOCKERHUB_USERNAME=marcojr13` and `IMAGE_TAG=latest`.
-Override them for a fork or a pinned version:
-
-```bash
-DOCKERHUB_USERNAME=youruser IMAGE_TAG=1.2.2 \
-  docker compose -f deploy/docker-compose.hub.yml up -d
-```
+The published stack and its tag overrides are documented in the
+[Docker Compose setup](docs/setup/docker-compose/README.md#run-published-images).
+For a fork, set `DOCKERHUB_USERNAME` to the namespace that holds the images.
 
 See [docs/CICD.md](docs/CICD.md) for setup, tags and release flow.
 
@@ -500,3 +346,16 @@ cd backend/server && bun audit
   must stay ignored and must never be force-added.
 - Full controls, accepted risks and scan details:
   [docs/SECURITY.md](docs/SECURITY.md).
+
+## Setup
+
+Choose a deployment path. Both guides start from a clean clone and list the
+exact scripts and commands.
+
+| Path | Best for | What it uses |
+|---|---|---|
+| [Docker Compose setup](docs/setup/docker-compose/README.md) | The fastest recruiter demo; no Kubernetes | Source build or published images; one `docker compose` command |
+| [Helm setup](docs/setup/helm/README.md) | Full Kubernetes deployment, metrics and GitOps | `deploy/kind` scripts, the Helm chart and optional Argo CD |
+
+The Compose path is the recommended first run. The Helm path needs Docker
+Desktop with more memory plus `kind`, `kubectl` and `helm`.
