@@ -130,9 +130,6 @@ Compose stack below keeps the shared `postgres` database for the API and agent.
 └── docs/                         migration evidence, security and runbooks
 ```
 
-`AGENTS.md`, `.opencode/` and `.orkai.yaml` are local-only and gitignored; a
-fresh clone does not include them.
-
 ## Quickstart (recruiter)
 
 **Prerequisite:** Docker Desktop (4 GB RAM recommended).
