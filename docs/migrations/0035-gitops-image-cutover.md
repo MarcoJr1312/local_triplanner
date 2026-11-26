@@ -4,11 +4,11 @@
 > services use published SHA tags: six `sha-e377c12`, broker/email
 > `sha-714d97a`. See
 > [`0036-broker-email-ci.md`](./0036-broker-email-ci.md). The broker/email
-> local rows below are the pre-broker/email-CI snapshot.
+> local rows below are the pre-broker/email-CI snapshot. Released in `v1.8.0`.
 
 | Field | Value |
 |---|---|
-| Status | **Gate 2 approved locally (2026-11-26); release deferred** |
+| Status | **Gate 2 approved locally (2026-11-26); released in `v1.8.0`** |
 | Cycle | Kubernetes Manifest Delivery |
 | Slice | M29.2 — published SHA images, HEAD tracking |
 | Chart | `helm-triplanner` 0.21.0 |

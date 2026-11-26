@@ -8,7 +8,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **Gate 2 approved locally (2026-11-26); release deferred** |
+| Status | **Gate 2 approved locally (2026-11-26); released in `v1.8.0`** |
 | Cycle | Kubernetes Manifest Delivery |
 | Slice | M28 — Argo CD and GitOps |
 | Argo CD chart | `argo/argo-cd` 10.20.0 (app v3.6.3) |

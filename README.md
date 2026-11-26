@@ -13,12 +13,12 @@ to Google Maps routes or an Uber deep link.
 The product UI is **English by default**, with an **es/en** switch in the
 profile settings.
 
-> **Status:** local delivery through **M28** — chart `0.21.0`, app `1.8.0`.
-> Release tagging and image publication are deferred. The Compose stack remains
-> the recruiter quickstart; the Helm/Cilium stack is the advanced local path.
-> Four PostgreSQL exporters, one MongoDB exporter and 11 Grafana dashboards are
-> live. Argo CD GitOps is live in `triplanner-agrocd`; all eight services use
-> CI-published SHA images: six `sha-e377c12` and broker/email `sha-714d97a`.
+> **Status:** local delivery through **M30** — chart `0.21.0`, app `1.8.0`,
+> tagged **`v1.8.0`**. The Compose stack remains the recruiter quickstart; the
+> Helm/Cilium stack is the advanced local path. Four PostgreSQL exporters, one
+> MongoDB exporter and 11 Grafana dashboards are live. Argo CD GitOps is live in
+> `triplanner-agrocd`; all eight services use CI-published SHA images: six
+> `sha-e377c12` and broker/email `sha-714d97a`.
 
 ## Documentation
 
@@ -29,6 +29,7 @@ profile settings.
 - [CI image-tag automation](docs/migrations/0034-ci-image-tags.md)
 - [Argo CD image cutover](docs/migrations/0035-gitops-image-cutover.md)
 - [Broker and email CI coverage](docs/migrations/0036-broker-email-ci.md)
+- [Release notes v1.8.0](docs/RELEASE_NOTES_v1.8.0.md)
 - [10-minute demo tour](docs/DEMO_TOUR.md)
 - [Troubleshooting](docs/TROUBLESHOOTING.md)
 - [Security notes](docs/SECURITY.md)
@@ -418,9 +419,9 @@ Add `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` (Read & Write token) to the
 GitHub repository secrets. Pushes to `main` publish `latest` + `sha-*`; tags
 `v*` publish semver tags. Images are multi-arch (`amd64` + `arm64`).
 
-Published images: `marcojr13/triplanner-{web,api,agent}` with release tags
-`1.2.2`, `1.2`, `sha-3e15bed`; `latest` tracks the current `main`. Run them
-without building:
+Published images: all eight `marcojr13/triplanner-*` repositories. Release
+`v1.8.0` publishes `1.8.0`/`1.8` tags; `latest` tracks the current `main`, and
+each service also has a `sha-<short>` tag. Run them without building:
 
 ```bash
 docker compose -f deploy/docker-compose.hub.yml up -d
@@ -429,9 +430,9 @@ docker compose -f deploy/docker-compose.hub.yml up -d
 > **Current local delivery:** all eight services use CI-published SHA images
 > (six `sha-e377c12`, broker/email `sha-714d97a`). Local source builds use
 > `triplanner-local/*:sha-5247619` via
-> `deploy/kind/triplanner-local-images.yaml`. Publishing the `1.8.0` release
-> images and tagging the release are deferred; the published `1.2.2` images
-> above are historical.
+> `deploy/kind/triplanner-local-images.yaml`. The `v1.8.0` tag publishes
+> `1.8.0`/`1.8` images for all eight services; the chart keeps the tested SHA
+> pins, and the published `1.2.2` images above are historical.
 
 The file defaults to `DOCKERHUB_USERNAME=marcojr13` and `IMAGE_TAG=latest`.
 Override them for a fork or a pinned version:

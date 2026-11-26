@@ -12,6 +12,9 @@ Each service has its own workflow and test command.
 | `locations.yml` | Locations service | `bun audit` + `bun test` (MongoDB) | `triplanner-locations` |
 | `trips.yml` | Trips service | `bun audit` + `bun test` (PostgreSQL) | `triplanner-trips` |
 | `users.yml` | Users service | `bun audit` + `bun test` (PostgreSQL, including the UUID migration) | `triplanner-users` |
+| `broker.yml` | Go demo broker | `go test ./...` | `triplanner-kafka` |
+| `email.yml` | Email service | `bunx tsc --noEmit` + `bun test` | `triplanner-email` |
+| `gitops-image-tags.yml` | Helm values | no app tests | updates chart image tags |
 | `compose-smoke.yml` | Full stack | builds all images, boots Compose, runs `scripts/smoke.sh` | no push |
 
 Every test job audits its dependencies before running the tests:
@@ -28,9 +31,12 @@ Triggers:
 - **Push to a feature branch:** tests run; no image is pushed.
 - **Push to `main`:** tests + multi-arch publish of `latest` and `sha-<short>`.
 - **Tag `v*`:** tests + multi-arch publish of `1.2.3`, `1.2` and `sha-<short>`.
-- **Manual:** `workflow_dispatch` on the service workflows.
+  Path filters are not evaluated for tag pushes, so every service workflow runs
+  for a release tag.
+- **Manual:** `workflow_dispatch` on the service workflows, and on
+  `gitops-image-tags.yml` with `service` + `tag` inputs.
 
-Path filters keep each workflow scoped to its service files.
+Path filters keep each workflow scoped to its service files for branch pushes.
 
 ## Current images
 
@@ -45,12 +51,16 @@ Path filters keep each workflow scoped to its service files.
   - `marcojr13/triplanner-users` (new: first publish is M10.14)
   - `marcojr13/triplanner-kafka`
   - `marcojr13/triplanner-email`
-- Published tags: `latest` (current `main`), `1.2`, `1.2.2`, `sha-3e15bed`
-  and `sha-4e009c3` (plus the older release tags).
+- Published tags: `1.8.0` and `1.8` (release `v1.8.0`), `latest` (current
+  `main`), `sha-e377c12` for the six application services and `sha-714d97a`
+  for broker/email, plus the older release tags.
 - Architectures: `linux/amd64`, `linux/arm64`.
-- Verification: the service workflows passed on `main` and tag `v1.2.2` (8/8);
-  the published `1.2.2` stack passed the smoke test with 0 critical container
-  CVEs.
+- Verification: the eight service workflows publish on `main` and on `v*` tags;
+  the `v1.8.0` tag triggers all eight plus the Compose smoke. The kind stack
+  runs the published SHA pins: Argo CD Synced/Healthy, `/api/ready` reports
+  `backend: ok`, Prometheus scrapes 13/13 targets and Grafana provisions 11
+  dashboards. The historical `v1.2.2` run published 8/8 and its stack passed
+  the smoke test with 0 critical container CVEs.
 
 ## Docker Hub setup
 

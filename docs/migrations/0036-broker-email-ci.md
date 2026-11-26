@@ -2,12 +2,12 @@
 
 | Field | Value |
 |---|---|
-| Status | **Implemented and verified locally (2026-11-26); Gate 2 pending** |
+| Status | **Gate 2 approved (2026-11-26); released in `v1.8.0`** |
 | Cycle | Kubernetes Manifest Delivery |
 | Slice | M30 — broker/email workflows and image cutover |
 | Workflows | `.github/workflows/broker.yml`, `.github/workflows/email.yml` |
 | Images | `marcojr13/triplanner-kafka:sha-714d97a`, `marcojr13/triplanner-email:sha-714d97a` |
-| Argo CD | `HEAD`, Synced/Healthy at `d090ec7` |
+| Argo CD | `HEAD`, Synced/Healthy at `b13366e` |
 | App images | six `sha-e377c12`, broker/email `sha-714d97a` |
 
 ## 1. Gap closed
@@ -92,5 +92,6 @@ their controllers; PVC-backed data was preserved.
 
 ## 5. Gate
 
-Ready for Gate 2: the broker and email have CI, published SHA images, chart
-defaults and live Argo CD pods. The release tag remains deferred.
+Gate 2 approved on 2026-11-26: the broker and email have CI, published SHA
+images, chart defaults and live Argo CD pods. The docs merged at `b13366e` and
+the release shipped as `v1.8.0`.
