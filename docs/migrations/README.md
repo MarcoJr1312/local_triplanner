@@ -64,6 +64,8 @@ Migrations:
 - [`0031-database-exporters.md`](./0031-database-exporters.md) — five
   exporters, read-only roles, two dashboards and cluster evidence; Gate 2
   approved locally
+- [`0032-argocd-gitops-plan.md`](./0032-argocd-gitops-plan.md) — Argo CD
+  GitOps plan for `helm/helm-triplanner`; Gate 1 pending
 
 ## Branching (local only)
 
